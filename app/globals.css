@@ -1,26 +1,209 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  --color-gold: #C89B3C;
+  --color-gold-light: #F0E6D2;
+  --color-gold-dark: #785A28;
+  --color-blue-team: #0A84FF;
+  --color-red-team: #FF453A;
+  --color-navy: #0A0E1A;
+  --color-navy-light: #0F1629;
+  --color-navy-lighter: #1A2035;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: #0A0E1A;
+  --foreground: #F0E6D2;
+  --card: #0F1629;
+  --card-foreground: #F0E6D2;
+  --popover: #0F1629;
+  --popover-foreground: #F0E6D2;
+  --primary: #C89B3C;
+  --primary-foreground: #0A0E1A;
+  --secondary: #1A2035;
+  --secondary-foreground: #F0E6D2;
+  --muted: #1A2035;
+  --muted-foreground: #8B7A5E;
+  --accent: #1A2035;
+  --accent-foreground: #F0E6D2;
+  --destructive: #FF453A;
+  --border: rgba(200, 155, 60, 0.2);
+  --input: rgba(200, 155, 60, 0.15);
+  --ring: #C89B3C;
+  --chart-1: #C89B3C;
+  --chart-2: #0A84FF;
+  --chart-3: #FF453A;
+  --chart-4: #32CD32;
+  --chart-5: #8B7A5E;
+  --radius: 0.625rem;
+  --sidebar: #0F1629;
+  --sidebar-foreground: #F0E6D2;
+  --sidebar-primary: #C89B3C;
+  --sidebar-primary-foreground: #0A0E1A;
+  --sidebar-accent: #1A2035;
+  --sidebar-accent-foreground: #F0E6D2;
+  --sidebar-border: rgba(200, 155, 60, 0.2);
+  --sidebar-ring: #C89B3C;
+}
+
+.dark {
+  --background: #0A0E1A;
+  --foreground: #F0E6D2;
+  --card: #0F1629;
+  --card-foreground: #F0E6D2;
+  --popover: #0F1629;
+  --popover-foreground: #F0E6D2;
+  --primary: #C89B3C;
+  --primary-foreground: #0A0E1A;
+  --secondary: #1A2035;
+  --secondary-foreground: #F0E6D2;
+  --muted: #1A2035;
+  --muted-foreground: #8B7A5E;
+  --accent: #1A2035;
+  --accent-foreground: #F0E6D2;
+  --destructive: #FF453A;
+  --border: rgba(200, 155, 60, 0.2);
+  --input: rgba(200, 155, 60, 0.15);
+  --ring: #C89B3C;
+  --chart-1: #C89B3C;
+  --chart-2: #0A84FF;
+  --chart-3: #FF453A;
+  --chart-4: #32CD32;
+  --chart-5: #8B7A5E;
+  --sidebar: #0F1629;
+  --sidebar-foreground: #F0E6D2;
+  --sidebar-primary: #C89B3C;
+  --sidebar-primary-foreground: #0A0E1A;
+  --sidebar-accent: #1A2035;
+  --sidebar-accent-foreground: #F0E6D2;
+  --sidebar-border: rgba(200, 155, 60, 0.2);
+  --sidebar-ring: #C89B3C;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@keyframes player-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes champion-shuffle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes lock-in-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(200, 155, 60, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(200, 155, 60, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 155, 60, 0);
+  }
+}
+
+@keyframes team-flash {
+  0% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-100%) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+.animate-player-enter {
+  animation: player-enter 0.4s ease-out forwards;
+}
+
+.animate-champion-shuffle {
+  animation: champion-shuffle 0.15s ease-in-out infinite;
+}
+
+.animate-lock-in {
+  animation: lock-in-flash 0.6s ease-out;
+}
+
+.animate-team-flash {
+  animation: team-flash 0.8s ease-out forwards;
 }

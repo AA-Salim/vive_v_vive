@@ -44,6 +44,10 @@ export function usePoints(userId: string | null) {
 
   useEffect(() => {
     fetchPoints()
+    const timeout = setTimeout(() => {
+      setState((prev) => (prev.isLoading ? { ...prev, isLoading: false } : prev))
+    }, 5000)
+    return () => clearTimeout(timeout)
   }, [fetchPoints])
 
   const initialize = useCallback(async () => {

@@ -233,10 +233,10 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
 
           <Button
             onClick={handleBet}
-            disabled={!selectedSide || !amount || placing || (!!user && pointsLoading)}
+            disabled={!selectedSide || !amount || placing || pointsLoading}
             className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-50"
           >
-            {placing ? "Placing..." : user ? "Place Bet" : "Login to Bet"}
+            {placing ? "Placing..." : pointsLoading ? "Loading..." : user ? "Place Bet" : "Login to Bet"}
           </Button>
         </div>
       )}

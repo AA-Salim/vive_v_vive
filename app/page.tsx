@@ -159,8 +159,13 @@ export default function HomePage() {
           const assignment = side === "blue" ? group.blue : group.red
           const playerId = assignment.player.id
 
-          setVisiblePlayerIds((prev) => new Set([...prev, playerId]))
+          setShuffleImageUrls((prev) => {
+            const next = new Map(prev)
+            next.set(playerId, getRandomChampionImage(assignment.lane, assignment.championInternal))
+            return next
+          })
           setShufflingPlayerIds((prev) => new Set([...prev, playerId]))
+          setVisiblePlayerIds((prev) => new Set([...prev, playerId]))
 
           if (!skipRef.current) {
             const shuffleEnd = Date.now() + SHUFFLE_DURATION

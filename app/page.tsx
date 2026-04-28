@@ -118,9 +118,13 @@ export default function HomePage() {
     }
   }, [isResolved, session?.status, session?.id])
 
-  const getRandomChampionImage = useCallback((lane: Role) => {
+  const getRandomChampionImage = useCallback((lane: Role, excludeInternal?: string) => {
     const pool = CHAMPION_POOLS[lane]
-    const random = pool[Math.floor(Math.random() * pool.length)]
+    const filtered = excludeInternal
+      ? pool.filter((c) => c.internal !== excludeInternal)
+      : pool
+    const candidates = filtered.length > 0 ? filtered : pool
+    const random = candidates[Math.floor(Math.random() * candidates.length)]
     return getChampionImageUrl(random.internal)
   }, [])
 
@@ -163,7 +167,7 @@ export default function HomePage() {
             while (Date.now() < shuffleEnd && !skipRef.current && !aborted) {
               setShuffleImageUrls((prev) => {
                 const next = new Map(prev)
-                next.set(playerId, getRandomChampionImage(assignment.lane))
+                next.set(playerId, getRandomChampionImage(assignment.lane, assignment.championInternal))
                 return next
               })
               await sleep(SHUFFLE_INTERVAL)

@@ -15,7 +15,7 @@ interface BettingPanelProps {
 
 export function BettingPanel({ sessionId }: BettingPanelProps) {
   const { user, signIn } = useAuth()
-  const { balance, refetch: refetchPoints } = usePoints(user?.id ?? null)
+  const { balance, isLoading: pointsLoading, refetch: refetchPoints } = usePoints(user?.id ?? null)
   const [pool, setPool] = useState<BettingPool | null>(null)
   const [selectedSide, setSelectedSide] = useState<Side | null>(null)
   const [amount, setAmount] = useState("")
@@ -233,10 +233,10 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
 
           <Button
             onClick={handleBet}
-            disabled={!selectedSide || !amount || placing}
+            disabled={!selectedSide || !amount || placing || (!!user && pointsLoading)}
             className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-50"
           >
-            {placing ? "Placing..." : "Place Bet"}
+            {placing ? "Placing..." : user ? "Place Bet" : "Login to Bet"}
           </Button>
         </div>
       )}

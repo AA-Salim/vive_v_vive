@@ -74,10 +74,10 @@ function MapOverlay({
           />
         </div>
         <span className="max-w-[90px] truncate text-center text-[11px] font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          {assignment.champion}
+          {isShuffling ? "???" : assignment.champion}
         </span>
         <span className="max-w-[90px] truncate text-center text-[10px] text-[var(--color-gold-light)] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          {assignment.player.name}
+          {isShuffling ? "???" : assignment.player.name}
         </span>
       </div>
     </div>

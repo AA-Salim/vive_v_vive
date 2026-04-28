@@ -138,4 +138,18 @@ export interface BettingPool {
   red_multiplier: number | null
   bet_count: number
   user_bet: Bet | null
+  bets?: BetDetail[]
 }
+
+export interface BetDetail {
+  id: string
+  user_id: string
+  side: Side
+  amount: number
+  payout: number | null
+  status: "pending" | "won" | "lost" | "refunded"
+  discord_username: string
+  discord_avatar_url: string | null
+}
+
+export type PlayerRevealState = "hidden" | "silhouette" | "shuffling" | "locking" | "revealed"

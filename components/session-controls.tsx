@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useAuth } from "@/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import type { SessionWithAssignments } from "@/lib/types"
@@ -11,7 +12,10 @@ interface SessionControlsProps {
 }
 
 export function SessionControls({ session, onAction }: SessionControlsProps) {
+  const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+
+  const isCreator = user && session.created_by === user.id
 
   const patchSession = async (
     action: string,
@@ -36,6 +40,8 @@ export function SessionControls({ session, onAction }: SessionControlsProps) {
       setLoading(false)
     }
   }
+
+  if (!isCreator) return null
 
   if (session.status === "draft") {
     return (

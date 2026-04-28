@@ -74,9 +74,20 @@ export async function POST(request: Request) {
     new Map()
   )
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "Login required to create a session" },
+      { status: 401 }
+    )
+  }
+
   const { data: session, error: sessionError } = await supabase
     .from("game_sessions")
-    .insert({ status: "draft" })
+    .insert({ status: "draft", created_by: user.id })
     .select()
     .single()
 

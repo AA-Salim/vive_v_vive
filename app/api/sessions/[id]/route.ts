@@ -40,6 +40,17 @@ export async function PATCH(
     )
   }
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (session.created_by && (!user || user.id !== session.created_by)) {
+    return NextResponse.json(
+      { error: "Only the session creator can perform this action" },
+      { status: 403 }
+    )
+  }
+
   switch (body.action) {
     case "reroll":
       return handleReroll(supabase, session)

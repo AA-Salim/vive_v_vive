@@ -63,10 +63,10 @@ export function PlayerCard({
           )}
         </div>
         <p className="truncate text-sm font-medium text-[var(--color-gold-light)]">
-          {assignment.champion}
+          {isShuffling ? "???" : assignment.champion}
         </p>
         <p className="truncate text-xs text-[var(--color-gold-light)]/60">
-          {assignment.player.name}
+          {isShuffling ? "???" : assignment.player.name}
         </p>
       </div>
       {showLock && onToggleLock && (

@@ -2,14 +2,14 @@
 
 import Image from "next/image"
 import { getChampionImageUrl, ROLE_LABELS } from "@/lib/champions"
-import type { Assignment, Role } from "@/lib/types"
+import type { Assignment, PlayerRevealState, Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface MapViewProps {
   assignments: Assignment[]
-  visiblePlayerIds?: Set<string>
-  shufflingPlayerIds?: Set<string>
+  playerStates?: Map<string, PlayerRevealState>
   shuffleImageUrls?: Map<string, string>
+  activeLane?: Role | null
 }
 
 const BLUE_POSITIONS: Record<Role, { top: string; left: string }> = {
@@ -31,26 +31,37 @@ const RED_POSITIONS: Record<Role, { top: string; left: string }> = {
 function MapOverlay({
   assignment,
   position,
-  isVisible,
-  isShuffling,
+  state,
   shuffleImageUrl,
+  isActiveLane,
 }: {
   assignment: Assignment
   position: { top: string; left: string }
-  isVisible: boolean
-  isShuffling?: boolean
+  state: PlayerRevealState
   shuffleImageUrl?: string
+  isActiveLane: boolean
 }) {
-  if (!isVisible) return null
+  if (state === "hidden") return null
+
+  const isSilhouette = state === "silhouette"
+  const isShuffling = state === "shuffling"
+  const isLocking = state === "locking"
+  const isRevealed = state === "revealed"
 
   const imageUrl =
     isShuffling && shuffleImageUrl
       ? shuffleImageUrl
-      : getChampionImageUrl(assignment.championInternal)
+      : isSilhouette
+        ? getChampionImageUrl(assignment.championInternal)
+        : getChampionImageUrl(assignment.championInternal)
 
   return (
     <div
-      className="animate-player-enter absolute z-10 -translate-x-1/2 -translate-y-1/2"
+      className={cn(
+        "absolute z-10 -translate-x-1/2 -translate-y-1/2",
+        isSilhouette && "animate-silhouette",
+        (isShuffling || isRevealed) && "animate-player-enter"
+      )}
       style={{ top: position.top, left: position.left }}
     >
       <div className="flex flex-col items-center gap-0.5">
@@ -60,24 +71,34 @@ function MapOverlay({
             assignment.side === "blue"
               ? "ring-[3px] ring-[var(--color-blue-team)] shadow-[0_0_12px_rgba(10,132,255,0.5)]"
               : "ring-[3px] ring-[var(--color-red-team)] shadow-[0_0_12px_rgba(255,69,58,0.5)]",
-            isShuffling && "animate-champion-shuffle"
+            isShuffling && "animate-champion-shuffle",
+            isLocking && (assignment.side === "blue" ? "animate-lock-in-blue" : "animate-lock-in-red"),
+            isActiveLane && isSilhouette && "animate-lane-highlight"
           )}
           style={{ width: 64, height: 64 }}
         >
           <Image
             src={imageUrl}
-            alt={assignment.champion}
+            alt={isRevealed || isLocking ? assignment.champion : "?"}
             width={64}
             height={64}
-            className="h-full w-full object-cover"
+            className={cn(
+              "h-full w-full object-cover",
+              isSilhouette && "silhouette-placeholder"
+            )}
             unoptimized
           />
         </div>
         <span className="max-w-[90px] truncate text-center text-[11px] font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          {isShuffling ? "???" : assignment.champion}
+          {isRevealed || isLocking ? assignment.champion : "???"}
         </span>
-        <span className="max-w-[90px] truncate text-center text-[10px] text-[var(--color-gold-light)] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          {isShuffling ? "???" : assignment.player.name}
+        <span
+          className={cn(
+            "max-w-[90px] truncate text-center text-[10px] text-[var(--color-gold-light)] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]",
+            (isRevealed || isLocking) && "animate-name-reveal"
+          )}
+        >
+          {isRevealed || isLocking ? assignment.player.name : ""}
         </span>
       </div>
     </div>
@@ -86,9 +107,9 @@ function MapOverlay({
 
 export function MapView({
   assignments,
-  visiblePlayerIds,
-  shufflingPlayerIds,
+  playerStates,
   shuffleImageUrls,
+  activeLane,
 }: MapViewProps) {
   return (
     <div className="hidden md:block">
@@ -107,18 +128,17 @@ export function MapView({
           const positions =
             assignment.side === "blue" ? BLUE_POSITIONS : RED_POSITIONS
           const position = positions[assignment.lane]
-          const isVisible =
-            !visiblePlayerIds || visiblePlayerIds.has(assignment.player.id)
-          const isShuffling = shufflingPlayerIds?.has(assignment.player.id)
+          const state: PlayerRevealState = playerStates?.get(assignment.player.id) ?? "revealed"
+          const isActiveLaneForPlayer = activeLane === assignment.lane
 
           return (
             <MapOverlay
               key={assignment.player.id}
               assignment={assignment}
               position={position}
-              isVisible={isVisible}
-              isShuffling={isShuffling}
+              state={state}
               shuffleImageUrl={shuffleImageUrls?.get(assignment.player.id)}
+              isActiveLane={isActiveLaneForPlayer}
             />
           )
         })}

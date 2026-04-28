@@ -3,11 +3,15 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
+import { AuthNavSection } from "@/components/auth-nav-section"
 
 const links = [
   { href: "/", label: "Home" },
-  { href: "/stats", label: "Stats" },
   { href: "/history", label: "History" },
+  { href: "/rivalries", label: "Rivalries" },
+  { href: "/duos", label: "Duos" },
+  { href: "/stats", label: "Stats" },
+  { href: "/leaderboard", label: "Leaderboard" },
 ]
 
 export function Nav() {
@@ -19,7 +23,7 @@ export function Nav() {
         <Link href="/" className="text-lg font-bold text-[var(--color-gold)]">
           Vive v Vive Custom
         </Link>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -34,6 +38,9 @@ export function Nav() {
               {link.label}
             </Link>
           ))}
+          <div className="ml-3 border-l border-[var(--color-gold)]/20 pl-3">
+            <AuthNavSection />
+          </div>
         </div>
       </div>
     </nav>

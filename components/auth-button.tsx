@@ -66,7 +66,7 @@ export function AuthButton() {
           {!profile?.player_id && (
             <>
               <DropdownMenuItem
-                onSelect={() => setClaimOpen(true)}
+                onClick={() => setClaimOpen(true)}
                 className="text-[var(--color-gold-light)] focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
               >
                 <UserIcon className="mr-2 h-4 w-4" />
@@ -76,7 +76,7 @@ export function AuthButton() {
             </>
           )}
           <DropdownMenuItem
-            onSelect={() => signOut()}
+            onClick={() => signOut()}
             className="text-[var(--color-gold-light)] focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
           >
             <LogOutIcon className="mr-2 h-4 w-4" />

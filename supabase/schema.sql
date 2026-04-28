@@ -140,6 +140,20 @@ CREATE POLICY "balances_update" ON point_balances FOR UPDATE USING (false);
 ALTER TABLE point_transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "transactions_read" ON point_transactions FOR SELECT USING (true);
 
+CREATE OR REPLACE FUNCTION claim_daily_bonus(p_user_id UUID) RETURNS INTEGER AS $$
+DECLARE new_balance INTEGER; last_claim DATE;
+BEGIN
+  SELECT last_daily_claim INTO last_claim FROM point_balances WHERE user_id = p_user_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'User balance not found'; END IF;
+  IF last_claim = CURRENT_DATE THEN RETURN -1; END IF;
+  UPDATE point_balances SET balance = balance + 5, last_daily_claim = CURRENT_DATE, updated_at = now()
+  WHERE user_id = p_user_id RETURNING balance INTO new_balance;
+  INSERT INTO point_transactions (user_id, amount, reason)
+  VALUES (p_user_id, 5, 'daily_bonus');
+  RETURN new_balance;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Phase 4: Betting
 CREATE TABLE bets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

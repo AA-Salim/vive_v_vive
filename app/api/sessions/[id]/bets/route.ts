@@ -10,7 +10,7 @@ export async function GET(
 
   const { data: bets, error } = await supabase
     .from("bets")
-    .select("*")
+    .select("*, profiles:user_id ( discord_username, discord_avatar_url )")
     .eq("session_id", sessionId)
 
   if (error) {
@@ -18,11 +18,12 @@ export async function GET(
   }
 
   const allBets = bets ?? []
-  const blueTotal = allBets
-    .filter((b) => b.side === "blue" && b.status === "pending")
+  const pendingBets = allBets.filter((b) => b.status === "pending" || b.status === "won" || b.status === "lost")
+  const blueTotal = pendingBets
+    .filter((b) => b.side === "blue")
     .reduce((s, b) => s + b.amount, 0)
-  const redTotal = allBets
-    .filter((b) => b.side === "red" && b.status === "pending")
+  const redTotal = pendingBets
+    .filter((b) => b.side === "red")
     .reduce((s, b) => s + b.amount, 0)
   const total = blueTotal + redTotal
 
@@ -34,14 +35,28 @@ export async function GET(
     ? allBets.find((b) => b.user_id === user.id) ?? null
     : null
 
+  const betDetails = allBets
+    .filter((b) => b.status !== "refunded")
+    .map((b) => ({
+      id: b.id,
+      user_id: b.user_id,
+      side: b.side,
+      amount: b.amount,
+      payout: b.payout,
+      status: b.status,
+      discord_username: (b.profiles as { discord_username: string; discord_avatar_url: string | null })?.discord_username ?? "Unknown",
+      discord_avatar_url: (b.profiles as { discord_username: string; discord_avatar_url: string | null })?.discord_avatar_url ?? null,
+    }))
+
   return NextResponse.json({
     blue_total: blueTotal,
     red_total: redTotal,
     total,
     blue_multiplier: blueTotal > 0 ? total / blueTotal : null,
     red_multiplier: redTotal > 0 ? total / redTotal : null,
-    bet_count: allBets.filter((b) => b.status === "pending").length,
+    bet_count: pendingBets.length,
     user_bet: userBet,
+    bets: betDetails,
   })
 }
 

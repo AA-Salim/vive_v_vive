@@ -5,9 +5,13 @@ import { createClient } from "@/lib/supabase-client"
 import type { User } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/types"
 
+interface ProfileWithPlayer extends UserProfile {
+  players?: { id: string; name: string; is_admin: boolean } | null
+}
+
 interface AuthState {
   user: User | null
-  profile: UserProfile | null
+  profile: ProfileWithPlayer | null
   isLoading: boolean
 }
 
@@ -76,9 +80,12 @@ export function useAuth() {
     setState((prev) => ({ ...prev, profile }))
   }, [fetchProfile])
 
+  const isAdmin = !!state.profile?.players?.is_admin
+
   return {
     user: state.user,
     profile: state.profile,
+    isAdmin,
     isLoading: state.isLoading,
     signIn,
     signOut,

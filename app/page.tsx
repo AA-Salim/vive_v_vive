@@ -71,7 +71,7 @@ function statusColor(status: string) {
 
 export default function HomePage() {
   const { session, isLoading, refetch, serverTimeDelta } = useSession()
-  const { user, signIn } = useAuth()
+  const { user, isAdmin, signIn } = useAuth()
   const [fearlessKey, setFearlessKey] = useState(0)
   const [winFlash, setWinFlash] = useState<"blue" | "red" | null>(null)
   const [creating, setCreating] = useState(false)
@@ -90,7 +90,7 @@ export default function HomePage() {
   const assignments = session ? sessionToAssignments(session) : null
   const isActive = session && ["draft", "betting", "in_game"].includes(session.status)
   const isResolved = session && ["blue_win", "red_win", "canceled", "expired"].includes(session.status)
-  const isCreator = localCreator || (!!user && !!session && session.created_by === user.id)
+  const isCreator = localCreator || isAdmin || (!!user && !!session && session.created_by === user.id)
 
   useEffect(() => {
     if (!session) {

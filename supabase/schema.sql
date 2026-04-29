@@ -69,6 +69,7 @@ CREATE UNIQUE INDEX idx_one_active_session
 
 -- Phase 2: Auth
 ALTER TABLE players ADD COLUMN auth_user_id UUID UNIQUE;
+ALTER TABLE players ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE user_profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,

@@ -44,7 +44,17 @@ export async function PATCH(
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (session.created_by && (!user || user.id !== session.created_by)) {
+  let isAdmin = false
+  if (user) {
+    const { data: player } = await supabase
+      .from("players")
+      .select("is_admin")
+      .eq("auth_user_id", user.id)
+      .single()
+    isAdmin = !!player?.is_admin
+  }
+
+  if (session.created_by && !isAdmin && (!user || user.id !== session.created_by)) {
     return NextResponse.json(
       { error: "Only the session creator can perform this action" },
       { status: 403 }

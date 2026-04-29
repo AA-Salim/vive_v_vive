@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { splitTeams, assignLanes, assignChampions } from "@/lib/randomizer"
+import { getChampionPools } from "@/lib/champions-db"
 import type { Player } from "@/lib/types"
 
 const SESSION_SELECT = `
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
     fearlessData?.map((r) => r.champion_name) ?? []
   )
 
+  const championPools = await getChampionPools()
+
   const { blue, red } = splitTeams(players as Player[])
   const blueWithLanes = assignLanes(blue)
   const redWithLanes = assignLanes(red)
@@ -71,7 +74,8 @@ export async function POST(request: Request) {
     blueWithLanes,
     redWithLanes,
     fearlessBanned,
-    new Map()
+    new Map(),
+    championPools
   )
 
   const {

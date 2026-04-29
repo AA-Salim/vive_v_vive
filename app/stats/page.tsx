@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Table,
@@ -12,8 +11,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Skeleton } from "@/components/ui/skeleton"
-import { findChampion, getChampionImageUrl, ROLE_LABELS } from "@/lib/champions"
-import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface PlayerStat {
@@ -23,8 +20,6 @@ interface PlayerStat {
   losses: number
   games_played: number
   winRate: number
-  mostPlayedChampion: string | null
-  mostPlayedLane: string | null
 }
 
 type SortKey = "name" | "games_played" | "wins" | "losses" | "winRate"
@@ -178,16 +173,10 @@ export default function StatsPage() {
               <SortHeader label="Wins" field="wins" className="text-center" />
               <SortHeader label="Losses" field="losses" className="text-center" />
               <SortHeader label="Win Rate" field="winRate" className="text-center" />
-              <TableHead>Champion</TableHead>
-              <TableHead>Lane</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sorted.map((player) => {
-              const champ = player.mostPlayedChampion
-                ? findChampion(player.mostPlayedChampion)
-                : null
-              return (
+            {sorted.map((player) => (
                 <TableRow
                   key={player.id}
                   className="border-[var(--color-gold)]/10"
@@ -229,31 +218,8 @@ export default function StatsPage() {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    {champ && (
-                      <div className="flex items-center gap-1.5">
-                        <Image
-                          src={getChampionImageUrl(champ.internal)}
-                          alt={champ.name}
-                          width={24}
-                          height={24}
-                          className="rounded-full"
-                          unoptimized
-                        />
-                        <span className="text-xs text-[var(--color-gold-light)]/70">
-                          {champ.name}
-                        </span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-[var(--color-gold-light)]/70">
-                    {player.mostPlayedLane
-                      ? ROLE_LABELS[player.mostPlayedLane as Role] ?? player.mostPlayedLane
-                      : "-"}
-                  </TableCell>
                 </TableRow>
-              )
-            })}
+              ))}
           </TableBody>
         </Table>
       </div>

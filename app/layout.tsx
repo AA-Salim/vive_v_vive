@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
 import { Nav } from "@/components/nav"
+import { SalaxeBroadcast } from "@/components/salaxe-broadcast"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -34,6 +35,7 @@ export default function RootLayout({
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-6">
           {children}
         </main>
+        <SalaxeBroadcast />
         <Toaster />
       </body>
     </html>

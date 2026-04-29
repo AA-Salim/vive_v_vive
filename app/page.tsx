@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import type { Assignment, Player, Role, SessionWithAssignments } from "@/lib/types"
+import type { Assignment, Player, PlayerRevealState, Role, SessionWithAssignments } from "@/lib/types"
 import { getAssignmentsByLane } from "@/lib/randomizer"
 import { CHAMPION_POOLS, getChampionImageUrl } from "@/lib/champions"
 import { RosterManager } from "@/components/roster-manager"
@@ -14,12 +14,15 @@ import { BettingPanel } from "@/components/betting-panel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
+import { useAuth } from "@/hooks/use-auth"
 import { toast } from "sonner"
 
-const SHUFFLE_INTERVAL = 80
-const SHUFFLE_DURATION = 1000
-const LOCK_PAUSE = 400
-const LANE_PAUSE = 300
+const SHUFFLE_INTERVAL = 50
+const SHUFFLE_DURATION = 1100
+const LOCK_PAUSE = 200
+const LANE_PAUSE = 200
+const SILHOUETTE_HOLD = 1000
+const LOCK_IN_HOLD = 450
 
 function sessionToAssignments(session: SessionWithAssignments): Assignment[] {
   return session.session_assignments.map((sa) => ({
@@ -68,16 +71,17 @@ function statusColor(status: string) {
 
 export default function HomePage() {
   const { session, isLoading, refetch, serverTimeDelta } = useSession()
+  const { user, isAdmin, signIn } = useAuth()
   const [fearlessKey, setFearlessKey] = useState(0)
   const [winFlash, setWinFlash] = useState<"blue" | "red" | null>(null)
   const [creating, setCreating] = useState(false)
 
   const [isRevealing, setIsRevealing] = useState(false)
   const [revealDone, setRevealDone] = useState(false)
-  const [visiblePlayerIds, setVisiblePlayerIds] = useState<Set<string>>(new Set())
-  const [shufflingPlayerIds, setShufflingPlayerIds] = useState<Set<string>>(new Set())
+  const [playerStates, setPlayerStates] = useState<Map<string, PlayerRevealState>>(new Map())
   const [shuffleImageUrls, setShuffleImageUrls] = useState<Map<string, string>>(new Map())
-  const [isCreator, setIsCreator] = useState(false)
+  const [activeLane, setActiveLane] = useState<Role | null>(null)
+  const [localCreator, setLocalCreator] = useState(false)
 
   const skipRef = useRef(false)
   const revealAbortRef = useRef<(() => void) | null>(null)
@@ -86,26 +90,29 @@ export default function HomePage() {
   const assignments = session ? sessionToAssignments(session) : null
   const isActive = session && ["draft", "betting", "in_game"].includes(session.status)
   const isResolved = session && ["blue_win", "red_win", "canceled", "expired"].includes(session.status)
+  const isCreator = localCreator || isAdmin || (!!user && !!session && session.created_by === user.id)
 
   useEffect(() => {
     if (!session) {
       lastSessionId.current = null
-      setIsCreator(false)
+      setLocalCreator(false)
       return
     }
 
     if (session.id !== lastSessionId.current) {
       lastSessionId.current = session.id
 
-      if (!isCreator) {
+      if (!localCreator) {
         if (assignments) {
-          setVisiblePlayerIds(new Set(assignments.map((a) => a.player.id)))
+          const states = new Map<string, PlayerRevealState>()
+          assignments.forEach((a) => states.set(a.player.id, "revealed"))
+          setPlayerStates(states)
         }
         setRevealDone(true)
         setIsRevealing(false)
       }
     }
-  }, [session, assignments, isCreator])
+  }, [session, assignments, localCreator])
 
   useEffect(() => {
     if (isResolved && session) {
@@ -118,10 +125,22 @@ export default function HomePage() {
     }
   }, [isResolved, session?.status, session?.id])
 
-  const getRandomChampionImage = useCallback((lane: Role) => {
+  const getRandomChampionImage = useCallback((lane: Role, excludeInternal?: string) => {
     const pool = CHAMPION_POOLS[lane]
-    const random = pool[Math.floor(Math.random() * pool.length)]
+    const filtered = excludeInternal
+      ? pool.filter((c) => c.internal !== excludeInternal)
+      : pool
+    const candidates = filtered.length > 0 ? filtered : pool
+    const random = candidates[Math.floor(Math.random() * candidates.length)]
     return getChampionImageUrl(random.internal)
+  }, [])
+
+  const setPlayerState = useCallback((playerId: string, state: PlayerRevealState) => {
+    setPlayerStates((prev) => {
+      const next = new Map(prev)
+      next.set(playerId, state)
+      return next
+    })
   }, [])
 
   const revealSequence = useCallback(
@@ -146,40 +165,71 @@ export default function HomePage() {
           }, 50)
         })
 
+      // Stage 1: All silhouettes appear
+      const initialStates = new Map<string, PlayerRevealState>()
+      allAssignments.forEach((a) => initialStates.set(a.player.id, "silhouette"))
+      setPlayerStates(initialStates)
+      setActiveLane(null)
+
+      if (!skipRef.current && !aborted) {
+        await sleep(SILHOUETTE_HOLD)
+      }
+
+      // Stage 2: Lane-by-lane reveal
       for (let i = 0; i < laneGroups.length; i++) {
-        if (aborted) break
+        if (aborted || skipRef.current) break
         const group = laneGroups[i]
+
+        setActiveLane(group.lane)
 
         for (const side of ["blue", "red"] as const) {
           if (aborted || skipRef.current) break
           const assignment = side === "blue" ? group.blue : group.red
           const playerId = assignment.player.id
 
-          setVisiblePlayerIds((prev) => new Set([...prev, playerId]))
-          setShufflingPlayerIds((prev) => new Set([...prev, playerId]))
+          // Start shuffle
+          setPlayerState(playerId, "shuffling")
+          setShuffleImageUrls((prev) => {
+            const next = new Map(prev)
+            next.set(playerId, getRandomChampionImage(assignment.lane, assignment.championInternal))
+            return next
+          })
 
-          if (!skipRef.current) {
+          if (!skipRef.current && !aborted) {
+            // Slot machine: fast cycling that decelerates
             const shuffleEnd = Date.now() + SHUFFLE_DURATION
+            let interval = SHUFFLE_INTERVAL
+
             while (Date.now() < shuffleEnd && !skipRef.current && !aborted) {
               setShuffleImageUrls((prev) => {
                 const next = new Map(prev)
-                next.set(playerId, getRandomChampionImage(assignment.lane))
+                next.set(playerId, getRandomChampionImage(assignment.lane, assignment.championInternal))
                 return next
               })
-              await sleep(SHUFFLE_INTERVAL)
+
+              const remaining = shuffleEnd - Date.now()
+              if (remaining < 500) {
+                const progress = 1 - remaining / 500
+                interval = SHUFFLE_INTERVAL + Math.floor(progress * progress * 250)
+              }
+
+              await sleep(interval)
             }
           }
 
-          setShufflingPlayerIds((prev) => {
-            const next = new Set(prev)
-            next.delete(playerId)
-            return next
-          })
+          // Lock in: scale + flash
           setShuffleImageUrls((prev) => {
             const next = new Map(prev)
             next.delete(playerId)
             return next
           })
+          setPlayerState(playerId, "locking")
+
+          if (!skipRef.current && !aborted) {
+            await sleep(LOCK_IN_HOLD)
+          }
+
+          setPlayerState(playerId, "revealed")
 
           if (!skipRef.current && !aborted) {
             await sleep(LOCK_PAUSE)
@@ -191,20 +241,27 @@ export default function HomePage() {
         }
       }
 
+      // Stage 3: All revealed
+      setActiveLane(null)
+      const finalStates = new Map<string, PlayerRevealState>()
+      allAssignments.forEach((a) => finalStates.set(a.player.id, "revealed"))
+      setPlayerStates(finalStates)
+      setShuffleImageUrls(new Map())
       setIsRevealing(false)
       setRevealDone(true)
-      setVisiblePlayerIds(new Set(allAssignments.map((a) => a.player.id)))
       revealAbortRef.current = null
     },
-    [getRandomChampionImage]
+    [getRandomChampionImage, setPlayerState]
   )
 
   const handleSkip = () => {
     skipRef.current = true
     if (assignments) {
-      setVisiblePlayerIds(new Set(assignments.map((a) => a.player.id)))
-      setShufflingPlayerIds(new Set())
+      const states = new Map<string, PlayerRevealState>()
+      assignments.forEach((a) => states.set(a.player.id, "revealed"))
+      setPlayerStates(states)
       setShuffleImageUrls(new Map())
+      setActiveLane(null)
       setIsRevealing(false)
       setRevealDone(true)
     }
@@ -226,14 +283,19 @@ export default function HomePage() {
       })
       if (!res.ok) {
         const err = await res.json()
-        toast.error(err.error || "Failed to create session")
+        if (res.status === 401) {
+          toast.error("Login to create a session")
+          signIn()
+        } else {
+          toast.error(err.error || "Failed to create session")
+        }
         return
       }
       const newSession = await res.json()
-      setIsCreator(true)
-      setVisiblePlayerIds(new Set())
-      setShufflingPlayerIds(new Set())
+      setLocalCreator(true)
+      setPlayerStates(new Map())
       setShuffleImageUrls(new Map())
+      setActiveLane(null)
       setRevealDone(false)
 
       await refetch()
@@ -262,9 +324,9 @@ export default function HomePage() {
 
   const handleReroll = async () => {
     if (!session) return
-    setVisiblePlayerIds(new Set())
-    setShufflingPlayerIds(new Set())
+    setPlayerStates(new Map())
     setShuffleImageUrls(new Map())
+    setActiveLane(null)
     setRevealDone(false)
 
     const res = await fetch(`/api/sessions/${session.id}`, {
@@ -294,12 +356,12 @@ export default function HomePage() {
 
   const handleReset = () => {
     if (revealAbortRef.current) revealAbortRef.current()
-    setVisiblePlayerIds(new Set())
-    setShufflingPlayerIds(new Set())
+    setPlayerStates(new Map())
     setShuffleImageUrls(new Map())
+    setActiveLane(null)
     setIsRevealing(false)
     setRevealDone(false)
-    setIsCreator(false)
+    setLocalCreator(false)
     lastSessionId.current = null
     refetch()
   }
@@ -350,22 +412,22 @@ export default function HomePage() {
             <>
               <MapView
                 assignments={assignments}
-                visiblePlayerIds={visiblePlayerIds}
-                shufflingPlayerIds={shufflingPlayerIds}
+                playerStates={playerStates}
                 shuffleImageUrls={shuffleImageUrls}
+                activeLane={activeLane}
               />
 
               <TeamList
                 assignments={assignments}
-                visiblePlayerIds={visiblePlayerIds}
-                shufflingPlayerIds={shufflingPlayerIds}
+                playerStates={playerStates}
                 shuffleImageUrls={shuffleImageUrls}
                 onToggleLock={
-                  session.status === "draft" && revealDone
+                  session.status === "draft" && revealDone && isCreator
                     ? handleToggleLock
                     : undefined
                 }
-                showLocks={session.status === "draft" && revealDone}
+                showLocks={session.status === "draft" && revealDone && isCreator}
+                activeLane={activeLane}
               />
 
               {isRevealing && (
@@ -389,7 +451,7 @@ export default function HomePage() {
                 />
               )}
 
-              {session.status === "draft" && revealDone && (
+              {session.status === "draft" && revealDone && isCreator && (
                 <div className="flex flex-wrap items-center justify-center gap-3">
                   <SessionControls
                     session={session}
@@ -407,7 +469,7 @@ export default function HomePage() {
 
               {session.status === "betting" && (
                 <>
-                  <BettingPanel sessionId={session.id} />
+                  <BettingPanel sessionId={session.id} isBettingOpen={true} />
                   <SessionControls
                     session={session}
                     onAction={handleSessionAction}
@@ -416,10 +478,13 @@ export default function HomePage() {
               )}
 
               {session.status === "in_game" && (
-                <SessionControls
-                  session={session}
-                  onAction={handleSessionAction}
-                />
+                <>
+                  <BettingPanel sessionId={session.id} isBettingOpen={false} />
+                  <SessionControls
+                    session={session}
+                    onAction={handleSessionAction}
+                  />
+                </>
               )}
             </>
           )}
@@ -429,6 +494,8 @@ export default function HomePage() {
               <MapView assignments={assignments} />
 
               <TeamList assignments={assignments} />
+
+              <BettingPanel sessionId={session.id} isBettingOpen={false} />
 
               <div className="flex flex-col items-center gap-3">
                 <div className="text-lg font-bold text-[var(--color-gold)]">

@@ -23,6 +23,7 @@ export function usePoints(userId: string | null) {
       setState({ balance: 0, lastDailyClaim: null, transactions: [], isLoading: false })
       return
     }
+    setState((prev) => ({ ...prev, isLoading: true }))
     try {
       const res = await fetch("/api/points")
       if (!res.ok) {
@@ -43,6 +44,10 @@ export function usePoints(userId: string | null) {
 
   useEffect(() => {
     fetchPoints()
+    const timeout = setTimeout(() => {
+      setState((prev) => (prev.isLoading ? { ...prev, isLoading: false } : prev))
+    }, 5000)
+    return () => clearTimeout(timeout)
   }, [fetchPoints])
 
   const initialize = useCallback(async () => {

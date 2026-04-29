@@ -1,26 +1,27 @@
 "use client"
 
-import type { Assignment, Role } from "@/lib/types"
+import type { Assignment, PlayerRevealState, Role } from "@/lib/types"
 import { PlayerCard } from "./player-card"
+import { cn } from "@/lib/utils"
 
 const LANE_ORDER: Role[] = ["top", "jungle", "mid", "adc", "support"]
 
 interface TeamListProps {
   assignments: Assignment[]
-  visiblePlayerIds?: Set<string>
-  shufflingPlayerIds?: Set<string>
+  playerStates?: Map<string, PlayerRevealState>
   shuffleImageUrls?: Map<string, string>
   onToggleLock?: (playerId: string) => void
   showLocks?: boolean
+  activeLane?: Role | null
 }
 
 export function TeamList({
   assignments,
-  visiblePlayerIds,
-  shufflingPlayerIds,
+  playerStates,
   shuffleImageUrls,
   onToggleLock,
   showLocks = false,
+  activeLane,
 }: TeamListProps) {
   const blue = assignments.filter((a) => a.side === "blue")
   const red = assignments.filter((a) => a.side === "red")
@@ -40,16 +41,18 @@ export function TeamList({
       </h3>
       <div className="space-y-1">
         {sortByLane(team).map((assignment) => {
-          const isVisible =
-            !visiblePlayerIds || visiblePlayerIds.has(assignment.player.id)
-          const isShuffling = shufflingPlayerIds?.has(assignment.player.id)
+          const state: PlayerRevealState = playerStates?.get(assignment.player.id) ?? "revealed"
+          const isActiveLaneRow = activeLane === assignment.lane
 
-          if (!isVisible) return null
+          if (state === "hidden") return null
 
           return (
             <div
               key={assignment.player.id}
-              className="animate-player-enter"
+              className={cn(
+                "rounded-lg transition-all duration-300",
+                isActiveLaneRow && state === "silhouette" && "bg-[var(--color-gold)]/5 ring-1 ring-[var(--color-gold)]/20"
+              )}
             >
               <PlayerCard
                 assignment={assignment}
@@ -59,7 +62,7 @@ export function TeamList({
                     ? () => onToggleLock(assignment.player.id)
                     : undefined
                 }
-                isShuffling={isShuffling}
+                state={state}
                 shuffleImageUrl={shuffleImageUrls?.get(assignment.player.id)}
               />
             </div>

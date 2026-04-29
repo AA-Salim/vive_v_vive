@@ -7,15 +7,17 @@ import { usePoints } from "@/hooks/use-points"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
+import Image from "next/image"
 import type { BettingPool, Side } from "@/lib/types"
 
 interface BettingPanelProps {
   sessionId: string
+  isBettingOpen?: boolean
 }
 
-export function BettingPanel({ sessionId }: BettingPanelProps) {
+export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelProps) {
   const { user, signIn } = useAuth()
-  const { balance, refetch: refetchPoints } = usePoints(user?.id ?? null)
+  const { balance, isLoading: pointsLoading, refetch: refetchPoints } = usePoints(user?.id ?? null)
   const [pool, setPool] = useState<BettingPool | null>(null)
   const [selectedSide, setSelectedSide] = useState<Side | null>(null)
   const [amount, setAmount] = useState("")
@@ -43,7 +45,7 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "bets",
           filter: `session_id=eq.${sessionId}`,
@@ -99,6 +101,9 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
   if (!pool) return null
 
   const hasBet = !!pool.user_bet
+  const blueBets = pool.bets?.filter((b) => b.side === "blue") ?? []
+  const redBets = pool.bets?.filter((b) => b.side === "red") ?? []
+  const hasBets = blueBets.length > 0 || redBets.length > 0
 
   return (
     <div className="rounded-lg border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-4">
@@ -146,7 +151,93 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
         </div>
       </div>
 
-      {hasBet ? (
+      {hasBets && (
+        <div className="mt-4 space-y-2">
+          <div className="text-center text-xs font-semibold tracking-wider text-[var(--color-gold)]/70">
+            BETS PLACED
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              {blueBets.map((bet) => (
+                <div
+                  key={bet.id}
+                  className="flex items-center gap-2 rounded-md bg-[var(--color-blue-team)]/10 px-2.5 py-1.5"
+                >
+                  {bet.discord_avatar_url ? (
+                    <Image
+                      src={bet.discord_avatar_url}
+                      alt=""
+                      width={20}
+                      height={20}
+                      className="shrink-0 rounded-full"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="h-5 w-5 shrink-0 rounded-full bg-[var(--color-blue-team)]/30" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-gold-light)]/80">
+                    {bet.discord_username}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1 text-xs font-bold">
+                    <span className="text-[var(--color-blue-team)]">{bet.amount}</span>
+                    {bet.status === "won" && bet.payout != null && (
+                      <span className="text-green-400">+{bet.payout}</span>
+                    )}
+                    {bet.status === "lost" && (
+                      <span className="text-red-400/60">-{bet.amount}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {blueBets.length === 0 && (
+                <div className="py-2 text-center text-xs text-[var(--color-gold-light)]/30">
+                  No bets
+                </div>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              {redBets.map((bet) => (
+                <div
+                  key={bet.id}
+                  className="flex items-center gap-2 rounded-md bg-[var(--color-red-team)]/10 px-2.5 py-1.5"
+                >
+                  {bet.discord_avatar_url ? (
+                    <Image
+                      src={bet.discord_avatar_url}
+                      alt=""
+                      width={20}
+                      height={20}
+                      className="shrink-0 rounded-full"
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="h-5 w-5 shrink-0 rounded-full bg-[var(--color-red-team)]/30" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-xs text-[var(--color-gold-light)]/80">
+                    {bet.discord_username}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-1 text-xs font-bold">
+                    <span className="text-[var(--color-red-team)]">{bet.amount}</span>
+                    {bet.status === "won" && bet.payout != null && (
+                      <span className="text-green-400">+{bet.payout}</span>
+                    )}
+                    {bet.status === "lost" && (
+                      <span className="text-red-400/60">-{bet.amount}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {redBets.length === 0 && (
+                <div className="py-2 text-center text-xs text-[var(--color-gold-light)]/30">
+                  No bets
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isBettingOpen && hasBet && (
         <div className="mt-4 rounded-md bg-[var(--color-navy)]/50 p-3 text-center">
           <div className="text-xs text-[var(--color-gold-light)]/60">
             Your bet
@@ -164,8 +255,16 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
             </span>
           </div>
         </div>
-      ) : (
+      )}
+
+      {isBettingOpen && !hasBet && (
         <div className="mt-4 space-y-3">
+          {user && (
+            <div className="text-center text-sm font-semibold text-[var(--color-gold)]">
+              {pointsLoading ? "..." : balance} points
+            </div>
+          )}
+
           <div className="flex justify-center gap-2">
             <Button
               size="sm"
@@ -227,16 +326,39 @@ export function BettingPanel({ sessionId }: BettingPanelProps) {
             </Button>
           </div>
 
-          <div className="text-center text-xs text-[var(--color-gold-light)]/50">
-            Balance: {balance}
-          </div>
+          {!user && (
+            <p className="text-center text-xs text-[var(--color-gold-light)]/40">
+              Login with Discord to place bets
+            </p>
+          )}
+          {user && !pointsLoading && balance === 0 && (
+            <p className="text-center text-xs text-red-400">
+              No points available. Claim your daily bonus!
+            </p>
+          )}
+          {user && !pointsLoading && balance > 0 && !selectedSide && (
+            <p className="text-center text-xs text-[var(--color-gold-light)]/40">
+              Select a side above to bet
+            </p>
+          )}
+          {user && !pointsLoading && balance > 0 && selectedSide && !amount && (
+            <p className="text-center text-xs text-[var(--color-gold-light)]/40">
+              Enter an amount to bet
+            </p>
+          )}
 
           <Button
-            onClick={handleBet}
-            disabled={!selectedSide || !amount || placing}
+            onClick={user ? handleBet : signIn}
+            disabled={user ? (!selectedSide || !amount || placing || pointsLoading) : false}
             className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-50"
           >
-            {placing ? "Placing..." : "Place Bet"}
+            {!user
+              ? "Login to Bet"
+              : placing
+                ? "Placing..."
+                : pointsLoading
+                  ? "Loading balance..."
+                  : "Place Bet"}
           </Button>
         </div>
       )}

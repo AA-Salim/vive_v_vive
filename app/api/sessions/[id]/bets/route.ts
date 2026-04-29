@@ -18,11 +18,30 @@ export async function GET(
   }
 
   const allBets = bets ?? []
-  const blueTotal = allBets
-    .filter((b) => b.side === "blue" && b.status === "pending")
+
+  const userIds = [...new Set(allBets.map((b) => b.user_id))]
+  const profileMap = new Map<string, { discord_username: string; discord_avatar_url: string | null }>()
+
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("user_profiles")
+      .select("id, discord_username, discord_avatar_url")
+      .in("id", userIds)
+
+    for (const p of profiles ?? []) {
+      profileMap.set(p.id, {
+        discord_username: p.discord_username,
+        discord_avatar_url: p.discord_avatar_url,
+      })
+    }
+  }
+
+  const activeBets = allBets.filter((b) => b.status === "pending" || b.status === "won" || b.status === "lost")
+  const blueTotal = activeBets
+    .filter((b) => b.side === "blue")
     .reduce((s, b) => s + b.amount, 0)
-  const redTotal = allBets
-    .filter((b) => b.side === "red" && b.status === "pending")
+  const redTotal = activeBets
+    .filter((b) => b.side === "red")
     .reduce((s, b) => s + b.amount, 0)
   const total = blueTotal + redTotal
 
@@ -34,14 +53,31 @@ export async function GET(
     ? allBets.find((b) => b.user_id === user.id) ?? null
     : null
 
+  const betDetails = allBets
+    .filter((b) => b.status !== "refunded")
+    .map((b) => {
+      const profile = profileMap.get(b.user_id)
+      return {
+        id: b.id,
+        user_id: b.user_id,
+        side: b.side,
+        amount: b.amount,
+        payout: b.payout,
+        status: b.status,
+        discord_username: profile?.discord_username ?? "Unknown",
+        discord_avatar_url: profile?.discord_avatar_url ?? null,
+      }
+    })
+
   return NextResponse.json({
     blue_total: blueTotal,
     red_total: redTotal,
     total,
     blue_multiplier: blueTotal > 0 ? total / blueTotal : null,
     red_multiplier: redTotal > 0 ? total / redTotal : null,
-    bet_count: allBets.filter((b) => b.status === "pending").length,
+    bet_count: activeBets.length,
     user_bet: userBet,
+    bets: betDetails,
   })
 }
 

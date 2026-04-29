@@ -1,6 +1,6 @@
 import Image from "next/image"
 import { getChampionImageUrl, ROLE_LABELS } from "@/lib/champions"
-import type { Assignment } from "@/lib/types"
+import type { Assignment, PlayerRevealState } from "@/lib/types"
 import { LaneIcon } from "./lane-icon"
 import { cn } from "@/lib/utils"
 
@@ -8,7 +8,7 @@ interface PlayerCardProps {
   assignment: Assignment
   showLock?: boolean
   onToggleLock?: () => void
-  isShuffling?: boolean
+  state?: PlayerRevealState
   shuffleImageUrl?: string
   compact?: boolean
 }
@@ -17,20 +17,31 @@ export function PlayerCard({
   assignment,
   showLock = false,
   onToggleLock,
-  isShuffling = false,
+  state = "revealed",
   shuffleImageUrl,
   compact = false,
 }: PlayerCardProps) {
+  const isSilhouette = state === "silhouette"
+  const isShuffling = state === "shuffling"
+  const isLocking = state === "locking"
+  const isRevealed = state === "revealed"
+  const isHidden = state === "hidden"
+
+  if (isHidden) return null
+
   const imageUrl = isShuffling && shuffleImageUrl
     ? shuffleImageUrl
     : getChampionImageUrl(assignment.championInternal)
+
   const imgSize = compact ? 48 : 48
 
   return (
     <div
       className={cn(
         "flex items-center gap-3 rounded-lg p-2 transition-colors",
-        assignment.fearlessOverride && "ring-1 ring-yellow-500/50"
+        assignment.fearlessOverride && "ring-1 ring-yellow-500/50",
+        isSilhouette && "animate-silhouette",
+        isLocking && "animate-player-enter"
       )}
     >
       <div
@@ -39,16 +50,20 @@ export function PlayerCard({
           assignment.side === "blue"
             ? "ring-2 ring-[var(--color-blue-team)]"
             : "ring-2 ring-[var(--color-red-team)]",
-          isShuffling && "animate-champion-shuffle"
+          isShuffling && "animate-champion-shuffle",
+          isLocking && (assignment.side === "blue" ? "animate-lock-in-blue" : "animate-lock-in-red")
         )}
         style={{ width: imgSize, height: imgSize }}
       >
         <Image
           src={imageUrl}
-          alt={assignment.champion}
+          alt={isRevealed || isLocking ? assignment.champion : "?"}
           width={imgSize}
           height={imgSize}
-          className="h-full w-full object-cover"
+          className={cn(
+            "h-full w-full object-cover",
+            isSilhouette && "silhouette-placeholder"
+          )}
           unoptimized
         />
       </div>
@@ -63,10 +78,15 @@ export function PlayerCard({
           )}
         </div>
         <p className="truncate text-sm font-medium text-[var(--color-gold-light)]">
-          {assignment.champion}
+          {isRevealed || isLocking ? assignment.champion : "???"}
         </p>
-        <p className="truncate text-xs text-[var(--color-gold-light)]/60">
-          {assignment.player.name}
+        <p
+          className={cn(
+            "truncate text-xs text-[var(--color-gold-light)]/60",
+            (isRevealed || isLocking) && "animate-name-reveal"
+          )}
+        >
+          {isRevealed || isLocking ? assignment.player.name : ""}
         </p>
       </div>
       {showLock && onToggleLock && (
@@ -80,7 +100,7 @@ export function PlayerCard({
           )}
           title={assignment.locked ? "Unlock" : "Lock"}
         >
-          {assignment.locked ? "🔒" : "🔓"}
+          {assignment.locked ? "L" : "U"}
         </button>
       )}
     </div>

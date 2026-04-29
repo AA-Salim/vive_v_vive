@@ -27,6 +27,7 @@ export function RosterManager({ onRandomize, disabled }: RosterManagerProps) {
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState("")
+  const [search, setSearch] = useState("")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<Player | null>(null)
 
@@ -151,6 +152,13 @@ export function RosterManager({ onRandomize, disabled }: RosterManagerProps) {
         </Button>
       </div>
 
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search players..."
+        className="bg-[var(--color-navy)]/30 text-sm"
+      />
+
       {loading ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -193,70 +201,74 @@ export function RosterManager({ onRandomize, disabled }: RosterManagerProps) {
           </div>
 
           <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
-            {activePlayers.map((player) => (
-              <div
-                key={player.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-[var(--color-navy-lighter)]"
-              >
-                <Checkbox
-                  checked={selectedIds.has(player.id)}
-                  onCheckedChange={() => toggleSelection(player.id)}
-                />
-                <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]">
-                  {player.name}
-                </span>
-                <Button
-                  onClick={() => toggleActive(player)}
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-1 text-[10px] text-[var(--color-gold-light)]/40"
-                  title="Set inactive"
+            {activePlayers
+              .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+              .map((player) => (
+                <div
+                  key={player.id}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-[var(--color-navy-lighter)]"
                 >
-                  Bench
-                </Button>
-                <Button
-                  onClick={() => setDeleteTarget(player)}
-                  size="sm"
-                  variant="ghost"
-                  className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
-                >
-                  X
-                </Button>
-              </div>
-            ))}
+                  <Checkbox
+                    checked={selectedIds.has(player.id)}
+                    onCheckedChange={() => toggleSelection(player.id)}
+                  />
+                  <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]">
+                    {player.name}
+                  </span>
+                  <Button
+                    onClick={() => toggleActive(player)}
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-1 text-[10px] text-[var(--color-gold-light)]/40"
+                    title="Set inactive"
+                  >
+                    Bench
+                  </Button>
+                  <Button
+                    onClick={() => setDeleteTarget(player)}
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
+                  >
+                    X
+                  </Button>
+                </div>
+              ))}
 
             {inactivePlayers.length > 0 && (
               <>
                 <div className="pt-2 pb-1 text-xs text-[var(--color-gold-light)]/40">
                   Benched
                 </div>
-                {inactivePlayers.map((player) => (
-                  <div
-                    key={player.id}
-                    className="flex items-center gap-2 rounded-md px-2 py-1.5 opacity-50"
-                  >
-                    <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]/60">
-                      {player.name}
-                    </span>
-                    <Button
-                      onClick={() => toggleActive(player)}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-1 text-[10px] text-green-400/60"
-                      title="Reactivate"
+                {inactivePlayers
+                  .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+                  .map((player) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center gap-2 rounded-md px-2 py-1.5 opacity-50"
                     >
-                      Activate
-                    </Button>
-                    <Button
-                      onClick={() => setDeleteTarget(player)}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
-                    >
-                      X
-                    </Button>
-                  </div>
-                ))}
+                      <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]/60">
+                        {player.name}
+                      </span>
+                      <Button
+                        onClick={() => toggleActive(player)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1 text-[10px] text-green-400/60"
+                        title="Reactivate"
+                      >
+                        Activate
+                      </Button>
+                      <Button
+                        onClick={() => setDeleteTarget(player)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
+                      >
+                        X
+                      </Button>
+                    </div>
+                  ))}
               </>
             )}
           </div>

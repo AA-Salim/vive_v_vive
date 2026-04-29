@@ -15,6 +15,23 @@ const KISS_RESPONSES = [
   "The Great Salaxe has felt worthier kisses, but yours will do.",
 ]
 
+const KISS_DESCRIPTIONS = [
+  "Show your devotion to Le Grand Salaxe. Each kiss earns you +1 point.",
+  "The Royal Hand awaits. Prove your loyalty to Chalaksse.",
+  "Chklat demands tribute. +1 point per act of groveling.",
+  "EL Salaxino Goblino extends His hand. Will you kiss it?",
+  "The Great Salaxe permits you to approach. +1 point for your courage.",
+  "Chalakssinoss awaits your devotion. Do not disappoint Him.",
+  "SLX offers His hand. You know what to do.",
+  "Salaxe Le Genereux allows you to earn +1 point. Be grateful.",
+  "Le Bon Salaxe's hand grows cold. Warm it with your devotion.",
+  "The King's hand is outstretched. This is an honor, not a request.",
+]
+
 export function getRandomKissResponse(): string {
   return KISS_RESPONSES[Math.floor(Math.random() * KISS_RESPONSES.length)]
+}
+
+export function getRandomKissDescription(): string {
+  return KISS_DESCRIPTIONS[Math.floor(Math.random() * KISS_DESCRIPTIONS.length)]
 }

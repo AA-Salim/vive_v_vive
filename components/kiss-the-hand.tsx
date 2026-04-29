@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { CrownIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { getRandomKissResponse } from "@/lib/salaxe-kiss-responses"
+import { getRandomKissResponse, getRandomKissDescription } from "@/lib/salaxe-kiss-responses"
 
 interface KissTheHandProps {
   kissRemaining: number
@@ -13,6 +13,7 @@ interface KissTheHandProps {
 
 export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
   const [loading, setLoading] = useState(false)
+  const description = useMemo(() => getRandomKissDescription(), [])
 
   const handleKiss = async () => {
     if (loading) return
@@ -44,7 +45,7 @@ export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
       <p className="mb-3 text-xs text-[var(--color-gold-light)]/50">
         {exhausted
           ? "You have shown sufficient devotion for today."
-          : "Show your devotion to Le Grand Salaxe. Each kiss earns you +1 point."}
+          : description}
       </p>
       <div className="flex items-center gap-3">
         <Button

@@ -33,7 +33,8 @@ export function assignChampions(
   blueTeam: Array<{ player: Player; lane: Role }>,
   redTeam: Array<{ player: Player; lane: Role }>,
   fearlessBanned: Set<string>,
-  lockedAssignments: Map<string, Assignment>
+  lockedAssignments: Map<string, Assignment>,
+  championPools: Record<Role, Champion[]> = CHAMPION_POOLS
 ): Assignment[] {
   const usedInThisRound = new Set<string>()
   const results: Assignment[] = []
@@ -51,7 +52,7 @@ export function assignChampions(
       continue
     }
 
-    const pool = CHAMPION_POOLS[slot.lane]
+    const pool = championPools[slot.lane]
     const available = pool.filter(
       (ch) => !fearlessBanned.has(ch.name) && !usedInThisRound.has(ch.name)
     )

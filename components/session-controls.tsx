@@ -12,10 +12,10 @@ interface SessionControlsProps {
 }
 
 export function SessionControls({ session, onAction }: SessionControlsProps) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [loading, setLoading] = useState(false)
 
-  const isCreator = user && session.created_by === user.id
+  const isCreator = isAdmin || (user && session.created_by === user.id)
 
   const patchSession = async (
     action: string,

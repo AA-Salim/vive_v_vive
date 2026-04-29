@@ -11,6 +11,7 @@ const links = [
   { href: "/rivalries", label: "Rivalries" },
   { href: "/duos", label: "Duos" },
   { href: "/stats", label: "Stats" },
+  { href: "/gamba", label: "Gamba" },
   { href: "/leaderboard", label: "Leaderboard" },
 ]
 

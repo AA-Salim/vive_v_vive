@@ -18,6 +18,7 @@ interface LeaderboardEntry {
   player_name: string | null
   balance: number
   last_change: number | null
+  total_kisses: number
   is_current_user: boolean
 }
 
@@ -38,6 +39,9 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
           </TableHead>
           <TableHead className="text-right text-[var(--color-gold-light)]/60">
             Balance
+          </TableHead>
+          <TableHead className="w-16 text-center text-[var(--color-gold-light)]/60">
+            Kisses
           </TableHead>
           <TableHead className="w-20 text-right text-[var(--color-gold-light)]/60">
             Last
@@ -93,6 +97,9 @@ export function LeaderboardTable({ entries }: LeaderboardTableProps) {
             </TableCell>
             <TableCell className="text-right text-sm font-bold text-[var(--color-gold)]">
               {entry.balance}
+            </TableCell>
+            <TableCell className="text-center text-sm text-[var(--color-gold-light)]/50">
+              {entry.total_kisses > 0 ? entry.total_kisses : "-"}
             </TableCell>
             <TableCell className="text-right text-sm">
               {entry.last_change !== null && (

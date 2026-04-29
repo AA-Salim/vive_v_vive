@@ -109,7 +109,7 @@ CREATE TABLE point_transactions (
   amount INTEGER NOT NULL,
   reason TEXT NOT NULL CHECK (reason IN (
     'initial_grant', 'daily_bonus', 'game_win', 'game_participation',
-    'bet_placed', 'bet_won', 'bet_refunded'
+    'bet_placed', 'bet_won', 'bet_refunded', 'kiss_the_hand'
   )),
   reference_id UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()

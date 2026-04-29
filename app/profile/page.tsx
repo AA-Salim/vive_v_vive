@@ -23,6 +23,7 @@ const REASON_LABELS: Record<PointReason, string> = {
   bet_placed: "Bet Placed",
   bet_won: "Bet Won",
   bet_refunded: "Bet Refunded",
+  kiss_the_hand: "Kiss the Hand",
 }
 
 export default function ProfilePage() {

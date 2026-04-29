@@ -109,6 +109,7 @@ export type PointReason =
   | "bet_placed"
   | "bet_won"
   | "bet_refunded"
+  | "kiss_the_hand"
 
 export interface PointTransaction {
   id: string

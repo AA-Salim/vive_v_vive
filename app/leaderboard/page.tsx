@@ -12,6 +12,7 @@ interface LeaderboardEntry {
   player_name: string | null
   balance: number
   last_change: number | null
+  total_kisses: number
   is_current_user: boolean
 }
 

@@ -48,6 +48,17 @@ export async function GET() {
     }
   }
 
+  const { data: kissTxns } = await supabase
+    .from("point_transactions")
+    .select("user_id")
+    .eq("reason", "kiss_the_hand")
+    .in("user_id", userIds)
+
+  const kissCountMap = new Map<string, number>()
+  for (const tx of kissTxns ?? []) {
+    kissCountMap.set(tx.user_id, (kissCountMap.get(tx.user_id) ?? 0) + 1)
+  }
+
   const {
     data: { user: currentUser },
   } = await supabase.auth.getUser()
@@ -66,6 +77,7 @@ export async function GET() {
       player_name: playerName,
       balance: b.balance,
       last_change: lastTxMap.get(b.user_id) ?? null,
+      total_kisses: kissCountMap.get(b.user_id) ?? 0,
       is_current_user: currentUser?.id === b.user_id,
     }
   })

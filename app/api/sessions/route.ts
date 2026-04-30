@@ -17,7 +17,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("game_sessions")
     .select(SESSION_SELECT)
-    .in("status", ["draft", "betting", "in_game"])
+    .in("status", ["draft", "chaos", "betting", "in_game"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()

@@ -11,6 +11,8 @@ import { FearlessPanel } from "@/components/fearless-panel"
 import { SessionControls } from "@/components/session-controls"
 import { BettingTimer } from "@/components/betting-timer"
 import { BettingPanel } from "@/components/betting-panel"
+import { ChaosTimer } from "@/components/chaos-timer"
+import { ChaosPanel } from "@/components/chaos-panel"
 import { KissTheHand } from "@/components/kiss-the-hand"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -49,6 +51,7 @@ function sessionToAssignments(session: SessionWithAssignments): Assignment[] {
 function statusLabel(status: string) {
   switch (status) {
     case "draft": return "Draft"
+    case "chaos": return "Royal Decrees"
     case "betting": return "Betting Open"
     case "in_game": return "In Game"
     case "blue_win": return "Blue Wins"
@@ -62,6 +65,7 @@ function statusLabel(status: string) {
 function statusColor(status: string) {
   switch (status) {
     case "draft": return "bg-[var(--color-gold)]/20 text-[var(--color-gold)]"
+    case "chaos": return "bg-red-500/20 text-red-400"
     case "betting": return "bg-yellow-500/20 text-yellow-400"
     case "in_game": return "bg-green-500/20 text-green-400"
     case "blue_win": return "bg-[var(--color-blue-team)]/20 text-[var(--color-blue-team)]"
@@ -91,7 +95,7 @@ export default function HomePage() {
   const lastSessionId = useRef<string | null>(null)
 
   const assignments = session ? sessionToAssignments(session) : null
-  const isActive = session && ["draft", "betting", "in_game"].includes(session.status)
+  const isActive = session && ["draft", "chaos", "betting", "in_game"].includes(session.status)
   const isResolved = session && ["blue_win", "red_win", "canceled", "expired"].includes(session.status)
   const isCreator = localCreator || isAdmin || (!!user && !!session && session.created_by === user.id)
 
@@ -348,6 +352,15 @@ export default function HomePage() {
     refetch()
   }
 
+  const handleCloseChaos = async () => {
+    if (!session) return
+    await fetch(`/api/sessions/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "close_chaos" }),
+    })
+  }
+
   const handleCloseBetting = async () => {
     if (!session) return
     await fetch(`/api/sessions/${session.id}`, {
@@ -450,6 +463,24 @@ export default function HomePage() {
                     Skip Animation
                   </Button>
                 </div>
+              )}
+
+              {session.status === "chaos" && session.chaos_ends_at && (
+                <ChaosTimer
+                  chaosEndsAt={session.chaos_ends_at}
+                  serverTimeDelta={serverTimeDelta}
+                  onExpired={handleCloseChaos}
+                />
+              )}
+
+              {session.status === "chaos" && (
+                <>
+                  <ChaosPanel session={session} isOpen={true} />
+                  <SessionControls
+                    session={session}
+                    onAction={handleSessionAction}
+                  />
+                </>
               )}
 
               {session.status === "betting" && session.betting_ends_at && (

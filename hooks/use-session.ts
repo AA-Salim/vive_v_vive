@@ -51,6 +51,13 @@ export function useSession() {
           fetchSession()
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "chaos_actions" },
+        () => {
+          fetchSession()
+        }
+      )
       .subscribe()
 
     return () => {

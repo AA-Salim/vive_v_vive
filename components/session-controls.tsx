@@ -65,6 +65,28 @@ export function SessionControls({ session, onAction }: SessionControlsProps) {
     )
   }
 
+  if (session.status === "chaos") {
+    return (
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <Button
+          onClick={() => patchSession("close_chaos")}
+          disabled={loading}
+          className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
+        >
+          {loading ? "Closing..." : "Skip to Betting"}
+        </Button>
+        <Button
+          onClick={() => patchSession("cancel")}
+          disabled={loading}
+          variant="ghost"
+          className="text-[var(--color-gold-light)]/50"
+        >
+          Cancel
+        </Button>
+      </div>
+    )
+  }
+
   if (session.status === "betting") {
     return (
       <div className="flex flex-wrap items-center justify-center gap-3">

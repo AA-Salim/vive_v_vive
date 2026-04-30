@@ -15,6 +15,7 @@ type ActionBody =
   | { action: "reroll" }
   | { action: "toggle_lock"; assignment_id: string }
   | { action: "start_game" }
+  | { action: "close_chaos" }
   | { action: "close_betting" }
   | { action: "declare_winner"; winner_side: "blue" | "red" }
   | { action: "cancel" }
@@ -68,6 +69,8 @@ export async function PATCH(
       return handleToggleLock(supabase, session, body.assignment_id)
     case "start_game":
       return handleStartGame(supabase, session)
+    case "close_chaos":
+      return handleCloseChaos(supabase, session)
     case "close_betting":
       return handleCloseBetting(supabase, session)
     case "declare_winner":
@@ -248,6 +251,33 @@ async function handleStartGame(supabase: any, session: any) {
     )
   }
 
+  const chaosEndsAt = new Date(Date.now() + 90 * 1000).toISOString()
+
+  const { error } = await supabase
+    .from("game_sessions")
+    .update({
+      status: "chaos",
+      chaos_ends_at: chaosEndsAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", session.id)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return returnSession(supabase, session.id)
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function handleCloseChaos(supabase: any, session: any) {
+  if (session.status !== "chaos") {
+    return NextResponse.json(
+      { error: "Can only close chaos during chaos phase" },
+      { status: 400 }
+    )
+  }
+
   const bettingEndsAt = new Date(Date.now() + 5 * 60 * 1000).toISOString()
 
   const { error } = await supabase
@@ -416,6 +446,11 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
     p_winner_side: winnerSide,
   })
 
+  await supabase.rpc("resolve_chaos_wagers", {
+    p_session_id: session.id,
+    p_winner_side: winnerSide,
+  })
+
   const { error: updateError } = await supabase
     .from("game_sessions")
     .update({
@@ -437,7 +472,7 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleCancel(supabase: any, session: any) {
-  if (!["draft", "betting", "in_game"].includes(session.status)) {
+  if (!["draft", "chaos", "betting", "in_game"].includes(session.status)) {
     return NextResponse.json(
       { error: "Session is already resolved" },
       { status: 400 }
@@ -445,6 +480,10 @@ async function handleCancel(supabase: any, session: any) {
   }
 
   await supabase.rpc("refund_all_bets", {
+    p_session_id: session.id,
+  })
+
+  await supabase.rpc("refund_chaos_actions", {
     p_session_id: session.id,
   })
 

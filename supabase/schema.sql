@@ -217,3 +217,96 @@ BEGIN
   END LOOP;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Phase 5: Royal Decrees (Chaos Round)
+ALTER TABLE game_sessions DROP CONSTRAINT game_sessions_status_check;
+ALTER TABLE game_sessions ADD CONSTRAINT game_sessions_status_check
+  CHECK (status IN ('draft', 'chaos', 'betting', 'in_game', 'blue_win', 'red_win', 'canceled', 'expired'));
+
+ALTER TABLE game_sessions ADD COLUMN chaos_ends_at TIMESTAMPTZ;
+
+DROP INDEX IF EXISTS idx_game_sessions_status;
+CREATE INDEX idx_game_sessions_status ON game_sessions(status)
+  WHERE status IN ('draft', 'chaos', 'betting', 'in_game');
+
+DROP INDEX IF EXISTS idx_one_active_session;
+CREATE UNIQUE INDEX idx_one_active_session
+  ON game_sessions ((true))
+  WHERE status IN ('draft', 'chaos', 'betting', 'in_game');
+
+ALTER TABLE point_transactions DROP CONSTRAINT point_transactions_reason_check;
+ALTER TABLE point_transactions ADD CONSTRAINT point_transactions_reason_check
+  CHECK (reason IN (
+    'initial_grant', 'daily_bonus', 'game_win', 'game_participation',
+    'bet_placed', 'bet_won', 'bet_refunded', 'kiss_the_hand',
+    'chaos_spent', 'chaos_won', 'chaos_refunded'
+  ));
+
+CREATE TABLE chaos_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  action_type TEXT NOT NULL CHECK (action_type IN (
+    'double_or_nothing', 'swap_teammate',
+    'shuffle_lanes', 'reroll_champs', 'target_reroll'
+  )),
+  tier TEXT NOT NULL CHECK (tier IN ('medium', 'high', 'super')),
+  cost INTEGER NOT NULL,
+  side TEXT CHECK (side IN ('blue', 'red')),
+  target_player_id UUID REFERENCES players(id),
+  target_player_2_id UUID REFERENCES players(id),
+  target_team TEXT CHECK (target_team IN ('blue', 'red')),
+  payout INTEGER,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'won', 'lost', 'resolved', 'refunded')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_chaos_actions_session ON chaos_actions(session_id);
+CREATE INDEX idx_chaos_actions_user ON chaos_actions(user_id);
+
+ALTER TABLE chaos_actions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "chaos_read" ON chaos_actions FOR SELECT USING (true);
+CREATE POLICY "chaos_insert" ON chaos_actions FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "chaos_update" ON chaos_actions FOR UPDATE USING (false);
+
+CREATE OR REPLACE FUNCTION resolve_chaos_wagers(p_session_id UUID, p_winner_side TEXT)
+RETURNS VOID AS $$
+DECLARE
+  action_record RECORD;
+BEGIN
+  FOR action_record IN
+    SELECT * FROM chaos_actions
+    WHERE session_id = p_session_id
+      AND action_type = 'double_or_nothing'
+      AND status = 'pending'
+  LOOP
+    IF action_record.side = p_winner_side THEN
+      UPDATE chaos_actions SET status = 'won', payout = action_record.cost * 2
+        WHERE id = action_record.id;
+      PERFORM adjust_balance(action_record.user_id, action_record.cost * 2,
+        'chaos_won', action_record.id);
+    ELSE
+      UPDATE chaos_actions SET status = 'lost', payout = 0
+        WHERE id = action_record.id;
+    END IF;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION refund_chaos_actions(p_session_id UUID)
+RETURNS VOID AS $$
+DECLARE
+  action_record RECORD;
+BEGIN
+  FOR action_record IN
+    SELECT * FROM chaos_actions
+    WHERE session_id = p_session_id AND status IN ('pending', 'resolved')
+  LOOP
+    UPDATE chaos_actions SET status = 'refunded', payout = action_record.cost
+      WHERE id = action_record.id;
+    PERFORM adjust_balance(action_record.user_id, action_record.cost,
+      'chaos_refunded', action_record.id);
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -50,6 +50,7 @@ export interface PlayerStats extends Player {
 
 export type SessionStatus =
   | "draft"
+  | "chaos"
   | "betting"
   | "in_game"
   | "blue_win"
@@ -64,6 +65,7 @@ export interface GameSession {
   resolved_by: string | null
   game_id: string | null
   betting_ends_at: string | null
+  chaos_ends_at: string | null
   created_at: string
   updated_at: string
 }
@@ -110,6 +112,9 @@ export type PointReason =
   | "bet_won"
   | "bet_refunded"
   | "kiss_the_hand"
+  | "chaos_spent"
+  | "chaos_won"
+  | "chaos_refunded"
 
 export interface PointTransaction {
   id: string
@@ -154,3 +159,35 @@ export interface BetDetail {
 }
 
 export type PlayerRevealState = "hidden" | "silhouette" | "shuffling" | "locking" | "revealed"
+
+export type ChaosActionType =
+  | "double_or_nothing"
+  | "swap_teammate"
+  | "shuffle_lanes"
+  | "reroll_champs"
+  | "target_reroll"
+
+export type ChaosTier = "medium" | "high" | "super"
+
+export interface ChaosAction {
+  id: string
+  session_id: string
+  user_id: string
+  action_type: ChaosActionType
+  tier: ChaosTier
+  cost: number
+  side: Side | null
+  target_player_id: string | null
+  target_player_2_id: string | null
+  target_team: Side | null
+  payout: number | null
+  status: "pending" | "won" | "lost" | "resolved" | "refunded"
+  created_at: string
+}
+
+export interface ChaosActionWithNames extends ChaosAction {
+  discord_username: string
+  discord_avatar_url: string | null
+  target_player_name: string | null
+  target_player_2_name: string | null
+}

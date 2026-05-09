@@ -64,7 +64,7 @@ export async function POST() {
 
   const { data: newBalance, error } = await supabase.rpc("adjust_balance", {
     p_user_id: user.id,
-    p_amount: 1,
+    p_amount: 10,
     p_reason: "kiss_the_hand",
   })
 

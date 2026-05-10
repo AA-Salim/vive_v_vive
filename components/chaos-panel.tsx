@@ -38,13 +38,13 @@ const TIER_CONFIG = {
     label: "SWAP",
     cost: 89,
     payout: null,
-    description: "Swap with Teammate",
-    detail: "Trade your lane + champ with a teammate.",
+    description: "Swap / Reroll Self",
+    detail: "Trade with a teammate or reroll your own champ.",
     color: "text-orange-400",
     border: "border-orange-500/30",
     bg: "bg-orange-500/5",
     hoverBg: "hover:bg-orange-500/10",
-    maxPerSession: 1,
+    maxPerSession: null,
   },
   super: {
     label: "CHAOS",
@@ -62,6 +62,7 @@ const TIER_CONFIG = {
 
 type TierKey = keyof typeof TIER_CONFIG
 type DialogMode = null | "medium" | "high" | "super"
+type HighAction = "swap_teammate" | "reroll_self"
 type SuperAction = "shuffle_lanes" | "reroll_champs" | "target_reroll"
 
 export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
@@ -71,6 +72,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const [dialogMode, setDialogMode] = useState<DialogMode>(null)
   const [selectedSide, setSelectedSide] = useState<Side | null>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
+  const [highAction, setHighAction] = useState<HighAction | null>(null)
   const [superAction, setSuperAction] = useState<SuperAction | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -92,11 +94,14 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const userSwapCount = actions.filter(
     (a) => a.user_id === user?.id && a.action_type === "swap_teammate" && a.status !== "refunded"
   ).length
+  const userRerollSelfCount = actions.filter(
+    (a) => a.user_id === user?.id && a.action_type === "reroll_self" && a.status !== "refunded"
+  ).length
 
   const canAfford = (tier: TierKey) => balance >= TIER_CONFIG[tier].cost
   const isLimitReached = (tier: TierKey) => {
     if (tier === "medium") return userDonCount >= 3
-    if (tier === "high") return userSwapCount >= 1
+    if (tier === "high") return userSwapCount >= 1 && userRerollSelfCount >= 1
     return false
   }
 
@@ -113,6 +118,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     setDialogMode(null)
     setSelectedSide(null)
     setSelectedPlayerId(null)
+    setHighAction(null)
     setSuperAction(null)
   }
 
@@ -146,8 +152,13 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   }
 
   const handleHighConfirm = () => {
-    if (!selectedPlayerId) return
-    submitAction({ action_type: "swap_teammate", target_player_id: selectedPlayerId })
+    if (!highAction) return
+    if (highAction === "swap_teammate") {
+      if (!selectedPlayerId) return
+      submitAction({ action_type: "swap_teammate", target_player_id: selectedPlayerId })
+    } else {
+      submitAction({ action_type: "reroll_self" })
+    }
   }
 
   const handleSuperConfirm = () => {
@@ -168,6 +179,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
         return `${name} wagered 49 on ${a.side === "blue" ? "Blue" : "Red"}`
       case "swap_teammate":
         return `${name} swapped with ${a.target_player_2_name ?? "?"}`
+      case "reroll_self":
+        return `${name} rerolled their own champion`
       case "shuffle_lanes":
         return `${name} shuffled all ${a.target_team === "blue" ? "Blue" : "Red"} lanes`
       case "reroll_champs":
@@ -183,7 +196,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     if (tier === "medium") return `${userDonCount}/3`
     if (tier === "high") {
       if (!myAssignment) return "Players only"
-      return userSwapCount >= 1 ? "Used" : "Available"
+      if (userSwapCount >= 1 && userRerollSelfCount >= 1) return "Used"
+      return "Available"
     }
     return "Available"
   }
@@ -306,44 +320,77 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
         </DialogContent>
       </Dialog>
 
-      {/* High: Swap with Teammate */}
+      {/* High: Swap / Reroll Self */}
       <Dialog open={dialogMode === "high"} onOpenChange={(open) => !open && resetDialog()}>
         <DialogContent className="border-orange-500/20 bg-[var(--color-navy)]">
           <DialogHeader>
-            <DialogTitle className="text-orange-400">Swap with Teammate</DialogTitle>
+            <DialogTitle className="text-orange-400">Swap / Reroll Self</DialogTitle>
             <DialogDescription className="text-[var(--color-gold-light)]/60">
-              Trade your lane + champion with a teammate. Cost: 89 pts.
+              Trade with a teammate or reroll your own champion. Cost: 89 pts.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2 py-4">
-            {teammates.map((t) => (
+
+          {!highAction && (
+            <div className="space-y-2 py-4">
               <button
-                key={t.player_id}
-                onClick={() => setSelectedPlayerId(t.player_id)}
-                className={`w-full rounded-lg border p-3 text-left transition-all ${
-                  selectedPlayerId === t.player_id
-                    ? "border-orange-500/50 bg-orange-500/10"
-                    : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-orange-500/30"
-                }`}
+                onClick={() => setHighAction("swap_teammate")}
+                disabled={userSwapCount >= 1}
+                className="w-full rounded-lg border border-orange-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-orange-500/40 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[var(--color-gold-light)]">
-                    {t.players.name}
-                  </span>
-                  <span className="text-xs text-[var(--color-gold-light)]/50">
-                    {t.lane.toUpperCase()} - {t.champion}
-                  </span>
+                <div className="font-medium text-orange-400">Swap with Teammate</div>
+                <div className="text-xs text-[var(--color-gold-light)]/50">
+                  Trade your lane + champ with a teammate
                 </div>
               </button>
-            ))}
-          </div>
-          <Button
-            onClick={handleHighConfirm}
-            disabled={!selectedPlayerId || submitting}
-            className="w-full bg-orange-500 font-bold text-[var(--color-navy)] hover:bg-orange-600 disabled:opacity-50"
-          >
-            {submitting ? "Swapping..." : "Confirm Swap"}
-          </Button>
+              <button
+                onClick={() => setHighAction("reroll_self")}
+                disabled={userRerollSelfCount >= 1}
+                className="w-full rounded-lg border border-orange-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-orange-500/40 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <div className="font-medium text-orange-400">Reroll Self</div>
+                <div className="text-xs text-[var(--color-gold-light)]/50">
+                  Reroll your own champion (keep your lane)
+                </div>
+              </button>
+            </div>
+          )}
+
+          {highAction === "swap_teammate" && (
+            <div className="space-y-2 py-4">
+              {teammates.map((t) => (
+                <button
+                  key={t.player_id}
+                  onClick={() => setSelectedPlayerId(t.player_id)}
+                  className={`w-full rounded-lg border p-3 text-left transition-all ${
+                    selectedPlayerId === t.player_id
+                      ? "border-orange-500/50 bg-orange-500/10"
+                      : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-orange-500/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-[var(--color-gold-light)]">
+                      {t.players.name}
+                    </span>
+                    <span className="text-xs text-[var(--color-gold-light)]/50">
+                      {t.lane.toUpperCase()} - {t.champion}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {highAction && (
+            <Button
+              onClick={handleHighConfirm}
+              disabled={(highAction === "swap_teammate" && !selectedPlayerId) || submitting}
+              className="w-full bg-orange-500 font-bold text-[var(--color-navy)] hover:bg-orange-600 disabled:opacity-50"
+            >
+              {submitting
+                ? highAction === "swap_teammate" ? "Swapping..." : "Rerolling..."
+                : highAction === "swap_teammate" ? "Confirm Swap" : "Confirm Reroll"}
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
 

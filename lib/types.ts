@@ -163,6 +163,7 @@ export type PlayerRevealState = "hidden" | "silhouette" | "shuffling" | "locking
 export type ChaosActionType =
   | "double_or_nothing"
   | "swap_teammate"
+  | "reroll_self"
   | "shuffle_lanes"
   | "reroll_champs"
   | "target_reroll"

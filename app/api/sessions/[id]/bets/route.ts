@@ -145,9 +145,11 @@ export async function POST(
   })
 
   if (deductError) {
-    const msg = deductError.message.includes("Insufficient")
-      ? "Insufficient balance"
-      : deductError.message
+    const msg = deductError.message.includes("Debt limit")
+      ? "Debt limit reached (-300 max)"
+      : deductError.message.includes("Insufficient")
+        ? "Insufficient balance"
+        : deductError.message
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
@@ -292,10 +294,10 @@ export async function PATCH(
   })
 
   if (insError) {
-    return NextResponse.json(
-      { error: "Insufficient balance for insurance" },
-      { status: 400 }
-    )
+    const msg = insError.message.includes("Debt limit")
+      ? "Debt limit reached (-300 max)"
+      : "Insufficient balance for insurance"
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 
   await supabase

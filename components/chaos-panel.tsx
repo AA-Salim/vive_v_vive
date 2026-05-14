@@ -13,6 +13,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { toast } from "sonner"
 import type { SessionWithAssignments, Side, ChaosActionWithNames } from "@/lib/types"
 
@@ -75,6 +76,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const [highAction, setHighAction] = useState<HighAction | null>(null)
   const [superAction, setSuperAction] = useState<SuperAction | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [debtPledgeOpen, setDebtPledgeOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null)
 
   const userPlayerId = profile?.player_id ?? null
 
@@ -98,7 +101,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     (a) => a.user_id === user?.id && a.action_type === "reroll_self" && a.status !== "refunded"
   ).length
 
-  const canAfford = (tier: TierKey) => balance >= TIER_CONFIG[tier].cost
+  const canAfford = (tier: TierKey) => balance - TIER_CONFIG[tier].cost >= -300
   const isLimitReached = (tier: TierKey) => {
     if (tier === "medium") return userDonCount >= 3
     if (tier === "high") return userSwapCount >= 1 && userRerollSelfCount >= 1
@@ -122,7 +125,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     setSuperAction(null)
   }
 
-  const submitAction = async (body: Record<string, unknown>) => {
+  const doSubmitAction = async (body: Record<string, unknown>) => {
     setSubmitting(true)
     try {
       const res = await fetch(`/api/sessions/${session.id}/chaos`, {
@@ -143,6 +146,16 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
       toast.error("Failed to issue decree")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const submitAction = (body: Record<string, unknown>) => {
+    const action = () => doSubmitAction(body)
+    if (balance < 0) {
+      setPendingAction(() => action)
+      setDebtPledgeOpen(true)
+    } else {
+      action()
     }
   }
 
@@ -534,6 +547,18 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      <DebtPledgeDialog
+        open={debtPledgeOpen}
+        onOpenChange={setDebtPledgeOpen}
+        currentBalance={balance}
+        onConfirm={() => {
+          if (pendingAction) {
+            pendingAction()
+            setPendingAction(null)
+          }
+        }}
+      />
     </>
   )
 }

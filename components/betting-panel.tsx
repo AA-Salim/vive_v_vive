@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { usePoints } from "@/hooks/use-points"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import Image from "next/image"
 import type { BettingPool, Side } from "@/lib/types"
@@ -21,7 +22,9 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
   const [pool, setPool] = useState<BettingPool | null>(null)
   const [selectedSide, setSelectedSide] = useState<Side | null>(null)
   const [amount, setAmount] = useState("")
+  const [wantInsurance, setWantInsurance] = useState(false)
   const [placing, setPlacing] = useState(false)
+  const [insuring, setInsuring] = useState(false)
   const supabaseRef = useRef(createClient())
 
   const fetchPool = useCallback(async () => {
@@ -71,7 +74,8 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
       toast.error("Enter a valid amount")
       return
     }
-    if (numAmount > balance) {
+    const totalCost = numAmount + (wantInsurance ? 17 : 0)
+    if (totalCost > balance) {
       toast.error("Insufficient balance")
       return
     }
@@ -81,10 +85,13 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
       const res = await fetch(`/api/sessions/${sessionId}/bets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ side: selectedSide, amount: numAmount }),
+        body: JSON.stringify({ side: selectedSide, amount: numAmount, insured: wantInsurance }),
       })
       if (res.ok) {
-        toast.success(`Bet placed: ${numAmount} on ${selectedSide}`)
+        const msg = wantInsurance
+          ? `Bet placed: ${numAmount} on ${selectedSide} (insured)`
+          : `Bet placed: ${numAmount} on ${selectedSide}`
+        toast.success(msg)
         await fetchPool()
         await refetchPoints()
       } else {
@@ -98,12 +105,40 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
     }
   }
 
+  const handleBuyInsurance = async () => {
+    if (!user) return
+    setInsuring(true)
+    try {
+      const res = await fetch(`/api/sessions/${sessionId}/bets`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      })
+      if (res.ok) {
+        toast.success("Bet insured! 50% loss protection active")
+        await fetchPool()
+        await refetchPoints()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || "Failed to insure bet")
+      }
+    } catch {
+      toast.error("Failed to insure bet")
+    } finally {
+      setInsuring(false)
+    }
+  }
+
   if (!pool) return null
 
   const hasBet = !!pool.user_bet
   const blueBets = pool.bets?.filter((b) => b.side === "blue") ?? []
   const redBets = pool.bets?.filter((b) => b.side === "red") ?? []
   const hasBets = blueBets.length > 0 || redBets.length > 0
+
+  const numAmount = parseInt(amount, 10) || 0
+  const totalCost = numAmount + (wantInsurance ? 17 : 0)
+  const canAffordInsurance = balance >= numAmount + 17
 
   return (
     <div className="rounded-lg border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-4">
@@ -180,10 +215,16 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
                   </span>
                   <div className="flex shrink-0 items-center gap-1 text-xs font-bold">
                     <span className="text-[var(--color-blue-team)]">{bet.amount}</span>
+                    {bet.insured && (
+                      <span className="text-emerald-400/70" title="Insured">S</span>
+                    )}
                     {bet.status === "won" && bet.payout != null && (
                       <span className="text-green-400">+{bet.payout}</span>
                     )}
-                    {bet.status === "lost" && (
+                    {bet.status === "lost" && bet.insured && bet.payout != null && bet.payout > 0 && (
+                      <span className="text-yellow-400">-{bet.amount - bet.payout}</span>
+                    )}
+                    {bet.status === "lost" && (!bet.insured || !bet.payout) && (
                       <span className="text-red-400/60">-{bet.amount}</span>
                     )}
                   </div>
@@ -218,10 +259,16 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
                   </span>
                   <div className="flex shrink-0 items-center gap-1 text-xs font-bold">
                     <span className="text-[var(--color-red-team)]">{bet.amount}</span>
+                    {bet.insured && (
+                      <span className="text-emerald-400/70" title="Insured">S</span>
+                    )}
                     {bet.status === "won" && bet.payout != null && (
                       <span className="text-green-400">+{bet.payout}</span>
                     )}
-                    {bet.status === "lost" && (
+                    {bet.status === "lost" && bet.insured && bet.payout != null && bet.payout > 0 && (
+                      <span className="text-yellow-400">-{bet.amount - bet.payout}</span>
+                    )}
+                    {bet.status === "lost" && (!bet.insured || !bet.payout) && (
                       <span className="text-red-400/60">-{bet.amount}</span>
                     )}
                   </div>
@@ -253,7 +300,21 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
             >
               {pool.user_bet!.side === "blue" ? "Blue" : "Red"}
             </span>
+            {pool.user_bet!.insured && (
+              <span className="ml-2 text-xs text-emerald-400">(Insured)</span>
+            )}
           </div>
+          {!pool.user_bet!.insured && (
+            <Button
+              onClick={handleBuyInsurance}
+              disabled={insuring || balance < 17}
+              size="sm"
+              variant="outline"
+              className="mt-2 border-emerald-500/30 text-xs text-emerald-400 hover:border-emerald-500/60"
+            >
+              {insuring ? "Insuring..." : "Insure (17 pts) — 50% loss protection"}
+            </Button>
+          )}
         </div>
       )}
 
@@ -326,6 +387,30 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
             </Button>
           </div>
 
+          {/* Insurance option */}
+          {user && numAmount > 0 && (
+            <div className="flex items-center justify-center gap-2">
+              <Checkbox
+                id="insurance"
+                checked={wantInsurance}
+                onCheckedChange={(checked) => setWantInsurance(!!checked)}
+                disabled={!canAffordInsurance}
+              />
+              <label
+                htmlFor="insurance"
+                className="cursor-pointer text-xs text-emerald-400/80"
+              >
+                Insure (+17 pts) — recovers 50% on loss
+              </label>
+            </div>
+          )}
+
+          {user && wantInsurance && numAmount > 0 && (
+            <div className="text-center text-xs text-[var(--color-gold-light)]/50">
+              Total: {numAmount} + 17 = {totalCost} pts
+            </div>
+          )}
+
           {!user && (
             <p className="text-center text-xs text-[var(--color-gold-light)]/40">
               Login with Discord to place bets
@@ -349,7 +434,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
 
           <Button
             onClick={user ? handleBet : signIn}
-            disabled={user ? (!selectedSide || !amount || placing || pointsLoading) : false}
+            disabled={user ? (!selectedSide || !amount || placing || pointsLoading || totalCost > balance) : false}
             className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-50"
           >
             {!user
@@ -358,7 +443,9 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
                 ? "Placing..."
                 : pointsLoading
                   ? "Loading balance..."
-                  : "Place Bet"}
+                  : wantInsurance
+                    ? `Place Bet (${totalCost} pts)`
+                    : "Place Bet"}
           </Button>
         </div>
       )}

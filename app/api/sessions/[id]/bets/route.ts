@@ -64,6 +64,7 @@ export async function GET(
         amount: b.amount,
         payout: b.payout,
         status: b.status,
+        insured: b.insured,
         discord_username: profile?.discord_username ?? "Unknown",
         discord_avatar_url: profile?.discord_avatar_url ?? null,
       }
@@ -96,9 +97,10 @@ export async function POST(
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const { side, amount } = (await request.json()) as {
+  const { side, amount, insured } = (await request.json()) as {
     side: string
     amount: number
+    insured?: boolean
   }
 
   if (!side || !["blue", "red"].includes(side)) {
@@ -134,6 +136,7 @@ export async function POST(
     )
   }
 
+  // Deduct bet amount
   const { error: deductError } = await supabase.rpc("adjust_balance", {
     p_user_id: user.id,
     p_amount: -amount,
@@ -148,6 +151,31 @@ export async function POST(
     return NextResponse.json({ error: msg }, { status: 400 })
   }
 
+  // Deduct insurance if requested
+  let insuranceCharged = false
+  if (insured) {
+    const { error: insError } = await supabase.rpc("adjust_balance", {
+      p_user_id: user.id,
+      p_amount: -17,
+      p_reason: "insurance_bought",
+      p_reference_id: sessionId,
+    })
+    if (insError) {
+      // Refund the bet amount since insurance failed
+      await supabase.rpc("adjust_balance", {
+        p_user_id: user.id,
+        p_amount: amount,
+        p_reason: "bet_refunded",
+        p_reference_id: sessionId,
+      })
+      return NextResponse.json(
+        { error: "Insufficient balance for insurance" },
+        { status: 400 }
+      )
+    }
+    insuranceCharged = true
+  }
+
   const { data: bet, error: betError } = await supabase
     .from("bets")
     .insert({
@@ -155,17 +183,28 @@ export async function POST(
       user_id: user.id,
       side,
       amount,
+      insured: insuranceCharged,
     })
     .select()
     .single()
 
   if (betError) {
+    // Refund bet
     await supabase.rpc("adjust_balance", {
       p_user_id: user.id,
       p_amount: amount,
       p_reason: "bet_refunded",
       p_reference_id: sessionId,
     })
+    // Refund insurance if charged
+    if (insuranceCharged) {
+      await supabase.rpc("adjust_balance", {
+        p_user_id: user.id,
+        p_amount: 17,
+        p_reason: "insurance_refunded",
+        p_reference_id: sessionId,
+      })
+    }
 
     if (betError.code === "23505") {
       return NextResponse.json(
@@ -177,4 +216,92 @@ export async function POST(
   }
 
   return NextResponse.json(bet, { status: 201 })
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: sessionId } = await params
+  const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  const { data: session } = await supabase
+    .from("game_sessions")
+    .select("status, betting_ends_at")
+    .eq("id", sessionId)
+    .single()
+
+  if (!session || session.status !== "betting") {
+    return NextResponse.json(
+      { error: "Betting is not open" },
+      { status: 400 }
+    )
+  }
+
+  if (
+    session.betting_ends_at &&
+    new Date(session.betting_ends_at) < new Date()
+  ) {
+    return NextResponse.json(
+      { error: "Betting window has closed" },
+      { status: 400 }
+    )
+  }
+
+  const { data: existingBet } = await supabase
+    .from("bets")
+    .select("*")
+    .eq("session_id", sessionId)
+    .eq("user_id", user.id)
+    .single()
+
+  if (!existingBet) {
+    return NextResponse.json(
+      { error: "No bet found to insure" },
+      { status: 404 }
+    )
+  }
+
+  if (existingBet.insured) {
+    return NextResponse.json(
+      { error: "Bet is already insured" },
+      { status: 409 }
+    )
+  }
+
+  if (existingBet.status !== "pending") {
+    return NextResponse.json(
+      { error: "Can only insure pending bets" },
+      { status: 400 }
+    )
+  }
+
+  const { error: insError } = await supabase.rpc("adjust_balance", {
+    p_user_id: user.id,
+    p_amount: -17,
+    p_reason: "insurance_bought",
+    p_reference_id: existingBet.id,
+  })
+
+  if (insError) {
+    return NextResponse.json(
+      { error: "Insufficient balance for insurance" },
+      { status: 400 }
+    )
+  }
+
+  await supabase
+    .from("bets")
+    .update({ insured: true })
+    .eq("id", existingBet.id)
+
+  return NextResponse.json({ ...existingBet, insured: true })
 }

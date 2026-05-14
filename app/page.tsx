@@ -18,6 +18,7 @@ import { KissTheHand } from "@/components/kiss-the-hand"
 import { CoachSelectDialog } from "@/components/coach-select-dialog"
 import { QueuePanel } from "@/components/queue-panel"
 import { VainqueurControls } from "@/components/vainqueur-controls"
+import { ShameBoard } from "@/components/shame-board"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
@@ -468,6 +469,7 @@ export default function HomePage() {
             sessionResolved={!!isResolved}
             onNextGame={refetch}
           />
+          <ShameBoard userId={user?.id ?? null} />
         </div>
 
         <div className="space-y-6">

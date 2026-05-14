@@ -450,6 +450,7 @@ export default function HomePage() {
             <RosterManager
               onRandomize={handleRandomize}
               onCoachDraft={() => setCoachDialogOpen(true)}
+              isAdmin={isAdmin}
               disabled={isRevealing || creating}
             />
           )}

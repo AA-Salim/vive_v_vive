@@ -18,13 +18,16 @@ import {
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 
+const SELECTION_KEY = "vvv_last_selected_players"
+
 interface RosterManagerProps {
   onRandomize: (players: Player[]) => void
   onCoachDraft?: () => void
+  isAdmin?: boolean
   disabled?: boolean
 }
 
-export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterManagerProps) {
+export function RosterManager({ onRandomize, onCoachDraft, isAdmin, disabled }: RosterManagerProps) {
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState("")
@@ -47,6 +50,30 @@ export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterMan
   useEffect(() => {
     fetchPlayers()
   }, [fetchPlayers])
+
+  // Restore last selection from localStorage once players are loaded
+  useEffect(() => {
+    if (players.length === 0) return
+    try {
+      const saved = localStorage.getItem(SELECTION_KEY)
+      if (saved) {
+        const ids: string[] = JSON.parse(saved)
+        const valid = ids.filter((id) => players.some((p) => p.id === id && p.is_active))
+        if (valid.length > 0) {
+          setSelectedIds(new Set(valid))
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [players])
+
+  // Save selection to localStorage whenever it changes
+  useEffect(() => {
+    if (selectedIds.size > 0) {
+      localStorage.setItem(SELECTION_KEY, JSON.stringify([...selectedIds]))
+    }
+  }, [selectedIds])
 
   const addPlayer = async () => {
     const name = newName.trim()
@@ -124,13 +151,15 @@ export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterMan
   const activePlayers = players.filter((p) => p.is_active)
   const inactivePlayers = players.filter((p) => !p.is_active)
   const selectedCount = selectedIds.size
+  const selectedPlayers = players.filter((p) => selectedIds.has(p.id))
 
   const selectAll = () => {
     setSelectedIds(new Set(activePlayers.map((p) => p.id)))
   }
 
-  const deselectAll = () => {
+  const clearAll = () => {
     setSelectedIds(new Set())
+    localStorage.removeItem(SELECTION_KEY)
   }
 
   const handleRandomize = () => {
@@ -140,18 +169,20 @@ export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterMan
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <Input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-          placeholder="Player name..."
-          className="bg-[var(--color-navy)]/50"
-        />
-        <Button onClick={addPlayer} size="sm" variant="outline">
-          Add
-        </Button>
-      </div>
+      {isAdmin && (
+        <div className="flex gap-2">
+          <Input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
+            placeholder="Player name..."
+            className="bg-[var(--color-navy)]/50"
+          />
+          <Button onClick={addPlayer} size="sm" variant="outline">
+            Add
+          </Button>
+        </div>
+      )}
 
       <Input
         value={search}
@@ -191,15 +222,36 @@ export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterMan
                 Select All
               </Button>
               <Button
-                onClick={deselectAll}
+                onClick={clearAll}
                 size="sm"
                 variant="ghost"
-                className="text-xs"
+                className="text-xs text-red-400/70"
               >
-                Deselect
+                Clear
               </Button>
             </div>
           </div>
+
+          {/* Selected players summary */}
+          {selectedCount > 0 && (
+            <div className="rounded-md border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/40 p-2">
+              <div className="mb-1 text-xs font-medium text-[var(--color-gold-light)]/50">
+                Selected
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {selectedPlayers.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => toggleSelection(p.id)}
+                    className="rounded bg-[var(--color-gold)]/15 px-2 py-0.5 text-xs text-[var(--color-gold-light)] transition-colors hover:bg-red-500/20 hover:text-red-300"
+                    title={`Remove ${p.name}`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
             {activePlayers
@@ -207,36 +259,50 @@ export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterMan
               .map((player) => (
                 <div
                   key={player.id}
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-[var(--color-navy-lighter)]"
+                  className={cn(
+                    "flex items-center gap-2 rounded-md px-2 py-1.5",
+                    selectedIds.has(player.id)
+                      ? "bg-[var(--color-gold)]/8"
+                      : "hover:bg-[var(--color-navy-lighter)]"
+                  )}
                 >
                   <Checkbox
                     checked={selectedIds.has(player.id)}
                     onCheckedChange={() => toggleSelection(player.id)}
                   />
-                  <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]">
+                  <span className={cn(
+                    "flex-1 truncate text-sm",
+                    selectedIds.has(player.id)
+                      ? "text-[var(--color-gold-light)]"
+                      : "text-[var(--color-gold-light)]/60"
+                  )}>
                     {player.name}
                   </span>
-                  <Button
-                    onClick={() => toggleActive(player)}
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-1 text-[10px] text-[var(--color-gold-light)]/40"
-                    title="Set inactive"
-                  >
-                    Bench
-                  </Button>
-                  <Button
-                    onClick={() => setDeleteTarget(player)}
-                    size="sm"
-                    variant="ghost"
-                    className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
-                  >
-                    X
-                  </Button>
+                  {isAdmin && (
+                    <>
+                      <Button
+                        onClick={() => toggleActive(player)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1 text-[10px] text-[var(--color-gold-light)]/40"
+                        title="Set inactive"
+                      >
+                        Bench
+                      </Button>
+                      <Button
+                        onClick={() => setDeleteTarget(player)}
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
+                      >
+                        X
+                      </Button>
+                    </>
+                  )}
                 </div>
               ))}
 
-            {inactivePlayers.length > 0 && (
+            {inactivePlayers.length > 0 && isAdmin && (
               <>
                 <div className="pt-2 pb-1 text-xs text-[var(--color-gold-light)]/40">
                   Benched

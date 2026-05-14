@@ -474,7 +474,10 @@ export default function HomePage() {
 
         <div className="space-y-6">
           {session && session.status === "coach_draft" && (
-            <CoachDraftPanel session={session} userId={user?.id ?? null} />
+            <>
+              <CoachDraftPanel session={session} userId={user?.id ?? null} />
+              <SessionControls session={session} onAction={handleSessionAction} />
+            </>
           )}
 
           {assignments && isActive && session.status !== "coach_draft" && (

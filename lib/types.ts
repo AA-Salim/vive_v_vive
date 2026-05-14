@@ -132,6 +132,10 @@ export type PointReason =
   | "chaos_spent"
   | "chaos_won"
   | "chaos_refunded"
+  | "insurance_bought"
+  | "insurance_payout"
+  | "insurance_refunded"
+  | "shame_spent"
 
 export interface PointTransaction {
   id: string
@@ -150,6 +154,7 @@ export interface Bet {
   amount: number
   payout: number | null
   status: "pending" | "won" | "lost" | "refunded"
+  insured: boolean
   created_at: string
 }
 
@@ -171,8 +176,30 @@ export interface BetDetail {
   amount: number
   payout: number | null
   status: "pending" | "won" | "lost" | "refunded"
+  insured: boolean
   discord_username: string
   discord_avatar_url: string | null
+}
+
+export interface ShameEntry {
+  id: string
+  shamer_user_id: string
+  target_player_id: string
+  message: string
+  worst_stat_label: string
+  worst_stat_value: string
+  recent_losses: {
+    played_at: string
+    champion: string
+    lane: string
+    winner_side: string
+    player_side: string
+  }[]
+  expires_at: string
+  created_at: string
+  shamer_username?: string
+  shamer_avatar_url?: string | null
+  target_player_name?: string
 }
 
 export type PlayerRevealState = "hidden" | "silhouette" | "shuffling" | "locking" | "revealed"

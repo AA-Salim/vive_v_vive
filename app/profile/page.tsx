@@ -27,6 +27,10 @@ const REASON_LABELS: Record<PointReason, string> = {
   chaos_spent: "Royal Decree",
   chaos_won: "Decree Won",
   chaos_refunded: "Decree Refunded",
+  insurance_bought: "Insurance",
+  insurance_payout: "Insurance Payout",
+  insurance_refunded: "Insurance Refunded",
+  shame_spent: "Shame",
 }
 
 export default function ProfilePage() {

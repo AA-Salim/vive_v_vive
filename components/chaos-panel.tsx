@@ -412,7 +412,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
               >
                 <div className="font-medium text-red-400">Shuffle Lanes</div>
                 <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Randomize all lane assignments on a team (champs stay)
+                  Shuffle players across lanes (champions stay in their lane)
                 </div>
               </button>
               <button

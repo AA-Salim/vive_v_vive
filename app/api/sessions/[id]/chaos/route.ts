@@ -349,17 +349,17 @@ export async function POST(
       }
 
       const teamAssignments = assignments.filter(a => a.side === body.target_team)
-      const lanes = teamAssignments.map(a => a.lane)
+      const playerIds = teamAssignments.map(a => a.player_id)
 
-      for (let i = lanes.length - 1; i > 0; i--) {
+      for (let i = playerIds.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
-        ;[lanes[i], lanes[j]] = [lanes[j], lanes[i]]
+        ;[playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]]
       }
 
       for (let i = 0; i < teamAssignments.length; i++) {
         await supabase
           .from("session_assignments")
-          .update({ lane: lanes[i] })
+          .update({ player_id: playerIds[i] })
           .eq("id", teamAssignments[i].id)
       }
 

@@ -7,6 +7,7 @@ import { usePoints } from "@/hooks/use-points"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
+import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { toast } from "sonner"
 import Image from "next/image"
 import type { BettingPool, Side } from "@/lib/types"
@@ -25,6 +26,8 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
   const [wantInsurance, setWantInsurance] = useState(false)
   const [placing, setPlacing] = useState(false)
   const [insuring, setInsuring] = useState(false)
+  const [debtPledgeOpen, setDebtPledgeOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null)
   const supabaseRef = useRef(createClient())
 
   const fetchPool = useCallback(async () => {
@@ -62,24 +65,8 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
     }
   }, [sessionId, fetchPool])
 
-  const handleBet = async () => {
-    if (!user) {
-      signIn()
-      return
-    }
-    if (!selectedSide || !amount) return
-
+  const doBet = async () => {
     const numAmount = parseInt(amount, 10)
-    if (isNaN(numAmount) || numAmount < 1) {
-      toast.error("Enter a valid amount")
-      return
-    }
-    const totalCost = numAmount + (wantInsurance ? 17 : 0)
-    if (totalCost > balance) {
-      toast.error("Insufficient balance")
-      return
-    }
-
     setPlacing(true)
     try {
       const res = await fetch(`/api/sessions/${sessionId}/bets`, {
@@ -105,7 +92,33 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
     }
   }
 
-  const handleBuyInsurance = async () => {
+  const handleBet = () => {
+    if (!user) {
+      signIn()
+      return
+    }
+    if (!selectedSide || !amount) return
+
+    const numAmount = parseInt(amount, 10)
+    if (isNaN(numAmount) || numAmount < 1) {
+      toast.error("Enter a valid amount")
+      return
+    }
+    const totalCost = numAmount + (wantInsurance ? 17 : 0)
+    if (balance - totalCost < -300) {
+      toast.error("Debt limit reached (-300 max)")
+      return
+    }
+
+    if (balance < 0) {
+      setPendingAction(() => doBet)
+      setDebtPledgeOpen(true)
+    } else {
+      doBet()
+    }
+  }
+
+  const doInsure = async () => {
     if (!user) return
     setInsuring(true)
     try {
@@ -129,6 +142,16 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
     }
   }
 
+  const handleBuyInsurance = () => {
+    if (!user) return
+    if (balance < 0) {
+      setPendingAction(() => doInsure)
+      setDebtPledgeOpen(true)
+    } else {
+      doInsure()
+    }
+  }
+
   if (!pool) return null
 
   const hasBet = !!pool.user_bet
@@ -138,7 +161,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
 
   const numAmount = parseInt(amount, 10) || 0
   const totalCost = numAmount + (wantInsurance ? 17 : 0)
-  const canAffordInsurance = balance >= numAmount + 17
+  const canAffordInsurance = balance - numAmount - 17 >= -300
 
   return (
     <div className="rounded-lg border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-4">
@@ -307,7 +330,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
           {!pool.user_bet!.insured && (
             <Button
               onClick={handleBuyInsurance}
-              disabled={insuring || balance < 17}
+              disabled={insuring || balance - 17 < -300}
               size="sm"
               variant="outline"
               className="mt-2 border-emerald-500/30 text-xs text-emerald-400 hover:border-emerald-500/60"
@@ -416,17 +439,17 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
               Login with Discord to place bets
             </p>
           )}
-          {user && !pointsLoading && balance === 0 && (
+          {user && !pointsLoading && balance <= -300 && (
             <p className="text-center text-xs text-red-400">
-              No points available. Claim your daily bonus!
+              Debt limit reached (-300). Claim your daily bonus!
             </p>
           )}
-          {user && !pointsLoading && balance > 0 && !selectedSide && (
+          {user && !pointsLoading && balance > -300 && !selectedSide && (
             <p className="text-center text-xs text-[var(--color-gold-light)]/40">
               Select a side above to bet
             </p>
           )}
-          {user && !pointsLoading && balance > 0 && selectedSide && !amount && (
+          {user && !pointsLoading && balance > -300 && selectedSide && !amount && (
             <p className="text-center text-xs text-[var(--color-gold-light)]/40">
               Enter an amount to bet
             </p>
@@ -434,7 +457,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
 
           <Button
             onClick={user ? handleBet : signIn}
-            disabled={user ? (!selectedSide || !amount || placing || pointsLoading || totalCost > balance) : false}
+            disabled={user ? (!selectedSide || !amount || placing || pointsLoading || balance - totalCost < -300) : false}
             className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-50"
           >
             {!user
@@ -449,6 +472,18 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
           </Button>
         </div>
       )}
+
+      <DebtPledgeDialog
+        open={debtPledgeOpen}
+        onOpenChange={setDebtPledgeOpen}
+        currentBalance={balance}
+        onConfirm={() => {
+          if (pendingAction) {
+            pendingAction()
+            setPendingAction(null)
+          }
+        }}
+      />
     </div>
   )
 }

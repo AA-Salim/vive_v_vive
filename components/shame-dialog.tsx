@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { Player } from "@/lib/types"
@@ -26,6 +27,7 @@ export function ShameDialog({ open, onOpenChange, balance, onSuccess }: ShameDia
   const [targetId, setTargetId] = useState<string | null>(null)
   const [message, setMessage] = useState("")
   const [submitting, setSubmitting] = useState(false)
+  const [debtPledgeOpen, setDebtPledgeOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -43,11 +45,7 @@ export function ShameDialog({ open, onOpenChange, balance, onSuccess }: ShameDia
     }
   }, [open])
 
-  const handleSubmit = async () => {
-    if (!targetId) {
-      toast.error("Select a player to shame")
-      return
-    }
+  const doShame = async () => {
     setSubmitting(true)
     try {
       const res = await fetch("/api/shame", {
@@ -67,6 +65,18 @@ export function ShameDialog({ open, onOpenChange, balance, onSuccess }: ShameDia
       toast.error("Failed to shame")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleSubmit = () => {
+    if (!targetId) {
+      toast.error("Select a player to shame")
+      return
+    }
+    if (balance < 0) {
+      setDebtPledgeOpen(true)
+    } else {
+      doShame()
     }
   }
 
@@ -123,8 +133,8 @@ export function ShameDialog({ open, onOpenChange, balance, onSuccess }: ShameDia
 
           <div className="text-center text-xs text-[var(--color-gold-light)]/50">
             Your balance: {balance} pts
-            {balance < 234 && (
-              <span className="ml-2 text-red-400">(need 234)</span>
+            {balance - 234 < -300 && (
+              <span className="ml-2 text-red-400">(debt limit reached)</span>
             )}
           </div>
         </div>
@@ -135,13 +145,20 @@ export function ShameDialog({ open, onOpenChange, balance, onSuccess }: ShameDia
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={!targetId || balance < 234 || submitting}
+            disabled={!targetId || balance - 234 < -300 || submitting}
             className="bg-red-600 text-white hover:bg-red-700"
           >
             {submitting ? "Shaming..." : "Shame (234 pts)"}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <DebtPledgeDialog
+        open={debtPledgeOpen}
+        onOpenChange={setDebtPledgeOpen}
+        currentBalance={balance}
+        onConfirm={() => doShame()}
+      />
     </Dialog>
   )
 }

@@ -151,7 +151,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       const { error: insertError } = await supabase.from("chaos_actions").insert({
@@ -205,7 +206,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       await supabase
@@ -268,7 +270,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       const today = new Date().toISOString().split("T")[0]
@@ -345,7 +348,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       const teamAssignments = assignments.filter(a => a.side === body.target_team)
@@ -388,7 +392,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       const today = new Date().toISOString().split("T")[0]
@@ -473,7 +478,8 @@ export async function POST(
         p_reason: "chaos_spent",
       })
       if (balError) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       const today = new Date().toISOString().split("T")[0]

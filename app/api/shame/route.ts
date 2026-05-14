@@ -211,7 +211,10 @@ export async function POST(request: Request) {
   })
 
   if (balError) {
-    return NextResponse.json({ error: "Insufficient balance (234 pts required)" }, { status: 400 })
+    const msg = balError.message?.includes("Debt limit")
+      ? "Debt limit reached (-300 max)"
+      : "Insufficient balance (234 pts required)"
+    return NextResponse.json({ error: msg }, { status: 400 })
   }
 
   // Insert shame entry

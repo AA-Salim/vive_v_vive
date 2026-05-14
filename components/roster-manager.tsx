@@ -20,10 +20,11 @@ import { cn } from "@/lib/utils"
 
 interface RosterManagerProps {
   onRandomize: (players: Player[]) => void
+  onCoachDraft?: () => void
   disabled?: boolean
 }
 
-export function RosterManager({ onRandomize, disabled }: RosterManagerProps) {
+export function RosterManager({ onRandomize, onCoachDraft, disabled }: RosterManagerProps) {
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
   const [newName, setNewName] = useState("")
@@ -282,6 +283,17 @@ export function RosterManager({ onRandomize, disabled }: RosterManagerProps) {
               ? `Select ${10 - selectedCount} more player${10 - selectedCount !== 1 ? "s" : ""}`
               : "Randomize Teams"}
           </Button>
+
+          {onCoachDraft && (
+            <Button
+              onClick={onCoachDraft}
+              disabled={disabled}
+              variant="outline"
+              className="w-full border-purple-500/30 text-purple-400 hover:border-purple-500/60 hover:bg-purple-500/10"
+            >
+              Coach Draft
+            </Button>
+          )}
 
           {selectedCount > 10 && (
             <p className="text-center text-xs text-red-400">

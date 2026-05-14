@@ -12,11 +12,32 @@ import {
 import { ClaimPlayerDialog } from "@/components/claim-player-dialog"
 import { useState } from "react"
 import Image from "next/image"
-import { LogOutIcon, UserIcon } from "lucide-react"
+import { LogOutIcon, RefreshCwIcon, UserIcon } from "lucide-react"
+import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 
 export function AuthButton() {
   const { user, profile, isLoading, signIn, signOut } = useAuth()
   const [claimOpen, setClaimOpen] = useState(false)
+  const [isSyncing, setIsSyncing] = useState(false)
+
+  const syncChampions = async () => {
+    setIsSyncing(true)
+    const t = toast.loading("Syncing champions from Meraki API...")
+    try {
+      const res = await fetch("/api/champions/sync", { method: "POST" })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success(`Synced ${data.count} champions`, { id: t })
+      } else {
+        toast.error(data.error || "Sync failed", { id: t })
+      }
+    } catch (err) {
+      toast.error("Network error during sync", { id: t })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -81,6 +102,15 @@ export function AuthButton() {
           >
             <LogOutIcon className="mr-2 h-4 w-4" />
             Sign Out
+          </DropdownMenuItem>
+          <DropdownMenuSeparator className="bg-[var(--color-gold)]/10" />
+          <DropdownMenuItem
+            onClick={() => syncChampions()}
+            disabled={isSyncing}
+            className="text-[var(--color-gold-light)]/50 focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
+          >
+            <RefreshCwIcon className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} />
+            Sync Champions
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

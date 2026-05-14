@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import type { Assignment, Player, PlayerRevealState, Role, SessionWithAssignments } from "@/lib/types"
 import { getAssignmentsByLane } from "@/lib/randomizer"
-import { CHAMPION_POOLS, getChampionImageUrl } from "@/lib/champions"
+import { CHAMPION_POOLS, getChampionImageUrl, type Champion } from "@/lib/champions"
 import { RosterManager } from "@/components/roster-manager"
 import { MapView } from "@/components/map-view"
 import { TeamList } from "@/components/team-list"
@@ -89,10 +89,17 @@ export default function HomePage() {
   const [shuffleImageUrls, setShuffleImageUrls] = useState<Map<string, string>>(new Map())
   const [activeLane, setActiveLane] = useState<Role | null>(null)
   const [localCreator, setLocalCreator] = useState(false)
+  const [pools, setPools] = useState<Record<Role, Champion[]>>(CHAMPION_POOLS)
 
   const skipRef = useRef(false)
   const revealAbortRef = useRef<(() => void) | null>(null)
   const lastSessionId = useRef<string | null>(null)
+
+  useEffect(() => {
+    fetch("/api/champions").then(res => res.json()).then(data => {
+      if (data && !data.error) setPools(data)
+    })
+  }, [])
 
   const assignments = session ? sessionToAssignments(session) : null
   const isActive = session && ["draft", "chaos", "betting", "in_game"].includes(session.status)
@@ -133,14 +140,14 @@ export default function HomePage() {
   }, [isResolved, session?.status, session?.id])
 
   const getRandomChampionImage = useCallback((lane: Role, excludeInternal?: string) => {
-    const pool = CHAMPION_POOLS[lane]
+    const pool = pools[lane]
     const filtered = excludeInternal
       ? pool.filter((c) => c.internal !== excludeInternal)
       : pool
     const candidates = filtered.length > 0 ? filtered : pool
     const random = candidates[Math.floor(Math.random() * candidates.length)]
     return getChampionImageUrl(random.internal)
-  }, [])
+  }, [pools])
 
   const setPlayerState = useCallback((playerId: string, state: PlayerRevealState) => {
     setPlayerStates((prev) => {

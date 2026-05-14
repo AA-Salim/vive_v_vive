@@ -7,6 +7,7 @@ import { AuthNavSection } from "@/components/auth-nav-section"
 
 const links = [
   { href: "/", label: "Home" },
+  { href: "/champions", label: "Champions" },
   { href: "/history", label: "History" },
   { href: "/rivalries", label: "Rivalries" },
   { href: "/duos", label: "Duos" },

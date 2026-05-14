@@ -247,7 +247,7 @@ CREATE TABLE chaos_actions (
   session_id UUID NOT NULL REFERENCES game_sessions(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   action_type TEXT NOT NULL CHECK (action_type IN (
-    'double_or_nothing', 'swap_teammate',
+    'double_or_nothing', 'swap_teammate', 'reroll_self',
     'shuffle_lanes', 'reroll_champs', 'target_reroll'
   )),
   tier TEXT NOT NULL CHECK (tier IN ('medium', 'high', 'super')),

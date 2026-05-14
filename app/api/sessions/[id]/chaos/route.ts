@@ -8,13 +8,14 @@ const COSTS = { medium: 49, high: 89, super: 139 } as const
 type ChaosBody =
   | { action_type: "double_or_nothing"; side: "blue" | "red" }
   | { action_type: "swap_teammate"; target_player_id: string }
+  | { action_type: "reroll_self" }
   | { action_type: "shuffle_lanes"; target_team: "blue" | "red" }
   | { action_type: "reroll_champs"; target_team: "blue" | "red" }
   | { action_type: "target_reroll"; target_player_id: string }
 
 function getTier(actionType: string): "medium" | "high" | "super" {
   if (actionType === "double_or_nothing") return "medium"
-  if (actionType === "swap_teammate") return "high"
+  if (actionType === "swap_teammate" || actionType === "reroll_self") return "high"
   return "super"
 }
 
@@ -246,6 +247,97 @@ export async function POST(
       return NextResponse.json({ success: true })
     }
 
+    case "reroll_self": {
+      if (!userPlayerId) {
+        return NextResponse.json({ error: "You must be a player to reroll" }, { status: 400 })
+      }
+
+      const selfRerollCount = userActions.filter(a => a.action_type === "reroll_self").length
+      if (selfRerollCount >= 1) {
+        return NextResponse.json({ error: "Max 1 self-reroll per session" }, { status: 400 })
+      }
+
+      const selfAssignment = assignments.find(a => a.player_id === userPlayerId)
+      if (!selfAssignment) {
+        return NextResponse.json({ error: "You are not in this game" }, { status: 400 })
+      }
+
+      const { error: balError } = await supabase.rpc("adjust_balance", {
+        p_user_id: user.id,
+        p_amount: -cost,
+        p_reason: "chaos_spent",
+      })
+      if (balError) {
+        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+      }
+
+      const today = new Date().toISOString().split("T")[0]
+      const { data: fearlessData } = await supabase
+        .from("daily_fearless")
+        .select("champion_name")
+        .eq("date", today)
+
+      const fearlessBanned = new Set<string>(
+        fearlessData?.map((r: { champion_name: string }) => r.champion_name) ?? []
+      )
+
+      const lockedAssignments = new Map<string, Assignment>()
+      for (const a of assignments) {
+        if (a.player_id !== userPlayerId) {
+          lockedAssignments.set(a.player_id, {
+            player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" },
+            side: a.side,
+            lane: a.lane,
+            champion: a.champion,
+            championInternal: a.champion_internal,
+            locked: true,
+            fearlessOverride: a.fearless_override,
+          })
+        }
+      }
+
+      const blueTeam = assignments.filter(a => a.side === "blue").map(a => ({
+        player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" } as Player,
+        lane: a.lane as Role,
+      }))
+
+      const redTeam = assignments.filter(a => a.side === "red").map(a => ({
+        player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" } as Player,
+        lane: a.lane as Role,
+      }))
+
+      const newAssignments = assignChampions(blueTeam, redTeam, fearlessBanned, lockedAssignments)
+      const newSelf = newAssignments.find(a => a.player.id === userPlayerId)
+
+      if (newSelf) {
+        await supabase
+          .from("session_assignments")
+          .update({
+            champion: newSelf.champion,
+            champion_internal: newSelf.championInternal,
+            fearless_override: newSelf.fearlessOverride,
+          })
+          .eq("id", selfAssignment.id)
+      }
+
+      await supabase.from("chaos_actions").insert({
+        session_id: id,
+        user_id: user.id,
+        action_type: "reroll_self",
+        tier: "high",
+        cost,
+        target_player_id: userPlayerId,
+        status: "resolved",
+      })
+
+      await supabase
+        .from("game_sessions")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+      return NextResponse.json({ success: true })
+    }
+
     case "shuffle_lanes": {
       const { error: balError } = await supabase.rpc("adjust_balance", {
         p_user_id: user.id,
@@ -257,17 +349,17 @@ export async function POST(
       }
 
       const teamAssignments = assignments.filter(a => a.side === body.target_team)
-      const lanes = teamAssignments.map(a => a.lane)
+      const playerIds = teamAssignments.map(a => a.player_id)
 
-      for (let i = lanes.length - 1; i > 0; i--) {
+      for (let i = playerIds.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
-        ;[lanes[i], lanes[j]] = [lanes[j], lanes[i]]
+        ;[playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]]
       }
 
       for (let i = 0; i < teamAssignments.length; i++) {
         await supabase
           .from("session_assignments")
-          .update({ lane: lanes[i] })
+          .update({ player_id: playerIds[i] })
           .eq("id", teamAssignments[i].id)
       }
 

@@ -492,7 +492,7 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handleCancel(supabase: any, session: any) {
-  if (!["draft", "chaos", "betting", "in_game"].includes(session.status)) {
+  if (!["coach_draft", "draft", "chaos", "betting", "in_game"].includes(session.status)) {
     return NextResponse.json(
       { error: "Session is already resolved" },
       { status: 400 }

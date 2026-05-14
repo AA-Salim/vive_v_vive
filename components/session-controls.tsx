@@ -43,6 +43,19 @@ export function SessionControls({ session, onAction }: SessionControlsProps) {
 
   if (!isCreator) return null
 
+  if (session.status === "coach_draft") {
+    return (
+      <Button
+        onClick={() => patchSession("cancel")}
+        disabled={loading}
+        variant="ghost"
+        className="text-[var(--color-gold-light)]/50"
+      >
+        Cancel Draft
+      </Button>
+    )
+  }
+
   if (session.status === "draft") {
     return (
       <>

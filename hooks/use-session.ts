@@ -58,6 +58,27 @@ export function useSession() {
           fetchSession()
         }
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "coach_draft_picks" },
+        () => {
+          fetchSession()
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "player_queue" },
+        () => {
+          fetchSession()
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vainqueur_state" },
+        () => {
+          fetchSession()
+        }
+      )
       .subscribe()
 
     return () => {

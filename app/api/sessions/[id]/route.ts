@@ -467,6 +467,26 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
     )
   }
 
+  // Update vainqueur state if active
+  const { data: vState } = await supabase
+    .from("vainqueur_state")
+    .select("id, is_active")
+    .limit(1)
+    .maybeSingle()
+
+  if (vState?.is_active) {
+    await supabase
+      .from("vainqueur_state")
+      .update({
+        winning_player_ids: winnerIds,
+        losing_player_ids: loserIds,
+        loser_volunteers: [],
+        last_session_id: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", vState.id)
+  }
+
   return returnSession(supabase, session.id)
 }
 

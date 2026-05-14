@@ -5,6 +5,7 @@ import type { Assignment, Player, PlayerRevealState, Role, SessionWithAssignment
 import { getAssignmentsByLane } from "@/lib/randomizer"
 import { CHAMPION_POOLS, getChampionImageUrl, type Champion } from "@/lib/champions"
 import { RosterManager } from "@/components/roster-manager"
+import { CoachDraftPanel } from "@/components/coach-draft-panel"
 import { MapView } from "@/components/map-view"
 import { TeamList } from "@/components/team-list"
 import { FearlessPanel } from "@/components/fearless-panel"
@@ -14,6 +15,9 @@ import { BettingPanel } from "@/components/betting-panel"
 import { ChaosTimer } from "@/components/chaos-timer"
 import { ChaosPanel } from "@/components/chaos-panel"
 import { KissTheHand } from "@/components/kiss-the-hand"
+import { CoachSelectDialog } from "@/components/coach-select-dialog"
+import { QueuePanel } from "@/components/queue-panel"
+import { VainqueurControls } from "@/components/vainqueur-controls"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
@@ -50,6 +54,7 @@ function sessionToAssignments(session: SessionWithAssignments): Assignment[] {
 
 function statusLabel(status: string) {
   switch (status) {
+    case "coach_draft": return "Coach Draft"
     case "draft": return "Draft"
     case "chaos": return "Royal Decrees"
     case "betting": return "Betting Open"
@@ -64,6 +69,7 @@ function statusLabel(status: string) {
 
 function statusColor(status: string) {
   switch (status) {
+    case "coach_draft": return "bg-purple-500/20 text-purple-400"
     case "draft": return "bg-[var(--color-gold)]/20 text-[var(--color-gold)]"
     case "chaos": return "bg-red-500/20 text-red-400"
     case "betting": return "bg-yellow-500/20 text-yellow-400"
@@ -77,11 +83,12 @@ function statusColor(status: string) {
 
 export default function HomePage() {
   const { session, isLoading, refetch, serverTimeDelta } = useSession()
-  const { user, isAdmin, signIn } = useAuth()
+  const { user, profile, isAdmin, signIn } = useAuth()
   const { kissRemaining, kissTheHand } = usePoints(user?.id ?? null)
   const [fearlessKey, setFearlessKey] = useState(0)
   const [winFlash, setWinFlash] = useState<"blue" | "red" | null>(null)
   const [creating, setCreating] = useState(false)
+  const [coachDialogOpen, setCoachDialogOpen] = useState(false)
 
   const [isRevealing, setIsRevealing] = useState(false)
   const [revealDone, setRevealDone] = useState(false)
@@ -102,7 +109,7 @@ export default function HomePage() {
   }, [])
 
   const assignments = session ? sessionToAssignments(session) : null
-  const isActive = session && ["draft", "chaos", "betting", "in_game"].includes(session.status)
+  const isActive = session && ["coach_draft", "draft", "chaos", "betting", "in_game"].includes(session.status)
   const isResolved = session && ["blue_win", "red_win", "canceled", "expired"].includes(session.status)
   const isCreator = localCreator || isAdmin || (!!user && !!session && session.created_by === user.id)
 
@@ -389,6 +396,24 @@ export default function HomePage() {
     refetch()
   }
 
+  const handleStartCoachDraft = async (blueCoachId: string, redCoachId: string) => {
+    try {
+      const res = await fetch("/api/sessions/coach-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blue_coach_id: blueCoachId, red_coach_id: redCoachId }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        toast.error(err.error || "Failed to start coach draft")
+        return
+      }
+      await refetch()
+    } catch {
+      toast.error("Failed to start coach draft")
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -424,6 +449,7 @@ export default function HomePage() {
           {!isActive && (
             <RosterManager
               onRandomize={handleRandomize}
+              onCoachDraft={() => setCoachDialogOpen(true)}
               disabled={isRevealing || creating}
             />
           )}
@@ -434,10 +460,21 @@ export default function HomePage() {
               onKiss={kissTheHand}
             />
           )}
+          <QueuePanel currentPlayerId={profile?.player_id ?? null} />
+          <VainqueurControls
+            isAdmin={isAdmin}
+            currentPlayerId={profile?.player_id ?? null}
+            sessionResolved={!!isResolved}
+            onNextGame={refetch}
+          />
         </div>
 
         <div className="space-y-6">
-          {assignments && isActive && (
+          {session && session.status === "coach_draft" && (
+            <CoachDraftPanel session={session} userId={user?.id ?? null} />
+          )}
+
+          {assignments && isActive && session.status !== "coach_draft" && (
             <>
               <MapView
                 assignments={assignments}
@@ -564,6 +601,13 @@ export default function HomePage() {
           {!session && <MapView assignments={[]} />}
         </div>
       </div>
+
+      <CoachSelectDialog
+        open={coachDialogOpen}
+        onOpenChange={setCoachDialogOpen}
+        currentUserId={user?.id ?? null}
+        onConfirm={handleStartCoachDraft}
+      />
     </div>
   )
 }

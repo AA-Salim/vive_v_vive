@@ -48,7 +48,10 @@ export interface PlayerStats extends Player {
   mostPlayedLane: Role | null
 }
 
+export type GameMode = "standard" | "coach_draft" | "vainqueur"
+
 export type SessionStatus =
+  | "coach_draft"
   | "draft"
   | "chaos"
   | "betting"
@@ -61,13 +64,27 @@ export type SessionStatus =
 export interface GameSession {
   id: string
   status: SessionStatus
+  game_mode: GameMode
   created_by: string | null
   resolved_by: string | null
   game_id: string | null
   betting_ends_at: string | null
   chaos_ends_at: string | null
+  blue_coach_id: string | null
+  red_coach_id: string | null
+  draft_turn: Side | null
   created_at: string
   updated_at: string
+}
+
+export interface CoachDraftPick {
+  id: string
+  session_id: string
+  pick_number: number
+  player_id: string
+  side: Side
+  lane: Role | null
+  created_at: string
 }
 
 export interface SessionAssignment {
@@ -191,4 +208,22 @@ export interface ChaosActionWithNames extends ChaosAction {
   discord_avatar_url: string | null
   target_player_name: string | null
   target_player_2_name: string | null
+}
+
+export interface QueueEntry {
+  id: string
+  player_id: string
+  position: number
+  joined_at: string
+  player_name?: string
+}
+
+export interface VainqueurState {
+  id: string
+  is_active: boolean
+  winning_player_ids: string[]
+  losing_player_ids: string[]
+  loser_volunteers: string[]
+  last_session_id: string | null
+  updated_at: string
 }

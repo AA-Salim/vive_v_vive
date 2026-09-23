@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { AuthNavSection } from "@/components/auth-nav-section"
+import { useAct } from "@/hooks/use-act"
 
 const links = [
   { href: "/", label: "Home" },
@@ -14,16 +15,26 @@ const links = [
   { href: "/stats", label: "Stats" },
   { href: "/gamba", label: "Gamba" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/titles", label: "Titles" },
+  { href: "/archives", label: "Archives" },
 ]
 
 export function Nav() {
   const pathname = usePathname()
+  const { act } = useAct()
 
   return (
     <nav className="border-b border-[var(--color-gold)]/20 bg-[var(--color-navy-light)]">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4">
-        <Link href="/" className="text-lg font-bold text-[var(--color-gold)]">
-          Vive v Vive Custom
+        <Link href="/" className="flex flex-col">
+          <span className="text-lg font-bold leading-tight text-[var(--color-gold)]">
+            Vive v Vive Custom
+          </span>
+          {act?.subtitle && (
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--color-gold-light)]/40">
+              Act {act.act_number}: {act.subtitle}
+            </span>
+          )}
         </Link>
         <div className="flex items-center gap-1">
           {links.map((link) => (

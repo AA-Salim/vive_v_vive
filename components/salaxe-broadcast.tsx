@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useRef } from "react"
 import { CrownIcon } from "lucide-react"
-import { getRandomBroadcast } from "@/lib/salaxe-broadcasts"
+import { useAct } from "@/hooks/use-act"
+import { getActContent } from "@/lib/act-content"
 
 export function SalaxeBroadcast() {
+  const { act } = useAct()
   const [message, setMessage] = useState<string | null>(null)
   const [exiting, setExiting] = useState(false)
   const firedRef = useRef(false)
@@ -14,9 +16,10 @@ export function SalaxeBroadcast() {
     firedRef.current = true
 
     const delay = (3 + Math.random() * 17) * 60 * 1000
+    const content = getActContent(act?.act_number ?? 2)
 
     const timer = setTimeout(() => {
-      setMessage(getRandomBroadcast())
+      setMessage(content.getRandomBroadcast())
 
       setTimeout(() => {
         setExiting(true)
@@ -45,7 +48,7 @@ export function SalaxeBroadcast() {
         <div className="mb-1 flex items-center gap-2">
           <CrownIcon className="h-3 w-3 text-[var(--color-gold)]" />
           <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-gold)]/70">
-            Royal Broadcast
+            {act && act.act_number >= 2 ? "Broadcast from Exile" : "Royal Broadcast"}
           </span>
         </div>
         <p className="text-sm text-[var(--color-gold-light)]">{message}</p>

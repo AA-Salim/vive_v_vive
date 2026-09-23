@@ -31,6 +31,14 @@ const REASON_LABELS: Record<PointReason, string> = {
   insurance_payout: "Insurance Payout",
   insurance_refunded: "Insurance Refunded",
   shame_spent: "Shame",
+  act_carryover: "Act Carry-Over",
+  sing_his_praises: "Sing His Praises",
+  title_bought: "Title Purchased",
+  bounty_placed: "Bounty Placed",
+  bounty_claimed: "Bounty Claimed",
+  bounty_expired_refund: "Bounty Expired",
+  prophecy_bonus: "Prophecy Bonus",
+  sabotage_spent: "Sabotage",
 }
 
 export default function ProfilePage() {

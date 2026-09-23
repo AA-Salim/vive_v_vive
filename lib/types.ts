@@ -136,6 +136,14 @@ export type PointReason =
   | "insurance_payout"
   | "insurance_refunded"
   | "shame_spent"
+  | "act_carryover"
+  | "sing_his_praises"
+  | "title_bought"
+  | "bounty_placed"
+  | "bounty_claimed"
+  | "bounty_expired_refund"
+  | "prophecy_bonus"
+  | "sabotage_spent"
 
 export interface PointTransaction {
   id: string
@@ -211,8 +219,10 @@ export type ChaosActionType =
   | "shuffle_lanes"
   | "reroll_champs"
   | "target_reroll"
+  | "champion_ban"
+  | "lane_force"
 
-export type ChaosTier = "medium" | "high" | "super"
+export type ChaosTier = "medium" | "high" | "super" | "sabotage"
 
 export interface ChaosAction {
   id: string
@@ -227,6 +237,8 @@ export interface ChaosAction {
   target_team: Side | null
   payout: number | null
   status: "pending" | "won" | "lost" | "resolved" | "refunded"
+  banned_champion: string | null
+  forced_lane: string | null
   created_at: string
 }
 
@@ -253,4 +265,111 @@ export interface VainqueurState {
   loser_volunteers: string[]
   last_session_id: string | null
   updated_at: string
+}
+
+export type ActStatus = "active" | "archived" | "upcoming"
+
+export interface Act {
+  id: number
+  act_number: number
+  name: string
+  subtitle: string | null
+  status: ActStatus
+  started_at: string
+  ended_at: string | null
+  initial_grant: number
+  config: Record<string, unknown>
+  created_at: string
+}
+
+export type AwardCategory =
+  | "treasury"
+  | "warrior"
+  | "iron_man"
+  | "degenerate"
+  | "devotee"
+  | "punching_bag"
+  | "grand_champion"
+
+export interface ActAward {
+  id: string
+  act_id: number
+  user_id: string
+  player_id: string | null
+  category: AwardCategory
+  title: string
+  carry_over_bonus: number
+  final_value: string | null
+  perks: Record<string, unknown>
+  created_at: string
+}
+
+export interface ActSnapshot {
+  id: string
+  act_id: number
+  user_id: string
+  player_name: string | null
+  username: string | null
+  avatar_url: string | null
+  final_balance: number
+  total_earned: number
+  total_spent: number
+  total_bets: number
+  total_kisses: number
+  total_shames_received: number
+  total_games: number
+  wins: number
+  win_rate: number | null
+  rank: number | null
+  created_at: string
+}
+
+export interface Title {
+  id: string
+  name: string
+  description: string
+  price: number
+  category: "rebellion" | "mockery" | "loyalty" | "absurd" | "award"
+  for_self: boolean
+  act_id: number | null
+  is_permanent: boolean
+  created_at: string
+}
+
+export interface UserTitle {
+  id: string
+  user_id: string
+  title_id: string
+  assigned_by: string | null
+  is_active: boolean
+  created_at: string
+  title?: Title
+}
+
+export interface Bounty {
+  id: string
+  poster_user_id: string
+  target_player_id: string
+  amount: number
+  payout_multiplier: number
+  status: "active" | "claimed" | "failed" | "expired" | "refunded"
+  resolved_session_id: string | null
+  expires_at: string
+  created_at: string
+  poster_username?: string
+  poster_avatar_url?: string | null
+  target_player_name?: string
+}
+
+export type ProphecyType = "player_gets_lane" | "player_most_kills" | "side_wins_fast"
+
+export interface Prophecy {
+  id: string
+  user_id: string
+  session_id: string
+  prediction_type: ProphecyType
+  prediction_value: Record<string, unknown>
+  multiplier: number
+  correct: boolean | null
+  created_at: string
 }

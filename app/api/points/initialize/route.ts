@@ -21,9 +21,18 @@ export async function POST() {
     return NextResponse.json({ already_initialized: true })
   }
 
+  // Get initial grant from active act, fallback to 100
+  const { data: activeAct } = await supabase
+    .from("acts")
+    .select("initial_grant")
+    .eq("status", "active")
+    .maybeSingle()
+
+  const grant = activeAct?.initial_grant ?? 100
+
   const { error: balanceError } = await supabase
     .from("point_balances")
-    .insert({ user_id: user.id, balance: 50 })
+    .insert({ user_id: user.id, balance: grant })
 
   if (balanceError) {
     return NextResponse.json(
@@ -36,7 +45,7 @@ export async function POST() {
     .from("point_transactions")
     .insert({
       user_id: user.id,
-      amount: 50,
+      amount: grant,
       reason: "initial_grant",
     })
 
@@ -44,5 +53,5 @@ export async function POST() {
     return NextResponse.json({ error: txError.message }, { status: 500 })
   }
 
-  return NextResponse.json({ initialized: true, balance: 50 })
+  return NextResponse.json({ initialized: true, balance: grant })
 }

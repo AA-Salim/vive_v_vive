@@ -10,7 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { getRandomPhrase } from "@/lib/slaxe-phrases"
+import { useAct } from "@/hooks/use-act"
+import { getActContent } from "@/lib/act-content"
 
 interface DebtPledgeDialogProps {
   open: boolean
@@ -20,15 +21,17 @@ interface DebtPledgeDialogProps {
 }
 
 export function DebtPledgeDialog({ open, onOpenChange, currentBalance, onConfirm }: DebtPledgeDialogProps) {
+  const { act } = useAct()
   const [phrase, setPhrase] = useState("")
   const [input, setInput] = useState("")
 
   useEffect(() => {
     if (open) {
-      setPhrase(getRandomPhrase())
+      const content = getActContent(act?.act_number ?? 2)
+      setPhrase(content.getRandomPhrase())
       setInput("")
     }
-  }, [open])
+  }, [open, act])
 
   const matches = input.trim().toLowerCase() === phrase.toLowerCase()
 

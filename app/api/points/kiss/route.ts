@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 
+const PRAISE_REASONS = ["kiss_the_hand", "sing_his_praises"]
+
 export async function GET() {
   const supabase = await createClient()
   const {
@@ -18,13 +20,13 @@ export async function GET() {
       .from("point_transactions")
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("reason", "kiss_the_hand")
+      .in("reason", PRAISE_REASONS)
       .gte("created_at", `${today}T00:00:00Z`),
     supabase
       .from("point_transactions")
       .select("*", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("reason", "kiss_the_hand"),
+      .in("reason", PRAISE_REASONS),
   ])
 
   const usedToday = todayResult.count ?? 0
@@ -53,7 +55,7 @@ export async function POST() {
     .from("point_transactions")
     .select("*", { count: "exact", head: true })
     .eq("user_id", user.id)
-    .eq("reason", "kiss_the_hand")
+    .in("reason", PRAISE_REASONS)
     .gte("created_at", `${today}T00:00:00Z`)
 
   const usedToday = count ?? 0
@@ -62,10 +64,22 @@ export async function POST() {
     return NextResponse.json({ exhausted: true, remaining_today: 0 })
   }
 
+  // Determine reason based on active act
+  const { data: activeAct } = await supabase
+    .from("acts")
+    .select("act_number")
+    .eq("status", "active")
+    .maybeSingle()
+
+  const reason =
+    activeAct && activeAct.act_number >= 2
+      ? "sing_his_praises"
+      : "kiss_the_hand"
+
   const { data: newBalance, error } = await supabase.rpc("adjust_balance", {
     p_user_id: user.id,
     p_amount: 10,
-    p_reason: "kiss_the_hand",
+    p_reason: reason,
   })
 
   if (error) {

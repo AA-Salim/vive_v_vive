@@ -28,43 +28,48 @@ const TIER_CONFIG = {
     cost: 49,
     payout: "98",
     description: "Double or Nothing",
-    detail: "Pick a side. Win = 2x back. Lose = gone.",
     color: "text-yellow-400",
     border: "border-yellow-500/30",
     bg: "bg-yellow-500/5",
     hoverBg: "hover:bg-yellow-500/10",
-    maxPerSession: 3,
   },
   high: {
     label: "SWAP",
     cost: 89,
     payout: null,
-    description: "Swap / Reroll Self",
-    detail: "Trade with a teammate or reroll your own champ.",
+    description: "Swap / Reroll",
     color: "text-orange-400",
     border: "border-orange-500/30",
     bg: "bg-orange-500/5",
     hoverBg: "hover:bg-orange-500/10",
-    maxPerSession: null,
+  },
+  sabotage: {
+    label: "SABOTAGE",
+    cost: 75,
+    payout: null,
+    description: "Ban / Force",
+    color: "text-purple-400",
+    border: "border-purple-500/30",
+    bg: "bg-purple-500/5",
+    hoverBg: "hover:bg-purple-500/10",
   },
   super: {
     label: "CHAOS",
     cost: 139,
     payout: null,
     description: "Nuclear Option",
-    detail: "Shuffle lanes, reroll champs, or target someone.",
     color: "text-red-400",
     border: "border-red-500/30",
     bg: "bg-red-500/5",
     hoverBg: "hover:bg-red-500/10",
-    maxPerSession: null,
   },
 } as const
 
 type TierKey = keyof typeof TIER_CONFIG
-type DialogMode = null | "medium" | "high" | "super"
+type DialogMode = null | "medium" | "high" | "sabotage" | "super"
 type HighAction = "swap_teammate" | "reroll_self"
 type SuperAction = "shuffle_lanes" | "reroll_champs" | "target_reroll"
+type SabotageAction = "champion_ban" | "lane_force"
 
 export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const { user, profile, signIn } = useAuth()
@@ -75,6 +80,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const [highAction, setHighAction] = useState<HighAction | null>(null)
   const [superAction, setSuperAction] = useState<SuperAction | null>(null)
+  const [sabotageAction, setSabotageAction] = useState<SabotageAction | null>(null)
+  const [selectedPlayer2Id, setSelectedPlayer2Id] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [debtPledgeOpen, setDebtPledgeOpen] = useState(false)
   const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null)
@@ -100,11 +107,15 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const userRerollSelfCount = actions.filter(
     (a) => a.user_id === user?.id && a.action_type === "reroll_self" && a.status !== "refunded"
   ).length
+  const userSabotageCount = actions.filter(
+    (a) => a.user_id === user?.id && (a.action_type === "champion_ban" || a.action_type === "lane_force") && a.status !== "refunded"
+  ).length
 
   const canAfford = (tier: TierKey) => balance - TIER_CONFIG[tier].cost >= -300
   const isLimitReached = (tier: TierKey) => {
     if (tier === "medium") return userDonCount >= 3
     if (tier === "high") return userSwapCount >= 1 && userRerollSelfCount >= 1
+    if (tier === "sabotage") return userSabotageCount >= 1
     return false
   }
 
@@ -123,6 +134,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     setSelectedPlayerId(null)
     setHighAction(null)
     setSuperAction(null)
+    setSabotageAction(null)
+    setSelectedPlayer2Id(null)
   }
 
   const doSubmitAction = async (body: Record<string, unknown>) => {
@@ -174,6 +187,21 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
     }
   }
 
+  const handleSabotageConfirm = () => {
+    if (!sabotageAction) return
+    if (sabotageAction === "champion_ban") {
+      if (!selectedPlayerId) return
+      submitAction({ action_type: "champion_ban", target_player_id: selectedPlayerId })
+    } else {
+      if (!selectedPlayerId || !selectedPlayer2Id) return
+      submitAction({
+        action_type: "lane_force",
+        target_player_id: selectedPlayerId,
+        target_player_2_id: selectedPlayer2Id,
+      })
+    }
+  }
+
   const handleSuperConfirm = () => {
     if (!superAction) return
     if (superAction === "target_reroll") {
@@ -200,6 +228,10 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
         return `${name} rerolled all ${a.target_team === "blue" ? "Blue" : "Red"} champs`
       case "target_reroll":
         return `${name} rerolled ${a.target_player_name ?? "?"}'s champion`
+      case "champion_ban":
+        return `${name} banned ${a.banned_champion ?? "a champion"} from ${a.target_player_name ?? "?"}`
+      case "lane_force":
+        return `${name} forced ${a.target_player_name ?? "?"} and ${a.target_player_2_name ?? "?"} to swap lanes`
       default:
         return `${name} issued a decree`
     }
@@ -212,6 +244,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
       if (userSwapCount >= 1 && userRerollSelfCount >= 1) return "Used"
       return "Available"
     }
+    if (tier === "sabotage") return userSabotageCount >= 1 ? "Used" : "Available"
     return "Available"
   }
 
@@ -222,8 +255,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
           ROYAL DECREES
         </h3>
 
-        <div className="grid grid-cols-3 gap-3">
-          {(["medium", "high", "super"] as TierKey[]).map((tier) => {
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(["medium", "high", "sabotage", "super"] as TierKey[]).map((tier) => {
             const config = TIER_CONFIG[tier]
             const disabled = isDisabled(tier)
 
@@ -542,6 +575,184 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
                 className="flex-1 bg-red-500 font-bold text-white hover:bg-red-600 disabled:opacity-50"
               >
                 {submitting ? "Executing..." : "Confirm (139 pts)"}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Sabotage: Champion Ban / Lane Force */}
+      <Dialog open={dialogMode === "sabotage"} onOpenChange={(open) => !open && resetDialog()}>
+        <DialogContent className="border-purple-500/20 bg-[var(--color-navy)]">
+          <DialogHeader>
+            <DialogTitle className="text-purple-400">Sabotage</DialogTitle>
+            <DialogDescription className="text-[var(--color-gold-light)]/60">
+              Disrupt the enemy. 1 sabotage per session.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!sabotageAction && (
+            <div className="space-y-2 py-4">
+              <button
+                onClick={() => setSabotageAction("champion_ban")}
+                className="w-full rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/40"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-purple-400">Champion Ban</div>
+                  <div className="text-sm font-bold text-[var(--color-gold)]">75 pts</div>
+                </div>
+                <div className="text-xs text-[var(--color-gold-light)]/50">
+                  Ban a player&apos;s champion and force a reroll
+                </div>
+              </button>
+              <button
+                onClick={() => setSabotageAction("lane_force")}
+                className="w-full rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/40"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-purple-400">Lane Force</div>
+                  <div className="text-sm font-bold text-[var(--color-gold)]">120 pts</div>
+                </div>
+                <div className="text-xs text-[var(--color-gold-light)]/50">
+                  Force two players on the same team to swap lanes
+                </div>
+              </button>
+            </div>
+          )}
+
+          {sabotageAction === "champion_ban" && (
+            <div className="space-y-2 py-4">
+              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
+                Choose a player to sabotage
+              </div>
+              {session.session_assignments.map((a) => (
+                <button
+                  key={a.player_id}
+                  onClick={() => setSelectedPlayerId(a.player_id)}
+                  className={`w-full rounded-lg border p-3 text-left transition-all ${
+                    selectedPlayerId === a.player_id
+                      ? "border-purple-500/50 bg-purple-500/10"
+                      : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-purple-500/30"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold ${
+                          a.side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
+                        }`}
+                      >
+                        {a.side === "blue" ? "B" : "R"}
+                      </span>
+                      <span className="font-medium text-[var(--color-gold-light)]">
+                        {a.players.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-[var(--color-gold-light)]/50">
+                      {a.lane.toUpperCase()} - {a.champion}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sabotageAction === "lane_force" && !selectedPlayerId && (
+            <div className="space-y-2 py-4">
+              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
+                Pick the first player
+              </div>
+              {session.session_assignments.map((a) => (
+                <button
+                  key={a.player_id}
+                  onClick={() => setSelectedPlayerId(a.player_id)}
+                  className="w-full rounded-lg border border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/30"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold ${
+                          a.side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
+                        }`}
+                      >
+                        {a.side === "blue" ? "B" : "R"}
+                      </span>
+                      <span className="font-medium text-[var(--color-gold-light)]">
+                        {a.players.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-[var(--color-gold-light)]/50">
+                      {a.lane.toUpperCase()} - {a.champion}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {sabotageAction === "lane_force" && selectedPlayerId && (
+            <div className="space-y-2 py-4">
+              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
+                Pick their new lane partner (same team)
+              </div>
+              {session.session_assignments
+                .filter((a) => {
+                  const first = session.session_assignments.find((p) => p.player_id === selectedPlayerId)
+                  return first && a.side === first.side && a.player_id !== selectedPlayerId
+                })
+                .map((a) => (
+                  <button
+                    key={a.player_id}
+                    onClick={() => setSelectedPlayer2Id(a.player_id)}
+                    className={`w-full rounded-lg border p-3 text-left transition-all ${
+                      selectedPlayer2Id === a.player_id
+                        ? "border-purple-500/50 bg-purple-500/10"
+                        : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-purple-500/30"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-[var(--color-gold-light)]">
+                        {a.players.name}
+                      </span>
+                      <span className="text-xs text-[var(--color-gold-light)]/50">
+                        {a.lane.toUpperCase()} - {a.champion}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )}
+
+          {sabotageAction && (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (sabotageAction === "lane_force" && selectedPlayerId && !selectedPlayer2Id) {
+                    setSelectedPlayerId(null)
+                  } else {
+                    setSabotageAction(null)
+                    setSelectedPlayerId(null)
+                    setSelectedPlayer2Id(null)
+                  }
+                }}
+                className="border-[var(--color-gold)]/20 text-[var(--color-gold-light)]/60"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={handleSabotageConfirm}
+                disabled={
+                  submitting ||
+                  (sabotageAction === "champion_ban" ? !selectedPlayerId : !selectedPlayerId || !selectedPlayer2Id)
+                }
+                className="flex-1 bg-purple-500 font-bold text-white hover:bg-purple-600 disabled:opacity-50"
+              >
+                {submitting
+                  ? "Executing..."
+                  : sabotageAction === "champion_ban"
+                    ? "Ban Champion (75 pts)"
+                    : "Force Lane Swap (120 pts)"}
               </Button>
             </div>
           )}

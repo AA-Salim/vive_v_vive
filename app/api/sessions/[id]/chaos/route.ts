@@ -12,11 +12,21 @@ type ChaosBody =
   | { action_type: "shuffle_lanes"; target_team: "blue" | "red" }
   | { action_type: "reroll_champs"; target_team: "blue" | "red" }
   | { action_type: "target_reroll"; target_player_id: string }
+  | { action_type: "champion_ban"; target_player_id: string }
+  | { action_type: "lane_force"; target_player_id: string; target_player_2_id: string }
 
-function getTier(actionType: string): "medium" | "high" | "super" {
+function getTier(actionType: string): "medium" | "high" | "super" | "sabotage" {
   if (actionType === "double_or_nothing") return "medium"
   if (actionType === "swap_teammate" || actionType === "reroll_self") return "high"
+  if (actionType === "champion_ban" || actionType === "lane_force") return "sabotage"
   return "super"
+}
+
+function getCost(actionType: string): number {
+  if (actionType === "champion_ban") return 75
+  if (actionType === "lane_force") return 120
+  const tier = getTier(actionType) as keyof typeof COSTS
+  return COSTS[tier]
 }
 
 export async function GET(
@@ -61,6 +71,8 @@ export async function GET(
       created_at: a.created_at,
       discord_username: profile?.discord_username ?? "Unknown",
       discord_avatar_url: profile?.discord_avatar_url ?? null,
+      banned_champion: a.banned_champion ?? null,
+      forced_lane: a.forced_lane ?? null,
       target_player_name: tp?.name ?? null,
       target_player_2_name: tp2?.name ?? null,
     }
@@ -107,7 +119,7 @@ export async function POST(
   }
 
   const tier = getTier(body.action_type)
-  const cost = COSTS[tier]
+  const cost = getCost(body.action_type)
 
   const { data: existingActions } = await supabase
     .from("chaos_actions")
@@ -540,6 +552,163 @@ export async function POST(
         tier: "super",
         cost,
         target_player_id: body.target_player_id,
+        status: "resolved",
+      })
+
+      await supabase
+        .from("game_sessions")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+      return NextResponse.json({ success: true })
+    }
+
+    case "champion_ban": {
+      const sabotageCount = userActions.filter(
+        a => a.action_type === "champion_ban" || a.action_type === "lane_force"
+      ).length
+      if (sabotageCount >= 1) {
+        return NextResponse.json({ error: "Max 1 sabotage per session" }, { status: 400 })
+      }
+
+      const targetAssignment = assignments.find(a => a.player_id === body.target_player_id)
+      if (!targetAssignment) {
+        return NextResponse.json({ error: "Target not in this game" }, { status: 400 })
+      }
+
+      const bannedChampion = targetAssignment.champion
+
+      const { error: balError } = await supabase.rpc("adjust_balance", {
+        p_user_id: user.id,
+        p_amount: -cost,
+        p_reason: "sabotage_spent",
+      })
+      if (balError) {
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
+      }
+
+      const today = new Date().toISOString().split("T")[0]
+      const { data: fearlessData } = await supabase
+        .from("daily_fearless")
+        .select("champion_name")
+        .eq("date", today)
+
+      const fearlessBanned = new Set<string>(
+        fearlessData?.map((r: { champion_name: string }) => r.champion_name) ?? []
+      )
+      fearlessBanned.add(bannedChampion)
+
+      const lockedAssignments = new Map<string, Assignment>()
+      for (const a of assignments) {
+        if (a.player_id !== body.target_player_id) {
+          lockedAssignments.set(a.player_id, {
+            player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" },
+            side: a.side,
+            lane: a.lane,
+            champion: a.champion,
+            championInternal: a.champion_internal,
+            locked: true,
+            fearlessOverride: a.fearless_override,
+          })
+        }
+      }
+
+      const blueTeam = assignments.filter(a => a.side === "blue").map(a => ({
+        player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" } as Player,
+        lane: a.lane as Role,
+      }))
+
+      const redTeam = assignments.filter(a => a.side === "red").map(a => ({
+        player: { id: a.players.id, name: a.players.name, is_active: true, wins: 0, losses: 0, games_played: 0, created_at: "" } as Player,
+        lane: a.lane as Role,
+      }))
+
+      const newAssignments = assignChampions(blueTeam, redTeam, fearlessBanned, lockedAssignments)
+      const newTarget = newAssignments.find(a => a.player.id === body.target_player_id)
+
+      if (newTarget) {
+        await supabase
+          .from("session_assignments")
+          .update({
+            champion: newTarget.champion,
+            champion_internal: newTarget.championInternal,
+            fearless_override: newTarget.fearlessOverride,
+          })
+          .eq("id", targetAssignment.id)
+      }
+
+      await supabase.from("chaos_actions").insert({
+        session_id: id,
+        user_id: user.id,
+        action_type: "champion_ban",
+        tier: "sabotage",
+        cost,
+        target_player_id: body.target_player_id,
+        banned_champion: bannedChampion,
+        status: "resolved",
+      })
+
+      await supabase
+        .from("game_sessions")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+      return NextResponse.json({ success: true })
+    }
+
+    case "lane_force": {
+      const sabotageCount = userActions.filter(
+        a => a.action_type === "champion_ban" || a.action_type === "lane_force"
+      ).length
+      if (sabotageCount >= 1) {
+        return NextResponse.json({ error: "Max 1 sabotage per session" }, { status: 400 })
+      }
+
+      const target1 = assignments.find(a => a.player_id === body.target_player_id)
+      const target2 = assignments.find(a => a.player_id === body.target_player_2_id)
+
+      if (!target1 || !target2) {
+        return NextResponse.json({ error: "Target not in this game" }, { status: 400 })
+      }
+
+      if (target1.side !== target2.side) {
+        return NextResponse.json({ error: "Both players must be on the same team" }, { status: 400 })
+      }
+
+      if (target1.player_id === target2.player_id) {
+        return NextResponse.json({ error: "Must pick two different players" }, { status: 400 })
+      }
+
+      const { error: balError } = await supabase.rpc("adjust_balance", {
+        p_user_id: user.id,
+        p_amount: -cost,
+        p_reason: "sabotage_spent",
+      })
+      if (balError) {
+        const errMsg = balError.message?.includes("Debt limit") ? "Debt limit reached (-300 max)" : "Insufficient balance"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
+      }
+
+      await supabase
+        .from("session_assignments")
+        .update({ lane: target2.lane })
+        .eq("id", target1.id)
+
+      await supabase
+        .from("session_assignments")
+        .update({ lane: target1.lane })
+        .eq("id", target2.id)
+
+      await supabase.from("chaos_actions").insert({
+        session_id: id,
+        user_id: user.id,
+        action_type: "lane_force",
+        tier: "sabotage",
+        cost,
+        target_player_id: body.target_player_id,
+        target_player_2_id: body.target_player_2_id,
+        forced_lane: target2.lane,
         status: "resolved",
       })
 

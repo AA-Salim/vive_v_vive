@@ -51,7 +51,7 @@ export async function GET() {
   const { data: kissTxns } = await supabase
     .from("point_transactions")
     .select("user_id")
-    .eq("reason", "kiss_the_hand")
+    .in("reason", ["kiss_the_hand", "sing_his_praises"])
     .in("user_id", userIds)
 
   const kissCountMap = new Map<string, number>()

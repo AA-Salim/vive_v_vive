@@ -7,8 +7,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { getRandomQuote } from "@/lib/salaxe-quotes"
 import { useState, useMemo } from "react"
+import { useAct } from "@/hooks/use-act"
+import { getActContent } from "@/lib/act-content"
 
 interface SalaxeDailyDialogProps {
   open: boolean
@@ -21,8 +22,12 @@ export function SalaxeDailyDialog({
   onDismiss,
   username,
 }: SalaxeDailyDialogProps) {
+  const { act } = useAct()
   const [dismissed, setDismissed] = useState(false)
-  const quote = useMemo(() => getRandomQuote(), [])
+  const quote = useMemo(
+    () => getActContent(act?.act_number ?? 2).getRandomQuote(),
+    [act]
+  )
 
   const handleDismiss = () => {
     setDismissed(true)

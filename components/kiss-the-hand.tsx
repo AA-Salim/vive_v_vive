@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { CrownIcon } from "lucide-react"
+import { CrownIcon, MicIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { getRandomKissResponse, getRandomKissDescription } from "@/lib/salaxe-kiss-responses"
+import { useAct } from "@/hooks/use-act"
+import { getActContent } from "@/lib/act-content"
 
 interface KissTheHandProps {
   kissRemaining: number
@@ -12,8 +13,16 @@ interface KissTheHandProps {
 }
 
 export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
+  const { act } = useAct()
+  const content = useMemo(
+    () => getActContent(act?.act_number ?? 2),
+    [act]
+  )
   const [loading, setLoading] = useState(false)
-  const description = useMemo(() => getRandomKissDescription(), [])
+  const description = useMemo(
+    () => content.getRandomPraiseDescription(),
+    [content]
+  )
 
   const handleKiss = async () => {
     if (loading) return
@@ -21,31 +30,35 @@ export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
     try {
       const result = await onKiss()
       if (result?.kissed) {
-        toast.success(getRandomKissResponse())
+        toast.success(content.getRandomPraiseResponse())
       } else if (result?.exhausted) {
-        toast.error("The King's hand is weary. Return tomorrow.")
+        toast.error(
+          act && act.act_number >= 2
+            ? "Salaxe's ears are ringing. Return tomorrow."
+            : "The King's hand is weary. Return tomorrow."
+        )
       }
     } catch {
-      toast.error("Failed to kiss the royal hand")
+      toast.error("Failed")
     } finally {
       setLoading(false)
     }
   }
 
   const exhausted = kissRemaining <= 0
+  const isAct2 = act && act.act_number >= 2
+  const Icon = isAct2 ? MicIcon : CrownIcon
 
   return (
     <div className="rounded-lg border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-4">
       <div className="mb-3 flex items-center gap-2">
-        <CrownIcon className="h-4 w-4 text-[var(--color-gold)]" />
+        <Icon className="h-4 w-4 text-[var(--color-gold)]" />
         <span className="text-sm font-bold uppercase tracking-wider text-[var(--color-gold)]">
-          Kiss the Royal Hand
+          {content.praiseTitle}
         </span>
       </div>
       <p className="mb-3 text-xs text-[var(--color-gold-light)]/50">
-        {exhausted
-          ? "You have shown sufficient devotion for today."
-          : description}
+        {exhausted ? content.praiseExhausted : description}
       </p>
       <div className="flex items-center gap-3">
         <Button
@@ -54,7 +67,11 @@ export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
           size="sm"
           className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-40"
         >
-          {loading ? "Kissing..." : exhausted ? "Hand Weary" : "Kiss the Hand"}
+          {loading
+            ? content.praiseSinging
+            : exhausted
+              ? content.praiseExhaustedButton
+              : content.praiseAction}
         </Button>
         <span className="text-xs text-[var(--color-gold-light)]/40">
           {kissRemaining}/3 left today
@@ -63,3 +80,5 @@ export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
     </div>
   )
 }
+
+export const SingHisPraises = KissTheHand

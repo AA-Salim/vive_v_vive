@@ -19,6 +19,8 @@ import { CoachSelectDialog } from "@/components/coach-select-dialog"
 import { QueuePanel } from "@/components/queue-panel"
 import { VainqueurControls } from "@/components/vainqueur-controls"
 import { ShameBoard } from "@/components/shame-board"
+import { BountyPanel } from "@/components/bounty-panel"
+import { ProphecyPanel } from "@/components/prophecy-panel"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
@@ -470,6 +472,7 @@ export default function HomePage() {
             onNextGame={refetch}
           />
           <ShameBoard userId={user?.id ?? null} />
+          <BountyPanel />
         </div>
 
         <div className="space-y-6">
@@ -560,6 +563,7 @@ export default function HomePage() {
               {session.status === "betting" && (
                 <>
                   <BettingPanel sessionId={session.id} isBettingOpen={true} />
+                  <ProphecyPanel session={session} isBettingOpen={true} />
                   <SessionControls
                     session={session}
                     onAction={handleSessionAction}
@@ -570,6 +574,7 @@ export default function HomePage() {
               {session.status === "in_game" && (
                 <>
                   <BettingPanel sessionId={session.id} isBettingOpen={false} />
+                  <ProphecyPanel session={session} isBettingOpen={false} />
                   <SessionControls
                     session={session}
                     onAction={handleSessionAction}
@@ -586,6 +591,7 @@ export default function HomePage() {
               <TeamList assignments={assignments} />
 
               <BettingPanel sessionId={session.id} isBettingOpen={false} />
+              <ProphecyPanel session={session} isBettingOpen={false} />
 
               <div className="flex flex-col items-center gap-3">
                 <div className="text-lg font-bold text-[var(--color-gold)]">

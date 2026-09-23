@@ -451,6 +451,57 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
     p_winner_side: winnerSide,
   })
 
+  await supabase.rpc("resolve_bounties", {
+    p_session_id: session.id,
+    p_loser_player_ids: loserIds,
+  })
+
+  // Auto-verify player_gets_lane prophecies and apply bonuses
+  const { data: prophecies } = await supabase
+    .from("prophecies")
+    .select("*")
+    .eq("session_id", session.id)
+    .is("correct", null)
+
+  if (prophecies && prophecies.length > 0) {
+    for (const prophecy of prophecies) {
+      if (prophecy.prediction_type === "player_gets_lane") {
+        const pv = prophecy.prediction_value as { player_id: string; lane: string }
+        const match = assignments.find(
+          (a) => a.player_id === pv.player_id && a.lane === pv.lane
+        )
+        const isCorrect = !!match
+
+        await supabase
+          .from("prophecies")
+          .update({ correct: isCorrect })
+          .eq("id", prophecy.id)
+
+        if (isCorrect) {
+          const { data: bet } = await supabase
+            .from("bets")
+            .select("*")
+            .eq("session_id", session.id)
+            .eq("user_id", prophecy.user_id)
+            .eq("status", "won")
+            .maybeSingle()
+
+          if (bet && bet.payout > 0) {
+            const bonus = Math.floor(bet.payout * (prophecy.multiplier - 1))
+            if (bonus > 0) {
+              await supabase.rpc("adjust_balance", {
+                p_user_id: prophecy.user_id,
+                p_amount: bonus,
+                p_reason: "prophecy_bonus",
+                p_reference_id: session.id,
+              })
+            }
+          }
+        }
+      }
+    }
+  }
+
   const { error: updateError } = await supabase
     .from("game_sessions")
     .update({

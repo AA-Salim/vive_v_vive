@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { ACT_CATEGORIES } from "@/lib/acts"
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient()
 
   const {
@@ -21,21 +21,49 @@ export async function POST() {
     return NextResponse.json({ error: "Admin only" }, { status: 403 })
   }
 
-  const { data: activeAct } = await supabase
-    .from("acts")
-    .select("*")
-    .eq("status", "active")
-    .maybeSingle()
+  const body = await request.json().catch(() => ({}))
+  let targetAct = null
 
-  if (!activeAct) {
+  if (body.act_id) {
+    const { data: act } = await supabase
+      .from("acts")
+      .select("*")
+      .eq("id", body.act_id)
+      .single()
+    if (!act) {
+      return NextResponse.json({ error: "Act not found" }, { status: 404 })
+    }
+    const { data: existingAwards } = await supabase
+      .from("act_awards")
+      .select("id")
+      .eq("act_id", act.id)
+      .limit(1)
+    if (existingAwards && existingAwards.length > 0) {
+      return NextResponse.json(
+        { error: "Awards already computed for this act" },
+        { status: 400 }
+      )
+    }
+    targetAct = act
+  } else {
+    const { data: act } = await supabase
+      .from("acts")
+      .select("*")
+      .eq("status", "active")
+      .maybeSingle()
+    targetAct = act
+  }
+
+  if (!targetAct) {
     return NextResponse.json(
-      { error: "No active act to archive" },
+      { error: "No act to archive. Pass { act_id } for a specific act." },
       { status: 400 }
     )
   }
 
+  const activeAct = targetAct
   const actStarted = activeAct.started_at
-  const actEnded = new Date().toISOString()
+  const actEnded = activeAct.ended_at ?? new Date().toISOString()
 
   // ---- Compute award winners ----
 
@@ -301,11 +329,12 @@ export async function POST() {
     })
   }
 
-  // Archive the act
-  await supabase
-    .from("acts")
-    .update({ status: "archived", ended_at: actEnded })
-    .eq("id", activeAct.id)
+  if (activeAct.status !== "archived") {
+    await supabase
+      .from("acts")
+      .update({ status: "archived", ended_at: actEnded })
+      .eq("id", activeAct.id)
+  }
 
   return NextResponse.json({
     message: `Act ${activeAct.act_number} archived successfully`,

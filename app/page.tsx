@@ -21,6 +21,7 @@ import { VainqueurControls } from "@/components/vainqueur-controls"
 import { ShameBoard } from "@/components/shame-board"
 import { BountyPanel } from "@/components/bounty-panel"
 import { ProphecyPanel } from "@/components/prophecy-panel"
+import { RewardClaimBanner } from "@/components/reward-claim-banner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
@@ -446,6 +447,8 @@ export default function HomePage() {
           </Badge>
         </div>
       )}
+
+      <RewardClaimBanner />
 
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         <div className="space-y-4">

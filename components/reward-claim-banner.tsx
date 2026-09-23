@@ -21,6 +21,7 @@ interface UnclaimedAward {
   final_value: string | null
   perks: Record<string, unknown>
   acts: { act_number: number; name: string } | null
+  is_consolation?: boolean
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -31,6 +32,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   degenerate: "Degenerate",
   devotee: "Devotee",
   punching_bag: "Punching Bag",
+  consolation: "Participation Trophy",
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -41,16 +43,17 @@ const CATEGORY_COLORS: Record<string, string> = {
   degenerate: "text-green-400",
   devotee: "text-pink-400",
   punching_bag: "text-orange-400",
+  consolation: "text-purple-400",
 }
 
 const ROAST_MESSAGES = [
-  "No rewards for you. Act I saw what you did and chose violence.",
+  "No real rewards for you. Act I saw what you did and chose violence.",
   "You went through all of Act I and won... absolutely nothing. Impressive, honestly.",
   "The Charamil voted. You got zero awards. Democracy is brutal.",
   "Salaxe himself checked the stats and said 'even I would not give this one anything.'",
   "Act I rewards have been distributed. You were not on the list. Or any list. Ever.",
   "Everyone else is claiming titles and bonus points. You are claiming emotional damage.",
-  "No title. No bonus. No sympathy. Better luck in Act II.",
+  "No bonus. No glory. No sympathy. But hey, at least you showed up.",
   "The crown fell and somehow still didn't land anywhere near you.",
 ]
 
@@ -59,7 +62,6 @@ export function RewardClaimBanner() {
   const { refetch: refetchPoints } = usePoints(user?.id ?? null)
   const [awards, setAwards] = useState<UnclaimedAward[]>([])
   const [loaded, setLoaded] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [claiming, setClaiming] = useState<string | null>(null)
   const [roast] = useState(() =>
@@ -68,9 +70,6 @@ export function RewardClaimBanner() {
 
   useEffect(() => {
     if (!user) return
-    if (localStorage.getItem("act1-no-rewards-seen")) {
-      setDismissed(true)
-    }
     fetch("/api/acts/claim-rewards")
       .then((r) => r.json())
       .then((data) => {
@@ -90,11 +89,7 @@ export function RewardClaimBanner() {
       })
       const data = await res.json()
       if (data.claimed) {
-        toast.success(
-          data.bonus > 0
-            ? `Claimed "${data.title}" and +${data.bonus} bonus points!`
-            : `Claimed "${data.title}"!`
-        )
+        toast.success(`Claimed "${data.title}"!`)
         setAwards((prev) => prev.filter((a) => a.id !== awardId))
         await refetchPoints()
       } else {
@@ -114,35 +109,77 @@ export function RewardClaimBanner() {
     setDialogOpen(false)
   }
 
-  const handleDismissRoast = () => {
-    localStorage.setItem("act1-no-rewards-seen", "true")
-    setDismissed(true)
-  }
-
   if (!user || !loaded) return null
+  if (awards.length === 0) return null
 
-  if (awards.length === 0) {
-    if (dismissed) return null
+  const isConsolation = awards.every((a) => a.is_consolation)
+  const hasRealAwards = awards.some((a) => !a.is_consolation)
 
+  if (isConsolation) {
     return (
-      <div className="relative rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-center">
+      <>
         <button
-          onClick={handleDismissRoast}
-          className="absolute right-3 top-3 text-xs text-[var(--color-gold-light)]/30 hover:text-[var(--color-gold-light)]/60"
+          onClick={() => setDialogOpen(true)}
+          className="w-full rounded-lg border border-purple-500/30 bg-gradient-to-r from-purple-500/5 via-red-500/5 to-purple-500/5 p-4 text-center transition-all hover:border-purple-500/50 hover:shadow-[0_0_20px_rgba(168,85,247,0.1)]"
         >
-          dismiss
+          <div className="flex items-center justify-center gap-2">
+            <SkullIcon className="h-4 w-4 text-purple-400/70" />
+            <span className="text-sm font-bold tracking-wider text-purple-400">
+              ACT {awards[0]?.acts?.act_number ?? "I"} LEFT YOU SOMETHING
+            </span>
+            <SkullIcon className="h-4 w-4 text-purple-400/70" />
+          </div>
+          <div className="mt-1 text-xs text-[var(--color-gold-light)]/40">
+            It's not much, but it's yours
+          </div>
         </button>
-        <div className="flex items-center justify-center gap-2">
-          <SkullIcon className="h-4 w-4 text-red-400/60" />
-          <span className="text-xs font-bold uppercase tracking-wider text-red-400/60">
-            ACT I REWARDS
-          </span>
-          <SkullIcon className="h-4 w-4 text-red-400/60" />
-        </div>
-        <p className="mt-2 text-sm text-[var(--color-gold-light)]/60">
-          {roast}
-        </p>
-      </div>
+
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent className="max-w-lg border-purple-500/30 bg-[var(--color-navy)]">
+            <DialogHeader>
+              <DialogTitle className="text-center text-purple-400">
+                Your Participation Trophy
+              </DialogTitle>
+            </DialogHeader>
+
+            <p className="text-center text-xs text-red-400/60">
+              {roast}
+            </p>
+
+            <div className="mt-1 text-center text-[10px] text-[var(--color-gold-light)]/30">
+              But since you bothered showing up...
+            </div>
+
+            <div className="space-y-3 py-2">
+              {awards.map((award) => (
+                <div
+                  key={award.id}
+                  className="rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold uppercase tracking-wider text-purple-400">
+                        Consolation Title
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-[var(--color-gold-light)]">
+                        &ldquo;{award.title}&rdquo;
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => handleClaim(award.id)}
+                      disabled={claiming === award.id}
+                      className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-600"
+                    >
+                      {claiming === award.id ? "Claiming..." : "Claim"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
     )
   }
 
@@ -176,7 +213,11 @@ export function RewardClaimBanner() {
             {awards.map((award) => (
               <div
                 key={award.id}
-                className="rounded-lg border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-4"
+                className={`rounded-lg border p-4 ${
+                  award.is_consolation
+                    ? "border-purple-500/20 bg-[var(--color-navy-light)]"
+                    : "border-[var(--color-gold)]/20 bg-[var(--color-navy-light)]"
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -184,7 +225,7 @@ export function RewardClaimBanner() {
                       {CATEGORY_LABELS[award.category] ?? award.category}
                     </div>
                     <div className="mt-1 text-sm font-semibold text-[var(--color-gold-light)]">
-                      {award.title}
+                      {award.is_consolation ? `"${award.title}"` : award.title}
                     </div>
                     {award.final_value && (
                       <div className="mt-0.5 text-xs text-[var(--color-gold-light)]/50">
@@ -202,7 +243,11 @@ export function RewardClaimBanner() {
                       size="sm"
                       onClick={() => handleClaim(award.id)}
                       disabled={claiming === award.id}
-                      className="mt-1 bg-[var(--color-gold)] text-xs font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
+                      className={`mt-1 text-xs font-bold ${
+                        award.is_consolation
+                          ? "bg-purple-500 text-white hover:bg-purple-600"
+                          : "bg-[var(--color-gold)] text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
+                      }`}
                     >
                       {claiming === award.id ? "Claiming..." : "Claim"}
                     </Button>
@@ -212,7 +257,7 @@ export function RewardClaimBanner() {
             ))}
           </div>
 
-          {awards.length > 1 && (
+          {awards.length > 1 && hasRealAwards && (
             <Button
               onClick={handleClaimAll}
               disabled={claiming !== null}

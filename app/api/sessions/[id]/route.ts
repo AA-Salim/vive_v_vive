@@ -14,12 +14,13 @@ import {
   sessionResponse,
   type SessionRow,
 } from "@/lib/session/server"
-import { sessionActionSchema, type SessionAction } from "@/lib/session/types"
+import { sessionActionSchema, sessionIdSchema, type SessionAction } from "@/lib/session/types"
 
 export const maxDuration = 60
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!sessionIdSchema.safeParse(id).success) return errorResponse(404, "Session not found")
   const supabase = await createClient()
   const { session, error } = await loadSession(supabase, id)
   if (error) return errorResponse(500, error.message ?? "Could not load the game")
@@ -29,6 +30,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  if (!sessionIdSchema.safeParse(id).success) return errorResponse(404, "Session not found")
   const parsed = sessionActionSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return errorResponse(400, "Unknown or malformed action")
   const action = parsed.data

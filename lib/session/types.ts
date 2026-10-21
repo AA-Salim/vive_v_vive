@@ -10,6 +10,8 @@ export interface RoomSession extends SessionWithAssignments {
 
 export type RoomAssignment = SessionWithAssignments["session_assignments"][number]
 
+export const sessionIdSchema = z.guid()
+
 export const sessionActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("reroll") }),
   z.object({ action: z.literal("toggle_lock"), assignment_id: z.guid() }),

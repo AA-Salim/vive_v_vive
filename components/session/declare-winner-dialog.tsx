@@ -53,7 +53,7 @@ interface DeclareWinnerDialogProps {
 
 export function DeclareWinnerDialog({ session, open, onOpenChange, pending, onConfirm }: DeclareWinnerDialogProps) {
   const [choice, setChoice] = useState<Side | null>(null)
-  const { data: bets } = useBetSummary(session.id, open)
+  const { data: bets, isPending: betsLoading } = useBetSummary(session.id, open)
 
   const close = (next: boolean) => {
     if (!next) setChoice(null)
@@ -114,12 +114,16 @@ export function DeclareWinnerDialog({ session, open, onOpenChange, pending, onCo
         </div>
 
         <ul className="space-y-1.5 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-          <li>
-            {bets && bets.count > 0
-              ? choice
-                ? `${bets.count} bets, ${bets.total} points on the table: ${SIDE_NAME[choice]} backers (${backed} points staked) get paid.`
-                : `${bets.count} bets, ${bets.total} points on the table, paid out to the winning side.`
-              : "No bets this game: nothing to pay out."}
+          <li aria-live="polite">
+            {betsLoading
+              ? "Counting the gold on the table..."
+              : bets && bets.count > 0
+                ? choice
+                  ? `${bets.count} bets, ${bets.total} points on the table: ${SIDE_NAME[choice]} backers (${backed} points staked) get paid.`
+                  : `${bets.count} bets, ${bets.total} points on the table, paid out to the winning side.`
+                : bets
+                  ? "No bets this game: nothing to pay out."
+                  : "Every bet on this game is paid out to the winning side."}
           </li>
           <li>Decrees, duels, prophecies and bounties settle right after.</li>
           <li>

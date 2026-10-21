@@ -66,11 +66,13 @@ const NO_VERDICT: Record<Category, Record<Exclude<VerdictOutcome, "decided">, st
     split: "The court is split. No crown today: the Charamil could not agree, which is very on brand.",
     too_few: "Not enough voices to crown anyone. The throne stays empty, like Salaxe's trophy cabinet.",
     no_votes: "Nobody voted. The court left to queue another game.",
+    void: "The game was canceled, so the court crowns no one. The throne stays dusty.",
   },
   inter: {
     split: "The court is split on who inted the most. A rare day where everyone inted equally.",
     too_few: "Not enough voices to convict. The accused walks free. For now.",
     no_votes: "Nobody voted. The inter escapes justice, protected by everyone's laziness.",
+    void: "The game was canceled. No game, no crime, no sentence. Case dismissed.",
   },
 }
 

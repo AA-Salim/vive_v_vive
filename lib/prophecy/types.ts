@@ -40,7 +40,7 @@ export interface LegacyProphecyView {
   correct: boolean | null
 }
 
-export type VerdictOutcome = "decided" | "split" | "too_few" | "no_votes"
+export type VerdictOutcome = "decided" | "split" | "too_few" | "no_votes" | "void"
 
 export interface VerdictMarket {
   ballots: number
@@ -60,6 +60,7 @@ export interface VerdictSummary {
   inter: VerdictMarket
   mvp_bonus: number
   mvp_bonus_paid: string[]
+  void?: boolean
 }
 
 export interface TribunalInfo {

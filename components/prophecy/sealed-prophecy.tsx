@@ -6,7 +6,7 @@ import { AnimatedNumber } from "@/components/prophecy/animated-number"
 import { ChampionPortrait } from "@/components/prophecy/champion-portrait"
 import { TONES } from "@/components/prophecy/category-meta"
 import { CATEGORY_COPY, sealLabel } from "@/lib/prophecy/lines"
-import { currentMultiplier, formatMultiplier, payoutIfHit } from "@/lib/prophecy/odds"
+import { currentMultiplier, formatMultiplier, payoutIfHit, wagerProfit } from "@/lib/prophecy/odds"
 import type { Candidate, MarketBook, WagerView } from "@/lib/prophecy/types"
 import { cn } from "@/lib/utils"
 
@@ -57,6 +57,7 @@ export function SealedProphecy({ wager, candidate, book, phase }: SealedProphecy
           </div>
           <div className="text-xs text-muted-foreground">
             {wager.stake} staked
+            {wager.status === "won" && <> · {wager.payout ?? 0} paid out</>}
             {wager.status === "pending" && multiplier !== null && (
               <>
                 {" "}
@@ -75,12 +76,11 @@ export function SealedProphecy({ wager, candidate, book, phase }: SealedProphecy
 function StatusChip({ wager, phase }: { wager: WagerView; phase: SealedProphecyProps["phase"] }) {
   const base = "flex shrink-0 flex-col items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider"
   if (wager.status === "won") {
+    const profit = wagerProfit(wager)
     return (
-      <span className={cn(base, "bg-emerald-500/15 text-emerald-300")}>
+      <span className={cn(base, profit > 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-muted text-muted-foreground")}>
         <BadgeCheckIcon className="size-4" aria-hidden />
-        <span>
-          +<AnimatedNumber value={wager.payout ?? 0} />
-        </span>
+        <span>{profit > 0 ? <AnimatedNumber value={profit} prefix="+" /> : "Even"}</span>
       </span>
     )
   }

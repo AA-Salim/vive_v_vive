@@ -9,6 +9,7 @@ import { DeclareWinnerDialog } from "@/components/session/declare-winner-dialog"
 import { useSessionActions } from "@/components/session/use-session-actions"
 import { STALE_CLAIM_MS } from "@/lib/session/constants"
 import type { RoomSession, SessionActionName } from "@/lib/session/types"
+import type { SessionStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface SessionControlsProps {
@@ -21,13 +22,19 @@ interface SessionControlsProps {
   className?: string
 }
 
-type Pending = "cancel" | "close_chaos" | "close_betting" | "declare" | null
+type DialogKind = "cancel" | "close_chaos" | "close_betting" | "declare"
 
 const BIG = "h-11 px-4 text-sm sm:h-10"
 
 export function SessionControls({ session, canControl, isAdmin = false, serverNow = null, onSignIn, onAction, className }: SessionControlsProps) {
   const { runAsync, pending } = useSessionActions(session, onSignIn)
-  const [dialog, setDialog] = useState<Pending>(null)
+  const [opened, setOpened] = useState<{ kind: DialogKind; sessionId: string; status: SessionStatus } | null>(null)
+
+  // A confirmation belongs to the moment it was opened: phase dialogs close by themselves when the phase moves on.
+  const dialog =
+    opened && opened.sessionId === session.id && (opened.kind === "cancel" || opened.status === session.status) ? opened.kind : null
+  const setDialog = (kind: DialogKind | null) =>
+    setOpened(kind ? { kind, sessionId: session.id, status: session.status } : null)
 
   if (!canControl) return null
 

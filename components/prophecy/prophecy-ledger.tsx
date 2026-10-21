@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { ChevronDownIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { TONES } from "@/components/prophecy/category-meta"
+import { wagerProfit } from "@/lib/prophecy/odds"
 import type { Candidate, LegacyProphecyView, WagerView } from "@/lib/prophecy/types"
 import { cn } from "@/lib/utils"
 
@@ -104,7 +105,11 @@ export function ProphecyLedger({ wagers, legacy, candidates, viewerId }: Prophec
 
 function Outcome({ wager }: { wager: WagerView }) {
   const base = "w-14 shrink-0 text-right text-xs font-bold tabular-nums"
-  if (wager.status === "won") return <span className={cn(base, "text-emerald-300")}>+{wager.payout ?? 0}</span>
+  if (wager.status === "won") {
+    const profit = wagerProfit(wager)
+    if (profit <= 0) return <span className={cn(base, "text-muted-foreground")}>Even</span>
+    return <span className={cn(base, "text-emerald-300")}>+{profit}</span>
+  }
   if (wager.status === "lost") return <span className={cn(base, "text-destructive/80")}>-{wager.stake}</span>
   if (wager.status === "refunded") return <span className={cn(base, "text-muted-foreground")}>{wager.stake} back</span>
   return <span className={cn(base, "text-muted-foreground")}>{wager.stake}</span>

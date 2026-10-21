@@ -65,7 +65,6 @@ function MatchupSide({
             {revealed ? assignment.players.name : "Rolling..."}
           </span>
           {revealed && props.meId === assignment.player_id && <YouChip />}
-          {outcome === "won" && revealed && <CrownIcon className="size-3 shrink-0 text-[var(--color-gold)]" aria-label="Winner" />}
         </span>
         {revealed && title && (
           <span className={cn("mt-0.5 flex min-w-0", mirrored && "justify-end")}>

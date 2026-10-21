@@ -6,7 +6,8 @@ const SETTLE_RETRIES = 8
 const SETTLE_RETRY_MS = 2_500
 const SETTLE_GRACE_MS = 700
 
-// Votes close lazily: the first read after closes_at settles them, so poke the server when the gavel is due.
+// Deadlines are enforced lazily by the server (votes settle on the first read after closes_at, sealing locks at
+// betting_ends_at), so poke it when one is due until the answer reflects it.
 export function useSettleWhenDue(
   closesAt: number | null,
   settled: boolean,

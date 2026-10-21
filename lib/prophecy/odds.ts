@@ -62,6 +62,11 @@ export function payoutIfHit(book: MarketBook, playerId: string, stake: number): 
   return Math.floor((stake * book.pot) / backed)
 }
 
+// The stake left the balance when it was sealed, so a payout equal to the stake is a break-even.
+export function wagerProfit(wager: { stake: number; payout: number | null }): number {
+  return (wager.payout ?? 0) - wager.stake
+}
+
 export function formatMultiplier(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "x-"
   if (value >= 10) return `x${Math.round(value)}`

@@ -11,6 +11,7 @@ import { describeMarket } from "@/components/prophecy/market-outcome"
 import type { ClockedTribunal } from "@/components/prophecy/queries"
 import { CATEGORIES, type Category } from "@/lib/prophecy/constants"
 import { CATEGORY_COPY, verdictLine } from "@/lib/prophecy/lines"
+import { wagerProfit } from "@/lib/prophecy/odds"
 import type { Candidate, VerdictSummary } from "@/lib/prophecy/types"
 import { cn } from "@/lib/utils"
 
@@ -39,7 +40,7 @@ export function Verdict({ state, summary }: { state: ClockedTribunal; summary: V
   const myWager = state.myWager
   const selfId = state.viewer?.playerId ?? null
   const crownedSelf = !!selfId && summary.mvp.winners.includes(selfId)
-  useCelebration(state.sessionId, myWager?.status === "won" || crownedSelf)
+  useCelebration(state.sessionId, (myWager?.status === "won" && wagerProfit(myWager) > 0) || crownedSelf)
 
   return (
     <div className="space-y-3">
@@ -160,7 +161,20 @@ function PersonalVerdict({ state, summary }: { state: ClockedTribunal; summary: 
   const wager = state.myWager
   const lines: { text: string; tone: string }[] = []
 
-  if (wager?.status === "won") lines.push({ text: `Your prophecy hit: +${wager.payout ?? 0} points. The Oracle smiles.`, tone: "text-emerald-300" })
+  if (wager?.status === "won") {
+    const profit = wagerProfit(wager)
+    lines.push(
+      profit > 0
+        ? {
+            text: `Your prophecy hit: ${wager.payout ?? 0} paid on your ${wager.stake} stake, +${profit} profit. The Oracle smiles.`,
+            tone: "text-emerald-300",
+          }
+        : {
+            text: `Your prophecy hit, but so did everyone else's: your ${wager.stake} came straight back.`,
+            tone: "text-muted-foreground",
+          }
+    )
+  }
   if (wager?.status === "lost") lines.push({ text: `Your prophecy crumbled. ${wager.stake} points to the prophets who saw it coming.`, tone: "text-destructive" })
   if (wager?.status === "refunded") lines.push({ text: `Your ${wager.stake} point stake came back. The Oracle shrugs.`, tone: "text-muted-foreground" })
 

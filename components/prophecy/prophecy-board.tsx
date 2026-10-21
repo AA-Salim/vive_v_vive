@@ -15,6 +15,7 @@ import { ProphecyLedger } from "@/components/prophecy/prophecy-ledger"
 import { useProphecyBoard, useSealProphecy, type ClockedBoard, type SealInput } from "@/components/prophecy/queries"
 import { RulesPopover } from "@/components/prophecy/rules-popover"
 import { SealedProphecy } from "@/components/prophecy/sealed-prophecy"
+import { useSettleWhenDue } from "@/components/prophecy/use-settle-when-due"
 import { sealLabel } from "@/lib/prophecy/lines"
 import { totalPot } from "@/lib/prophecy/odds"
 
@@ -66,6 +67,8 @@ export function ProphecyBoardView({ sessionId, sealingAllowed }: { sessionId: st
   const { signIn } = useAuth()
   const board = query.data
   const points = usePoints(board?.viewer?.userId ?? null)
+  const sealDeadline = board?.open && board.closesAt ? Date.parse(board.closesAt) : null
+  useSettleWhenDue(sealDeadline, !board?.open, board?.clockOffset ?? 0, query.refetch)
 
   if (query.isPending) return <PanelSkeleton icon={ScrollTextIcon} title={TITLE} />
   if (!board) {

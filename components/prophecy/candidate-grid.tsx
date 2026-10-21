@@ -165,7 +165,7 @@ function CandidateTile({
     <button
       type="button"
       aria-pressed={selected}
-      aria-label={description}
+      aria-label={description && reason ? `${description} Unavailable: ${reason}.` : description}
       disabled={disabled}
       onClick={() => onSelect?.(candidate.playerId)}
       className={cn(

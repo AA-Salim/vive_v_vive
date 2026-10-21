@@ -16,9 +16,10 @@ import type { RoomSession } from "@/lib/session/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
+// canvas-confetti only understands hex colors.
 function cssColor(name: string): string | null {
   const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
-  return value || null
+  return /^#[0-9a-f]{3,8}$/i.test(value) ? value : null
 }
 
 function celebrate(side: Side) {
@@ -30,6 +31,8 @@ function celebrate(side: Side) {
   confetti({ ...base, particleCount: 90, spread: 70, startVelocity: 48, origin: { x: 0.85, y: 0.75 }, angle: 120 })
   setTimeout(() => confetti({ ...base, particleCount: 120, spread: 110, startVelocity: 35, origin: { x: 0.5, y: 0.35 } }), 350)
 }
+
+const CELEBRATION_WINDOW_MS = 5 * 60_000
 
 const FLASH: Record<Side, string> = {
   blue: "bg-[var(--color-blue-team)]",
@@ -47,29 +50,34 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
   const reduced = useReducedMotion()
   const serverNow = useServerNow(serverTimeDelta, 30_000)
   const [flash, setFlash] = useState<Side | null>(null)
+  const endedAt = Date.parse(session.updated_at)
 
+  // Celebrate once per tab, and only for a result that just landed: late visitors get the calm version.
   useEffect(() => {
-    if (!winner) return
+    if (!winner || Date.now() - serverTimeDelta - endedAt > CELEBRATION_WINDOW_MS) return
     const key = `vvv:celebrated:${session.id}`
     try {
       if (window.sessionStorage.getItem(key)) return
-      window.sessionStorage.setItem(key, "1")
     } catch {}
     const frame = requestAnimationFrame(() => {
+      try {
+        window.sessionStorage.setItem(key, "1")
+      } catch {}
       setFlash(winner)
       celebrate(winner)
     })
+    return () => cancelAnimationFrame(frame)
+  }, [session.id, winner, serverTimeDelta, endedAt])
+
+  useEffect(() => {
+    if (!flash) return
     const clear = setTimeout(() => setFlash(null), 1200)
-    return () => {
-      cancelAnimationFrame(frame)
-      clearTimeout(clear)
-    }
-  }, [session.id, winner])
+    return () => clearTimeout(clear)
+  }, [flash])
 
   if (!winner) return null
 
   const winners = session.session_assignments.filter((a) => a.side === winner).sort(byLane)
-  const endedAt = Date.parse(session.updated_at)
   const sideText = winner === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
 
   return (

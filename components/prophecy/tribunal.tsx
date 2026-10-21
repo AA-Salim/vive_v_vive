@@ -50,7 +50,16 @@ export function Tribunal({ sessionId }: { sessionId: string }) {
       </ComingSoon>
     )
   }
-  if (!vote) return null
+  if (!vote) {
+    return (
+      <PanelShell icon={GavelIcon} title={TITLE} subtitle="The court never convened for this game.">
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          The ballots closed before the bailiff found the keys: nobody is crowned, nobody is roasted, and every prophecy
+          stake goes home.
+        </p>
+      </PanelShell>
+    )
+  }
 
   const serverNow = now - state.clockOffset
   const msLeft = closesAt !== null && now > 0 ? Math.max(0, closesAt - serverNow) : VOTE_WINDOW_MS

@@ -79,13 +79,7 @@ export function Lobby({
   )
 
   const court = (
-    <Court
-      userId={viewer.userId}
-      playerId={viewer.playerId}
-      isAdmin={viewer.isAdmin}
-      sessionResolved={!!recentWinner}
-      onNextGame={onNextGame}
-    />
+    <Court userId={viewer.userId} playerId={viewer.playerId} isAdmin={viewer.isAdmin} sessionResolved onNextGame={onNextGame} />
   )
 
   if (isXl) {

@@ -8,7 +8,8 @@
 --     No verdict, or nobody called it: every stake in that market is returned. Zero-sum, so a coordinated
 --     vote cannot print points: if everyone backs the same player they just get their stake back.
 --   * Verdict: the leader needs at least 2 votes; a 2-way tie crowns both (dead heat), a wider tie is "split".
---   * Every crowned MVP with an account receives +15 (mvp_bonus).
+--   * Every crowned MVP with an account receives +15 (mvp_bonus). A vote on a game canceled later is void:
+--     stakes return and nobody is crowned or paid.
 --   * The vote opens when the winner is declared and closes 5 minutes after the game row was written.
 --     The first read after closes_at settles it; nothing needs an admin.
 
@@ -194,6 +195,10 @@ BEGIN
     IF v_session.game_id IS DISTINCT FROM p_game_id THEN RAISE EXCEPTION 'vote_game_mismatch'; END IF;
   ELSIF v_session.status = 'in_game' THEN
     IF NOT vvv_can_manage_session(v_uid, p_session_id) THEN RAISE EXCEPTION 'vote_forbidden'; END IF;
+    -- A rematch has the same ten players, so the roster alone cannot tell this game from the previous one.
+    IF (v_session.game_id IS NOT NULL AND v_session.game_id <> p_game_id) OR v_game.played_at < v_session.created_at THEN
+      RAISE EXCEPTION 'vote_game_mismatch';
+    END IF;
     IF EXISTS (
       SELECT 1 FROM session_assignments sa
       WHERE sa.session_id = p_session_id
@@ -238,6 +243,9 @@ BEGIN
   SELECT * INTO v_vote FROM post_game_votes WHERE session_id = p_session_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'vote_not_open'; END IF;
   IF v_vote.status <> 'open' OR v_vote.closes_at <= now() THEN RAISE EXCEPTION 'vote_closed'; END IF;
+  IF EXISTS (SELECT 1 FROM game_sessions WHERE id = p_session_id AND status IN ('canceled', 'expired')) THEN
+    RAISE EXCEPTION 'vote_closed';
+  END IF;
 
   IF NOT EXISTS (SELECT 1 FROM session_assignments WHERE session_id = p_session_id AND player_id = p_player_id) THEN
     RAISE EXCEPTION 'vote_player_not_in_game';
@@ -292,11 +300,15 @@ DECLARE
   v_player UUID;
   v_user UUID;
   v_bonus_paid UUID[] := '{}';
+  v_void BOOLEAN;
 BEGIN
   SELECT * INTO v_vote FROM post_game_votes WHERE session_id = p_session_id FOR UPDATE;
   IF NOT FOUND OR v_vote.status <> 'open' OR v_vote.closes_at > now() THEN
     RETURN NULL;
   END IF;
+
+  -- A game canceled after its vote opened gets no verdict: every stake goes home and nobody is crowned.
+  v_void := EXISTS (SELECT 1 FROM game_sessions WHERE id = p_session_id AND status IN ('canceled', 'expired'));
 
   -- A pick whose player was deleted can never win: return the stake.
   FOR v_wager IN
@@ -330,7 +342,10 @@ BEGIN
         HAVING COUNT(*) = v_top
       ) t;
 
-    IF v_ballots = 0 THEN
+    IF v_void THEN
+      v_outcome := 'void';
+      v_winners := '{}';
+    ELSIF v_ballots = 0 THEN
       v_outcome := 'no_votes';
       v_winners := '{}';
     ELSIF v_top < 2 THEN
@@ -399,7 +414,7 @@ BEGIN
     END IF;
   END LOOP;
 
-  v_summary := v_summary || jsonb_build_object('mvp_bonus', 15, 'mvp_bonus_paid', to_jsonb(v_bonus_paid));
+  v_summary := v_summary || jsonb_build_object('mvp_bonus', 15, 'mvp_bonus_paid', to_jsonb(v_bonus_paid), 'void', v_void);
 
   UPDATE post_game_votes
   SET status = 'settled', settled_at = now(), mvp_player_ids = v_mvp, inter_player_ids = v_inter, summary = v_summary
@@ -488,6 +503,20 @@ BEGIN
   RETURN v_count;
 END;
 $$;
+
+-- ============================================================
+-- PRIVILEGES
+-- ============================================================
+
+-- Internal helpers: only the SECURITY DEFINER functions above call them, with the owner's rights.
+REVOKE EXECUTE ON FUNCTION vvv_user_is_player(UUID, UUID) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION vvv_can_manage_session(UUID, UUID) FROM PUBLIC, anon, authenticated;
+
+-- Sealing and voting need a signed-in caller; lazy opening and settlement stay open to every reader.
+REVOKE EXECUTE ON FUNCTION seal_prophecy(UUID, TEXT, UUID, INTEGER) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION cast_post_game_vote(UUID, TEXT, UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION seal_prophecy(UUID, TEXT, UUID, INTEGER) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION cast_post_game_vote(UUID, TEXT, UUID) TO authenticated, service_role;
 
 -- ============================================================
 -- REALTIME

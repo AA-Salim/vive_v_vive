@@ -154,6 +154,7 @@ export function toTribunalInfo(row: VoteRow): TribunalInfo {
 }
 
 function announceSettlement(result: SettledVote) {
+  if (result.void) return
   const sessionId = result.session_id
   emitLive("vote.closed", {
     sessionId,

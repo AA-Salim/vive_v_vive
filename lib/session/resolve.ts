@@ -67,10 +67,97 @@ async function releaseClaim(supabase: SupabaseClient, sessionId: string, userId:
     .eq("resolved_by", userId)
 }
 
-async function adjustBalance(supabase: SupabaseClient, userId: string, amount: number, reason: string, referenceId: string) {
-  const args = { p_user_id: userId, p_amount: amount, p_reason: reason, p_reference_id: referenceId }
+const GAME_POINT_REASONS = ["game_win", "game_participation"]
+
+interface RosterRow {
+  id: string
+  wins: number
+  losses: number
+  games_played: number
+  auth_user_id: string | null
+}
+
+type StepResult = { error: string } | null
+
+async function loadRoster(supabase: SupabaseClient, session: SessionRow): Promise<RosterRow[] | { error: string }> {
+  const { data, error } = await supabase
+    .from("players")
+    .select("id, wins, losses, games_played, auth_user_id")
+    .in("id", session.session_assignments.map((a) => a.player_id))
+  if (error || !data) return { error: error?.message ?? "Could not load the players" }
+  return data as RosterRow[]
+}
+
+function insertGamePlayers(supabase: SupabaseClient, session: SessionRow, gameId: string) {
+  return supabase.from("game_players").insert(
+    session.session_assignments.map((a) => ({ game_id: gameId, player_id: a.player_id, side: a.side, lane: a.lane, champion: a.champion }))
+  )
+}
+
+// Users the ledger already credited with this session's game points; null when the ledger cannot be read.
+async function creditedUsers(supabase: SupabaseClient, sessionId: string, userIds: string[]): Promise<Set<string> | null> {
+  if (userIds.length === 0) return new Set()
+  const { data, error } = await supabase
+    .from("point_transactions")
+    .select("user_id")
+    .eq("reference_id", sessionId)
+    .in("reason", GAME_POINT_REASONS)
+    .in("user_id", userIds)
+  if (error) return null
+  return new Set((data ?? []).map((row: { user_id: string }) => row.user_id))
+}
+
+// A failed call is retried only when the ledger shows it did not land, so a lost response never pays twice.
+async function creditOnce(supabase: SupabaseClient, sessionId: string, userId: string, won: boolean) {
+  const args = {
+    p_user_id: userId,
+    p_amount: won ? GAME_WIN_POINTS : GAME_PARTICIPATION_POINTS,
+    p_reason: won ? "game_win" : "game_participation",
+    p_reference_id: sessionId,
+  }
   const { error } = await supabase.rpc("adjust_balance", args)
-  if (error) await supabase.rpc("adjust_balance", args)
+  if (!error) return
+  const credited = await creditedUsers(supabase, sessionId, [userId])
+  if (credited && !credited.has(userId)) await supabase.rpc("adjust_balance", args)
+}
+
+// Fearless, counters and points. Counters only move together with the game_players insert; points go to whoever
+// the ledger has not credited yet, so a retried declaration completes a crashed one without paying anyone twice.
+async function finishRecord(
+  supabase: SupabaseClient,
+  session: SessionRow,
+  roster: RosterRow[],
+  winnerSide: Side,
+  { countersDue, fresh }: { countersDue: boolean; fresh: boolean }
+) {
+  const assignments = session.session_assignments
+  const today = new Date().toISOString().split("T")[0]
+  const champions = [...new Set(assignments.map((a) => a.champion))]
+  await supabase
+    .from("daily_fearless")
+    .upsert(champions.map((champion_name) => ({ champion_name, date: today })), { onConflict: "date,champion_name" })
+
+  const linkedUsers = roster.map((p) => p.auth_user_id).filter((id): id is string => !!id)
+  const credited = fresh ? new Set<string>() : await creditedUsers(supabase, session.id, linkedUsers)
+  const sideOf = new Map(assignments.map((a) => [a.player_id, a.side]))
+  await Promise.all(
+    roster.map(async (p) => {
+      const won = sideOf.get(p.id) === winnerSide
+      if (countersDue) {
+        await supabase
+          .from("players")
+          .update(
+            won
+              ? { wins: p.wins + 1, games_played: p.games_played + 1 }
+              : { losses: p.losses + 1, games_played: p.games_played + 1 }
+          )
+          .eq("id", p.id)
+      }
+      if (p.auth_user_id && credited && !credited.has(p.auth_user_id)) {
+        await creditOnce(supabase, session.id, p.auth_user_id, won)
+      }
+    })
+  )
 }
 
 async function recordGame(
@@ -85,66 +172,57 @@ async function recordGame(
     .select("id")
     .single()
   if (gameError || !game) return { error: gameError?.message ?? "Could not record the game" }
+  const gameId = game.id as string
 
   const { data: linked } = await supabase
     .from("game_sessions")
-    .update({ game_id: game.id })
+    .update({ game_id: gameId })
     .eq("id", session.id)
     .eq("resolved_by", userId)
     .is("game_id", null)
     .select("id")
     .maybeSingle()
   if (!linked) {
-    await supabase.from("games").delete().eq("id", game.id)
+    await supabase.from("games").delete().eq("id", gameId)
     return { error: "Another declaration took over this game" }
   }
 
-  const assignments = session.session_assignments
-  const { error: playersError } = await supabase.from("game_players").insert(
-    assignments.map((a) => ({ game_id: game.id, player_id: a.player_id, side: a.side, lane: a.lane, champion: a.champion }))
-  )
+  const unlink = async () => {
+    await supabase.from("game_sessions").update({ game_id: null }).eq("id", session.id).eq("game_id", gameId)
+    await supabase.from("games").delete().eq("id", gameId)
+  }
+
+  const roster = await loadRoster(supabase, session)
+  if ("error" in roster) {
+    await unlink()
+    return roster
+  }
+  const { error: playersError } = await insertGamePlayers(supabase, session, gameId)
   if (playersError) {
-    await supabase.from("game_sessions").update({ game_id: null }).eq("id", session.id).eq("game_id", game.id)
-    await supabase.from("games").delete().eq("id", game.id)
+    await unlink()
     return { error: playersError.message }
   }
 
-  const today = new Date().toISOString().split("T")[0]
-  const champions = [...new Set(assignments.map((a) => a.champion))]
-  await supabase
-    .from("daily_fearless")
-    .upsert(champions.map((champion_name) => ({ champion_name, date: today })), { onConflict: "date,champion_name" })
+  await finishRecord(supabase, session, roster, winnerSide, { countersDue: true, fresh: true })
+  return { gameId }
+}
 
-  const { data: players } = await supabase
-    .from("players")
-    .select("id, wins, losses, games_played, auth_user_id")
-    .in("id", assignments.map((a) => a.player_id))
-
-  const sideOf = new Map(assignments.map((a) => [a.player_id, a.side]))
-  await Promise.all(
-    (players ?? []).map(async (p) => {
-      const won = sideOf.get(p.id) === winnerSide
-      await supabase
-        .from("players")
-        .update(
-          won
-            ? { wins: p.wins + 1, games_played: p.games_played + 1 }
-            : { losses: p.losses + 1, games_played: p.games_played + 1 }
-        )
-        .eq("id", p.id)
-      if (p.auth_user_id) {
-        await adjustBalance(
-          supabase,
-          p.auth_user_id,
-          won ? GAME_WIN_POINTS : GAME_PARTICIPATION_POINTS,
-          won ? "game_win" : "game_participation",
-          session.id
-        )
-      }
-    })
-  )
-
-  return { gameId: game.id as string }
+// Retry of a declaration whose request died after linking the game: redo only what never landed.
+async function repairRecord(supabase: SupabaseClient, session: SessionRow, gameId: string, winnerSide: Side): Promise<StepResult> {
+  const roster = await loadRoster(supabase, session)
+  if ("error" in roster) return roster
+  const { count, error } = await supabase
+    .from("game_players")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", gameId)
+  if (error) return { error: error.message ?? "Could not check the recorded game" }
+  const missingPlayers = !count
+  if (missingPlayers) {
+    const { error: insertError } = await insertGamePlayers(supabase, session, gameId)
+    if (insertError) return { error: insertError.message }
+  }
+  await finishRecord(supabase, session, roster, winnerSide, { countersDue: missingPlayers, fresh: false })
+  return null
 }
 
 async function updateVainqueur(supabase: SupabaseClient, sessionId: string, winnerIds: string[], loserIds: string[]) {
@@ -164,7 +242,7 @@ async function updateVainqueur(supabase: SupabaseClient, sessionId: string, winn
 
 // Claim (resolved_by) -> record the game and link it before any points move -> settle every feature hook ->
 // flip the status last, so whoever sees the result also sees settled payouts. A claim whose request died can be
-// retried after STALE_CLAIM_MS; the linked game_id makes the retry skip recording and paying the game again.
+// retried after STALE_CLAIM_MS; the linked game_id turns the retry into a repair of whatever never landed.
 export async function declareWinner(
   supabase: SupabaseClient,
   session: SessionRow,
@@ -190,15 +268,24 @@ export async function declareWinner(
 
   let gameId = claimed.game_id
   if (gameId) {
-    const { data: game } = await supabase.from("games").select("winner_side").eq("id", gameId).maybeSingle()
-    const recorded = (game?.winner_side ?? null) as Side | null
-    if (recorded && recorded !== winnerSide) {
+    const { data: game, error: gameError } = await supabase.from("games").select("winner_side").eq("id", gameId).maybeSingle()
+    if (gameError || !game) {
+      await releaseClaim(supabase, session.id, userId)
+      return fail(500, "The recorded game could not be read. Try again.")
+    }
+    const recorded = game.winner_side as Side
+    if (recorded !== winnerSide) {
       await releaseClaim(supabase, session.id, userId)
       return fail(
         409,
         `This game is already recorded as a ${SIDE_LABEL[recorded]} win. Declare ${SIDE_LABEL[recorded]} to finish settling it.`,
         "recorded_side"
       )
+    }
+    const repaired = await repairRecord(supabase, claimed, gameId, winnerSide)
+    if (repaired) {
+      await releaseClaim(supabase, session.id, userId)
+      return fail(500, repaired.error)
     }
   } else {
     const recorded = await recordGame(supabase, claimed, userId, winnerSide)
@@ -224,7 +311,7 @@ export async function declareWinner(
     .select(SESSION_SELECT)
     .maybeSingle()
   if (error || !finished) {
-    return fail(500, error?.message ?? "The game was settled but its result could not be saved. Retry in two minutes.")
+    return fail(500, "The game was settled but its result could not be saved. Retry in two minutes.")
   }
 
   await updateVainqueur(supabase, session.id, winnerIds, loserIds)

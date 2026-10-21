@@ -120,7 +120,7 @@ export async function loadOpenTribunal(
   await settleDueVotes(supabase, null)
   const { data, error } = await supabase
     .from("post_game_votes")
-    .select("session_id, status, closes_at, settled_at, summary")
+    .select("session_id, status, closes_at, settled_at, summary, game_sessions ( status )")
     .order("opened_at", { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -128,9 +128,13 @@ export async function loadOpenTribunal(
   if (error) throw new Error(error.message)
   if (!data) return { enabled: true, tribunal: null }
 
-  const row = data as Pick<VoteRow, "session_id" | "status" | "closes_at" | "settled_at" | "summary">
+  const row = data as Pick<VoteRow, "session_id" | "status" | "closes_at" | "settled_at" | "summary"> & {
+    game_sessions: { status: SessionStatus } | { status: SessionStatus }[] | null
+  }
+  const session = Array.isArray(row.game_sessions) ? row.game_sessions[0] : row.game_sessions
   const recent = row.status === "open" || (!!row.settled_at && Date.now() - Date.parse(row.settled_at) < RECENT_VERDICT_MS)
-  if (!recent) return { enabled: true, tribunal: null }
+  const voided = !!row.summary?.void || session?.status === "canceled" || session?.status === "expired"
+  if (!recent || voided) return { enabled: true, tribunal: null }
 
   return {
     enabled: true,

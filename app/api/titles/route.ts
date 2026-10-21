@@ -105,7 +105,7 @@ async function loadLedger(
       .from("point_transactions")
       .select("id, amount, reason, created_at")
       .eq("user_id", userId)
-      .in("reason", ["title_perk", "title_tribute"])
+      .in("reason", ["title_perk", "title_curse", "title_tribute"])
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(200),
@@ -114,12 +114,13 @@ async function loadLedger(
       .select("id, user_id, title_name, kind, amount, beneficiary_user_id, detail, created_at")
       .or(`user_id.eq.${userId},beneficiary_user_id.eq.${userId}`)
       .neq("amount", 0)
+      .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(8),
   ])
 
   const rows = txns ?? []
-  const perks = rows.filter((t) => t.reason === "title_perk").reduce((sum, t) => sum + (t.amount as number), 0)
+  const perks = rows.filter((t) => t.reason !== "title_tribute").reduce((sum, t) => sum + (t.amount as number), 0)
   const tributes = rows.filter((t) => t.reason === "title_tribute").reduce((sum, t) => sum + (t.amount as number), 0)
 
   const migrated = !isMissingSchema(applications.error)
@@ -140,9 +141,14 @@ async function loadLedger(
           id: t.id as string,
           at: t.created_at as string,
           title: null,
-          kind: t.reason === "title_tribute" ? "tribute" : (t.amount as number) < 0 ? "curse" : "perk",
+          kind: t.reason === "title_tribute" ? "tribute" : t.reason === "title_curse" ? "curse" : "perk",
           amount: t.amount as number,
-          detail: t.reason === "title_tribute" ? "Tribute from a branded subject" : "Title perk",
+          detail:
+            t.reason === "title_tribute"
+              ? "Tribute from a branded subject"
+              : t.reason === "title_curse"
+                ? "Paid for wearing a brand"
+                : "Title perk",
         }))
 
   return { ledger: { perks, tributes, recent }, migrated }

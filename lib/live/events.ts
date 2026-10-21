@@ -231,7 +231,7 @@ export function dbTargetsFor(table: string, row: Record<string, unknown> | null 
 export const EVENT_TYPE_PATTERN = /^[a-z][a-z_]{0,23}\.[a-z][a-z_]{0,31}$/
 
 // Too granular or too private for the persisted history; they are still broadcast.
-export const EPHEMERAL_EVENT_TYPES: ReadonlySet<string> = new Set(["session.lock", "points.changed", "vote.cast"])
+export const EPHEMERAL_EVENT_TYPES: ReadonlySet<string> = new Set(["session.lock", "points.changed", "vote.cast", "title.settled"])
 
 export function isPersistedType(type: string): boolean {
   return EVENT_TYPE_PATTERN.test(type) && !EPHEMERAL_EVENT_TYPES.has(type)

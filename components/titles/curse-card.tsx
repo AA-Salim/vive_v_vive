@@ -31,7 +31,15 @@ export function CurseCard({ title, owned, locked, migrated, onDignity }: CurseCa
       className="relative overflow-hidden rounded-lg border border-rose-500/30 bg-gradient-to-br from-rose-500/10 via-transparent to-transparent p-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TitleBadge name={title.name} category={title.category} perk={owned.perk} size="md" curse={{ bestowedBy: bestower, gamesLeft: curse.left }} description={title.description} />
+        <TitleBadge
+          name={title.name}
+          category={title.category}
+          perk={owned.perk}
+          size="md"
+          curse={{ bestowedBy: bestower, gamesLeft: curse.left }}
+          description={title.description}
+          interactive
+        />
         <span className="text-[11px] text-rose-200/80">by {bestower}</span>
       </div>
       <PerkLine perk={owned.perk} className="mt-2" />

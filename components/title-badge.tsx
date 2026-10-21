@@ -17,6 +17,7 @@ interface TitleBadgeProps {
   description?: string | null
   curse?: { bestowedBy?: string | null; gamesLeft?: number } | null
   size?: "sm" | "md" | "lg"
+  // Opt-in popover with the perk. Keep it off inside buttons and other popover triggers.
   interactive?: boolean
   className?: string
 }
@@ -50,7 +51,7 @@ export function TitleBadge({
   description,
   curse,
   size = "sm",
-  interactive = true,
+  interactive = false,
   className,
 }: TitleBadgeProps) {
   const cat = category ?? ""

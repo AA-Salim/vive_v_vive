@@ -2,7 +2,10 @@
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Requires phase10_foundation.sql (free-form point_transactions reasons).
 -- Rules mirrored in lib/titles/rules.ts: a curse brands its wearer for 8 resolved games, a wearer
--- carries at most 2 curses, dignity costs 1.5x the title price, one perk moves at most 60 points per game.
+-- carries at most 2 curses, dignity costs 1.5x the title price, one perk moves at most 60 points per game
+-- and a perk can cost its own wearer at most 10.
+-- New point reasons: title_perk, title_curse (paid by a branded wearer), title_tribute (received by the
+-- bestower), title_dignity (brand bought back).
 
 -- ============================================================
 -- PERK LEDGER: one row per (game, wearer, title), so every perk is one-shot.
@@ -260,7 +263,9 @@ $$;
 
 -- ============================================================
 -- APPLY ONE PERK OR CURSE after a game. Amounts are computed by the app (lib/titles/engine.ts);
--- this function makes the payout one-shot, bounded, and callable only by whoever may declare the winner.
+-- this function makes the payout one-shot, bounded, and callable only by whoever may declare the winner,
+-- and only while that game is being settled: the hooks run before the result is saved, so a game that is
+-- already resolved, or stuck in game past the 3 hour live window, can never pay out again.
 -- Returns the points moved, 0 when nothing could move, NULL when it was already applied.
 -- ============================================================
 
@@ -284,18 +289,23 @@ DECLARE
   v_amount INTEGER := p_amount;
   v_application UUID;
 BEGIN
-  SELECT id, status, created_by, created_at INTO v_session FROM game_sessions WHERE id = p_session_id;
+  SELECT id, status, created_by, created_at, updated_at INTO v_session FROM game_sessions WHERE id = p_session_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'session_not_found'; END IF;
-  IF v_session.status NOT IN ('in_game', 'blue_win', 'red_win') THEN RAISE EXCEPTION 'session_not_settled'; END IF;
+  IF v_session.status <> 'in_game' OR v_session.updated_at < now() - interval '3 hours' THEN
+    RAISE EXCEPTION 'session_not_settling';
+  END IF;
 
+  -- A session without a creator can only be settled by an admin.
   IF v_caller IS NULL OR NOT (
-    v_session.created_by = v_caller
+    COALESCE(v_session.created_by = v_caller, false)
     OR EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_caller AND is_admin)
   ) THEN
     RAISE EXCEPTION 'not_allowed';
   END IF;
 
-  IF p_kind NOT IN ('perk', 'curse') OR p_amount IS NULL OR p_amount = 0 OR abs(p_amount) > 60 THEN
+  IF p_kind IS NULL OR p_kind NOT IN ('perk', 'curse')
+     OR p_amount IS NULL OR p_amount = 0 OR abs(p_amount) > 60
+     OR (p_kind = 'perk' AND p_amount < -10) THEN
     RAISE EXCEPTION 'invalid_amount';
   END IF;
 
@@ -333,7 +343,7 @@ BEGIN
   IF v_amount < 0 THEN v_amount := LEAST(0, GREATEST(v_amount, -300 - v_balance)); END IF;
   IF v_amount = 0 THEN RETURN 0; END IF;
 
-  PERFORM adjust_balance(p_user_id, v_amount, 'title_perk', p_session_id);
+  PERFORM adjust_balance(p_user_id, v_amount, CASE WHEN p_kind = 'curse' THEN 'title_curse' ELSE 'title_perk' END, p_session_id);
   IF p_kind = 'curse' AND EXISTS (SELECT 1 FROM point_balances WHERE user_id = p_beneficiary) THEN
     PERFORM adjust_balance(p_beneficiary, -v_amount, 'title_tribute', p_session_id);
   END IF;

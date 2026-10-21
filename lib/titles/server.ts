@@ -171,17 +171,19 @@ export async function buildEquippedTitles(supabase: SupabaseClient): Promise<Equ
 
   for (const row of rows) {
     if (!row.is_active || byUser.has(row.user_id)) continue
-    const cursed = isCurseCategory(row.title.category)
-    const info = cursed ? null : perkInfo(row.title.name, row.title.category)
+    const curses = cursesByUser.get(row.user_id) ?? []
+    // A brand worn as a banner is listed once, as the curse it still is.
+    const wornBrand = isCurseCategory(row.title.category) ? curses.find((c) => c.title === row.title.name) : undefined
+    const info = isCurseCategory(row.title.category) ? null : perkInfo(row.title.name, row.title.category)
     byUser.set(row.user_id, {
       userId: row.user_id,
       playerId: identities.get(row.user_id)?.playerId ?? null,
       title: row.title.name,
       category: row.title.category,
-      perk: info?.summary ?? null,
-      kind: info ? info.kind : "cosmetic",
+      perk: wornBrand?.perk ?? info?.summary ?? null,
+      kind: wornBrand ? "curse" : info ? info.kind : "cosmetic",
       rarity: rarityOf(row.title.name, row.title.category, row.title.price),
-      curses: cursesByUser.get(row.user_id) ?? [],
+      curses,
     })
   }
 

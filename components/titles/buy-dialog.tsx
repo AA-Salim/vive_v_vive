@@ -55,7 +55,11 @@ export function BuyDialog({ title, balance, locked, pending, onOpenChange, onCon
               )}
             </div>
             {after !== null && after < 0 && (
-              <p className="text-xs text-rose-300">This puts you in debt. The Crown will want a pledge.</p>
+              <p className="text-xs text-rose-300">
+                {balance !== null && balance < 0
+                  ? "You are already in debt. The Crown will want a pledge of allegiance first."
+                  : "This sinks you into debt. Your next purchase will need a pledge of allegiance."}
+              </p>
             )}
 
             <Label className="min-h-10 cursor-pointer gap-3 rounded-lg px-1 text-sm font-normal text-[var(--color-gold-light)]/90">

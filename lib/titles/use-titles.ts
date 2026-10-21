@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
+import { useLiveSignal } from "@/components/live/live-provider"
 import { signed } from "@/lib/titles/copy"
 import type { CourtResponse, MilestonesResponse, TitlesCatalogResponse } from "@/lib/titles/types"
 
@@ -10,7 +11,7 @@ export const TITLES_KEYS = {
   catalog: ["titles", "catalog"] as const,
   court: ["titles", "court"] as const,
   milestones: ["titles", "milestones"] as const,
-  wallet: ["points", "titles-wallet"] as const,
+  wallet: (userId: string | null) => ["points", userId ?? "anonymous", "titles-wallet"] as const,
 }
 
 export class TitlesApiError extends Error {
@@ -59,12 +60,23 @@ export function useMilestones(enabled: boolean) {
   })
 }
 
-export function useWallet(enabled: boolean) {
+export function useWallet(userId: string | null) {
   return useQuery({
-    queryKey: TITLES_KEYS.wallet,
+    queryKey: TITLES_KEYS.wallet(userId),
     queryFn: async () => (await request<{ balance: number }>("/api/points")).balance,
-    enabled,
+    enabled: !!userId,
     staleTime: 10_000,
+  })
+}
+
+// The seal flips when a game goes live, and session events do not refresh the titles roots on their own.
+export function useTitlesLockSync() {
+  const queryClient = useQueryClient()
+  useLiveSignal((signal) => {
+    const sessionMoved =
+      (signal.kind === "event" && signal.event.type === "session.status") ||
+      (signal.kind === "db" && signal.table === "game_sessions")
+    if (sessionMoved) queryClient.invalidateQueries({ queryKey: TITLES_KEYS.catalog })
   })
 }
 

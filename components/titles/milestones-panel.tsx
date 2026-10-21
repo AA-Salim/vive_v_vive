@@ -106,6 +106,7 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
                           rarity={m.rarity}
                           perk={m.perk}
                           size="md"
+                          interactive
                           className={cn(!m.unlocked && "opacity-60 grayscale-[40%]")}
                         />
                         <p className="text-xs text-muted-foreground">{m.description}</p>

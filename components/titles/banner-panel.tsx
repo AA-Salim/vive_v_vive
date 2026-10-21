@@ -92,6 +92,7 @@ export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip,
                 perk={equipped.perk}
                 description={equippedTitle.description}
                 size="lg"
+                interactive
               />
               <PerkLine perk={equipped.perk} className="text-sm" />
               <p className="text-xs text-muted-foreground italic">&ldquo;{equippedTitle.description}&rdquo;</p>

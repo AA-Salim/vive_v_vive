@@ -46,7 +46,15 @@ export function TitleShopCard({ title, owned, balance, signedIn, locked, busy, o
       />
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
-          <TitleBadge name={title.name} category={title.category} rarity={title.rarity} perk={title.perk} description={title.description} size="md" />
+          <TitleBadge
+            name={title.name}
+            category={title.category}
+            rarity={title.rarity}
+            perk={title.perk}
+            description={title.description}
+            size="md"
+            interactive
+          />
           <p className={cn("text-[10px] font-semibold tracking-wider uppercase", RARITY_TEXT[title.rarity])}>
             {RARITY_LABEL[title.rarity]}
             {curse ? <span className="text-muted-foreground"> · bestowed on others</span> : null}

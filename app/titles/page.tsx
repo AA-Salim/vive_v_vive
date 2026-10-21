@@ -24,6 +24,7 @@ import {
   useLiftCurse,
   useMilestones,
   useTitlesCatalog,
+  useTitlesLockSync,
   useWallet,
 } from "@/lib/titles/use-titles"
 import type { CourtMember, OwnedTitleView, TitleView } from "@/lib/titles/types"
@@ -36,12 +37,13 @@ export default function TitlesPage() {
   const { user, profile, isLoading: authLoading, signIn } = useAuth()
   const signedIn = !!user
   const catalog = useTitlesCatalog()
-  const wallet = useWallet(signedIn)
+  const wallet = useWallet(user?.id ?? null)
   const milestones = useMilestones(signedIn)
   const equip = useEquipTitle()
   const buy = useBuyTitle()
   const lift = useLiftCurse()
   const claim = useClaimMilestones()
+  useTitlesLockSync()
 
   const [tab, setTab] = useState<HallTab>("armory")
   const [buyTarget, setBuyTarget] = useState<TitleView | null>(null)

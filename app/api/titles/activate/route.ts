@@ -43,14 +43,13 @@ export async function POST(request: Request) {
     category = (t?.category as string | undefined) ?? null
   }
 
-  const actor = await getActor(supabase, user.id)
-  if (titleId && titleName) {
+  const joined = previous?.titles as { name?: string } | { name?: string }[] | null | undefined
+  const prevName = (Array.isArray(joined) ? joined[0]?.name : joined?.name) ?? null
+  if (titleId && titleName && titleName !== prevName) {
     const perk = category && !isCurseCategory(category) ? perkInfo(titleName, category)?.summary ?? null : null
-    emitLive("title.equipped", { actor, data: { title: titleName, perk } })
-  } else {
-    const joined = previous?.titles as { name?: string } | { name?: string }[] | null | undefined
-    const prevName = Array.isArray(joined) ? joined[0]?.name : joined?.name
-    if (prevName) emitLive("title.unequipped", { actor, data: { title: prevName } })
+    emitLive("title.equipped", { actor: await getActor(supabase, user.id), data: { title: titleName, perk } })
+  } else if (!titleId && prevName) {
+    emitLive("title.unequipped", { actor: await getActor(supabase, user.id), data: { title: prevName } })
   }
 
   return NextResponse.json({ activated: true, title_id: titleId, title: titleName })

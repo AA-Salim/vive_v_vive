@@ -105,42 +105,65 @@ export async function settleTitlePerks(ctx: GameResolvedContext): Promise<void> 
   if (applied.length > 0) await announce(supabase, sessionId, applied)
 }
 
-async function applyAll(supabase: SupabaseClient, sessionId: string, applications: PerkApplication[]): Promise<Applied[]> {
-  const applied: Applied[] = []
-  for (let i = 0; i < applications.length; i++) {
-    const app = applications[i]
-    const { data, error } = await supabase.rpc("apply_title_perk", {
-      p_session_id: sessionId,
-      p_user_id: app.userId,
-      p_title_name: app.title,
-      p_kind: app.kind,
-      p_amount: app.amount,
-      p_detail: app.detail,
-      p_beneficiary: app.beneficiary,
-    })
-    if (error) {
-      if (isMissingSchema(error)) return [...applied, ...(await applyLegacy(supabase, sessionId, applications.slice(i)))]
-      continue
-    }
-    const moved = typeof data === "number" ? data : 0
-    if (moved !== 0) applied.push({ ...app, moved })
-  }
-  return applied
+type Outcome = { moved: number } | "missing" | null
+
+async function applyOne(supabase: SupabaseClient, sessionId: string, app: PerkApplication): Promise<Outcome> {
+  const { data, error } = await supabase.rpc("apply_title_perk", {
+    p_session_id: sessionId,
+    p_user_id: app.userId,
+    p_title_name: app.title,
+    p_kind: app.kind,
+    p_amount: app.amount,
+    p_detail: app.detail,
+    p_beneficiary: app.beneficiary,
+  })
+  if (error) return isMissingSchema(error) ? "missing" : null
+  return { moved: typeof data === "number" ? data : 0 }
 }
 
-// Before the titles migration: no ledger table, so a wearer who already has a title_perk entry for this game is skipped.
+// A perk only locks its wearer's balance, so perks settle in parallel. A curse also pays its bestower:
+// curses go one at a time, so two subjects who branded each other can never deadlock.
+async function applyAll(supabase: SupabaseClient, sessionId: string, applications: PerkApplication[]): Promise<Applied[]> {
+  const perks = applications.filter((a) => a.kind === "perk")
+  const curses = applications.filter((a) => a.kind === "curse")
+  const [first, ...rest] = [...perks, ...curses]
+
+  const probe = await applyOne(supabase, sessionId, first)
+  if (probe === "missing") return applyLegacy(supabase, sessionId, applications)
+
+  const outcomes: Outcome[] = [probe]
+  const parallel = rest.filter((a) => a.kind === "perk")
+  outcomes.push(...(await Promise.all(parallel.map((app) => applyOne(supabase, sessionId, app)))))
+  const sequential = rest.filter((a) => a.kind === "curse")
+  for (const app of sequential) outcomes.push(await applyOne(supabase, sessionId, app))
+
+  return [first, ...parallel, ...sequential].flatMap((app, i) => {
+    const outcome = outcomes[i]
+    return outcome && outcome !== "missing" && outcome.moved !== 0 ? [{ ...app, moved: outcome.moved }] : []
+  })
+}
+
+const REASON: Record<PerkApplication["kind"], string> = { perk: "title_perk", curse: "title_curse" }
+
+// Before the titles migration there is no ledger table: a wearer who already has an entry of the same kind
+// (perk or curse) for this game is skipped.
 async function applyLegacy(supabase: SupabaseClient, sessionId: string, applications: PerkApplication[]): Promise<Applied[]> {
   const userIds = [...new Set(applications.map((a) => a.userId))]
   const [{ data: existing }, { data: balances }] = await Promise.all([
-    supabase.from("point_transactions").select("user_id").eq("reference_id", sessionId).eq("reason", "title_perk"),
+    supabase
+      .from("point_transactions")
+      .select("user_id, reason")
+      .eq("reference_id", sessionId)
+      .in("reason", Object.values(REASON)),
     supabase.from("point_balances").select("user_id, balance").in("user_id", userIds),
   ])
-  const done = new Set((existing ?? []).map((t) => t.user_id as string))
+  const done = new Set((existing ?? []).map((t) => `${t.user_id as string}:${t.reason as string}`))
   const balance = new Map((balances ?? []).map((b) => [b.user_id as string, b.balance as number]))
 
   const applied: Applied[] = []
   for (const app of applications) {
-    if (done.has(app.userId) || !balance.has(app.userId)) continue
+    const reason = REASON[app.kind]
+    if (done.has(`${app.userId}:${reason}`) || !balance.has(app.userId)) continue
     const current = balance.get(app.userId) ?? 0
     const moved = app.amount < 0 ? Math.min(0, Math.max(app.amount, DEBT_FLOOR - current)) : app.amount
     if (moved === 0) continue
@@ -148,7 +171,7 @@ async function applyLegacy(supabase: SupabaseClient, sessionId: string, applicat
     const { error } = await supabase.rpc("adjust_balance", {
       p_user_id: app.userId,
       p_amount: moved,
-      p_reason: "title_perk",
+      p_reason: reason,
       p_reference_id: sessionId,
     })
     if (error) {

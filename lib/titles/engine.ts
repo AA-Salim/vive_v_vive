@@ -1,4 +1,4 @@
-import { PERK_CAP } from "@/lib/titles/rules"
+import { PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
 import { isInvolved, type PerkGame, type PerkSubject } from "@/lib/titles/perk-kit"
 import { perkFor } from "@/lib/titles/perks"
 import type { PerkKind } from "@/lib/titles/types"
@@ -55,6 +55,7 @@ export function computePerkApplications(
     const cap = Math.min(def.cap, PERK_CAP)
     let amount = Math.max(-cap, Math.min(cap, Math.round(result.amount)))
     if (wearer.kind === "curse") amount = -Math.abs(amount)
+    else amount = Math.max(-PERK_PENALTY_CAP, amount)
     if (amount === 0) continue
 
     applications.push({

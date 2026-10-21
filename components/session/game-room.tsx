@@ -75,6 +75,7 @@ function secondaryPanels(phase: GameRoomProps["phase"], session: RoomSession): R
         <BettingPanel key="bets" sessionId={session.id} isBettingOpen={false} />,
         <DuelsPanel key="duels" session={session} />,
         <ProphecyPanel key="prophecy" session={session} isBettingOpen={false} />,
+        <ChaosPanel key="chaos" session={session} isOpen={false} />,
       ]
     default:
       return []

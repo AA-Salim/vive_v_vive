@@ -4,6 +4,7 @@ import { useState } from "react"
 import { MotionConfig } from "motion/react"
 import { toast } from "sonner"
 import { CoachSelectDialog } from "@/components/coach-select-dialog"
+import { TribunalCallout } from "@/components/post-game-vote"
 import { RewardClaimBanner } from "@/components/reward-claim-banner"
 import { GameRoom, type RoomViewer } from "@/components/session/game-room"
 import { Lobby } from "@/components/session/lobby"
@@ -94,6 +95,7 @@ export function MatchRoom() {
     <MotionConfig reducedMotion="user">
       <div className="flex flex-col gap-5">
         <RewardClaimBanner />
+        <TribunalCallout hideForSessionId={phase === "result" ? (session?.id ?? null) : null} />
         {content}
         <CoachSelectDialog
           open={coachDialogOpen}

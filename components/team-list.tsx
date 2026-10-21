@@ -1,81 +1,75 @@
 "use client"
 
-import type { Assignment, PlayerRevealState, Role } from "@/lib/types"
-import { PlayerCard } from "./player-card"
+import { motion } from "motion/react"
+import { CrownIcon } from "lucide-react"
+import { PlayerCard } from "@/components/player-card"
+import { byLane, outcomeFor, slotShuffle, slotState, type BoardViewProps } from "@/components/session/board-types"
+import { SIDE_NAME } from "@/components/session/copy"
+import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-const LANE_ORDER: Role[] = ["top", "jungle", "mid", "adc", "support"]
-
-interface TeamListProps {
-  assignments: Assignment[]
-  playerStates?: Map<string, PlayerRevealState>
-  shuffleImageUrls?: Map<string, string>
-  onToggleLock?: (playerId: string) => void
-  showLocks?: boolean
-  activeLane?: Role | null
+interface TeamListProps extends BoardViewProps {
+  side: Side
+  mirrored?: boolean
 }
 
 export function TeamList({
+  side,
+  mirrored = false,
   assignments,
-  playerStates,
-  shuffleImageUrls,
+  frame,
+  titles,
+  winner,
+  draft,
+  canLock,
+  pendingLocks,
   onToggleLock,
-  showLocks = false,
-  activeLane,
+  animateLayout,
+  meId,
 }: TeamListProps) {
-  const blue = assignments.filter((a) => a.side === "blue")
-  const red = assignments.filter((a) => a.side === "red")
-
-  const sortByLane = (arr: Assignment[]) =>
-    [...arr].sort(
-      (a, b) => LANE_ORDER.indexOf(a.lane) - LANE_ORDER.indexOf(b.lane)
-    )
-
-  const renderTeam = (team: Assignment[], label: string, color: string) => (
-    <div className="flex-1">
-      <h3
-        className="mb-3 text-center text-sm font-bold uppercase tracking-wider"
-        style={{ color }}
-      >
-        {label}
-      </h3>
-      <div className="space-y-1">
-        {sortByLane(team).map((assignment) => {
-          const state: PlayerRevealState = playerStates?.get(assignment.player.id) ?? "revealed"
-          const isActiveLaneRow = activeLane === assignment.lane
-
-          if (state === "hidden") return null
-
-          return (
-            <div
-              key={assignment.player.id}
-              className={cn(
-                "rounded-lg transition-all duration-300",
-                isActiveLaneRow && state === "silhouette" && "bg-[var(--color-gold)]/5 ring-1 ring-[var(--color-gold)]/20"
-              )}
-            >
-              <PlayerCard
-                assignment={assignment}
-                showLock={showLocks}
-                onToggleLock={
-                  onToggleLock
-                    ? () => onToggleLock(assignment.player.id)
-                    : undefined
-                }
-                state={state}
-                shuffleImageUrl={shuffleImageUrls?.get(assignment.player.id)}
-              />
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
+  const team = assignments.filter((a) => a.side === side).sort(byLane)
+  const outcome = outcomeFor(winner, side)
+  const color = side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      {renderTeam(blue, "Blue Side", "var(--color-blue-team)")}
-      {renderTeam(red, "Red Side", "var(--color-red-team)")}
-    </div>
+    <section aria-label={SIDE_NAME[side]} className="flex min-w-0 flex-col gap-2">
+      <header className={cn("flex items-center gap-2 px-1", mirrored && "flex-row-reverse")}>
+        <h2 className={cn("font-display text-sm font-semibold uppercase tracking-[0.22em]", color)}>{SIDE_NAME[side]}</h2>
+        {outcome === "won" && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-gold)]">
+            <CrownIcon className="size-3" aria-hidden /> Victory
+          </span>
+        )}
+        {outcome === "lost" && (
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Defeat</span>
+        )}
+        <span aria-hidden className={cn("h-px flex-1", side === "blue" ? "bg-[var(--color-blue-team)]/30" : "bg-[var(--color-red-team)]/30")} />
+      </header>
+      <ol className="flex flex-col gap-2">
+        {team.map((a) => (
+          <motion.li
+            key={a.player_id}
+            layout={animateLayout}
+            layoutId={animateLayout ? `slot-${a.player_id}` : undefined}
+            transition={{ type: "spring", stiffness: 380, damping: 34 }}
+          >
+            <PlayerCard
+              assignment={a}
+              state={slotState(frame, a.player_id)}
+              shuffleChampion={slotShuffle(frame, a.player_id)}
+              title={titles.get(a.player_id) ?? null}
+              mirrored={mirrored}
+              outcome={outcome}
+              highlighted={!!frame && frame.activeLane === a.lane}
+              isMe={!!meId && a.player_id === meId}
+              showLockState={draft}
+              canLock={canLock}
+              lockPending={pendingLocks.has(a.id)}
+              onToggleLock={onToggleLock ? () => onToggleLock(a.id) : undefined}
+            />
+          </motion.li>
+        ))}
+      </ol>
+    </section>
   )
 }

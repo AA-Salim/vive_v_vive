@@ -1,143 +1,86 @@
 import { createClient } from "@/lib/supabase"
-import { NextResponse } from "next/server"
 import { emitLive, getActor } from "@/lib/live/server"
 import { splitTeams, assignLanes, assignChampions } from "@/lib/randomizer"
 import { getChampionPools } from "@/lib/champions-db"
 import type { Player } from "@/lib/types"
+import { isActiveStatus } from "@/lib/session/constants"
+import { todaysFearless } from "@/lib/session/phases"
+import {
+  advanceExpiredPhase,
+  errorResponse,
+  isRecentResult,
+  loadLatestSession,
+  loadSession,
+  presentSession,
+  sessionResponse,
+} from "@/lib/session/server"
+import { createSessionSchema } from "@/lib/session/types"
 
-const SESSION_SELECT = `
-  *,
-  session_assignments (
-    *,
-    players:player_id ( id, name )
-  )
-`
-
+// Returns the active game, or the game that ended in the last 30 minutes (recent_result: true) so every client
+// can show the result screen, or null. Expired chaos/betting timers are advanced here, at most once.
 export async function GET() {
   const supabase = await createClient()
+  const { session, error } = await loadLatestSession(supabase)
+  if (error) return errorResponse(500, error.message ?? "Could not load the game")
+  if (!session) return sessionResponse(null)
 
-  const { data, error } = await supabase
-    .from("game_sessions")
-    .select(SESSION_SELECT)
-    .in("status", ["coach_draft", "draft", "chaos", "betting", "in_game"])
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json(data, {
-    headers: { "x-server-time": new Date().toISOString() },
-  })
+  const current = isActiveStatus(session.status) ? await advanceExpiredPhase(supabase, session) : session
+  if (!isActiveStatus(current.status) && !isRecentResult(current)) return sessionResponse(null)
+  return sessionResponse(await presentSession(supabase, current))
 }
 
 export async function POST(request: Request) {
+  const parsed = createSessionSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return errorResponse(400, parsed.error.issues[0]?.message ?? "Pick exactly 10 players")
+
   const supabase = await createClient()
-  const { player_ids } = (await request.json()) as { player_ids: string[] }
-
-  if (!player_ids || player_ids.length !== 10) {
-    return NextResponse.json(
-      { error: "Exactly 10 player IDs required" },
-      { status: 400 }
-    )
-  }
-
-  const { data: players, error: playersError } = await supabase
-    .from("players")
-    .select("id, name, is_active, wins, losses, games_played, created_at")
-    .in("id", player_ids)
-
-  if (playersError || !players || players.length !== 10) {
-    return NextResponse.json(
-      { error: "Could not fetch all 10 players" },
-      { status: 400 }
-    )
-  }
-
-  const today = new Date().toISOString().split("T")[0]
-  const { data: fearlessData } = await supabase
-    .from("daily_fearless")
-    .select("champion_name")
-    .eq("date", today)
-
-  const fearlessBanned = new Set(
-    fearlessData?.map((r) => r.champion_name) ?? []
-  )
-
-  const championPools = await getChampionPools()
-
-  const { blue, red } = splitTeams(players as Player[])
-  const blueWithLanes = assignLanes(blue)
-  const redWithLanes = assignLanes(red)
-  const assignments = assignChampions(
-    blueWithLanes,
-    redWithLanes,
-    fearlessBanned,
-    new Map(),
-    championPools
-  )
-
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  if (!user) return errorResponse(401, "Sign in with Discord to start a game.", "auth_required")
 
-  if (!user) {
-    return NextResponse.json(
-      { error: "Login required to create a session" },
-      { status: 401 }
-    )
-  }
+  const playerIds = parsed.data.player_ids
+  const [{ data: players, error: playersError }, fearless, pools] = await Promise.all([
+    supabase.from("players").select("id, name, is_active, wins, losses, games_played, created_at").in("id", playerIds),
+    todaysFearless(supabase),
+    getChampionPools(),
+  ])
+  if (playersError) return errorResponse(500, playersError.message)
+  if (!players || players.length !== 10) return errorResponse(400, "Some of those players no longer exist. Refresh the roster.")
 
-  const { data: session, error: sessionError } = await supabase
+  const { blue, red } = splitTeams(players as Player[])
+  const assignments = assignChampions(assignLanes(blue), assignLanes(red), fearless, new Map(), pools)
+
+  const { data: created, error: sessionError } = await supabase
     .from("game_sessions")
     .insert({ status: "draft", created_by: user.id })
-    .select()
+    .select("id")
     .single()
-
   if (sessionError) {
-    if (sessionError.code === "23505") {
-      return NextResponse.json(
-        { error: "An active session already exists" },
-        { status: 409 }
-      )
-    }
-    return NextResponse.json(
-      { error: sessionError.message },
-      { status: 500 }
-    )
+    if (sessionError.code === "23505") return errorResponse(409, "A game is already running.", "active_session")
+    return errorResponse(500, sessionError.message)
   }
 
-  const rows = assignments.map((a) => ({
-    session_id: session.id,
-    player_id: a.player.id,
-    side: a.side,
-    lane: a.lane,
-    champion: a.champion,
-    champion_internal: a.championInternal,
-    locked: false,
-    fearless_override: a.fearlessOverride,
-  }))
-
-  const { error: assignError } = await supabase
-    .from("session_assignments")
-    .insert(rows)
-
+  const { error: assignError } = await supabase.from("session_assignments").insert(
+    assignments.map((a) => ({
+      session_id: created.id,
+      player_id: a.player.id,
+      side: a.side,
+      lane: a.lane,
+      champion: a.champion,
+      champion_internal: a.championInternal,
+      locked: false,
+      fearless_override: a.fearlessOverride,
+    }))
+  )
   if (assignError) {
-    await supabase.from("game_sessions").delete().eq("id", session.id)
-    return NextResponse.json(
-      { error: assignError.message },
-      { status: 500 }
-    )
+    await supabase.from("game_sessions").delete().eq("id", created.id)
+    return errorResponse(500, assignError.message)
   }
 
-  const { data: full } = await supabase
-    .from("game_sessions")
-    .select(SESSION_SELECT)
-    .eq("id", session.id)
-    .single()
+  const { session } = await loadSession(supabase, created.id)
+  if (!session) return errorResponse(500, "The game was created but could not be loaded.")
 
   emitLive("session.created", { sessionId: session.id, actor: await getActor(supabase, user.id), data: { mode: "standard" } })
-  return NextResponse.json(full, { status: 201 })
+  return sessionResponse(await presentSession(supabase, session), { status: 201 })
 }

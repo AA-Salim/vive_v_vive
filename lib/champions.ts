@@ -8,10 +8,25 @@ export interface Champion {
 
 export const CHAMPION_POOLS: Record<Role, Champion[]> = championData as Record<Role, Champion[]>
 
-const DDRAGON_VERSION = "14.24.1"
+const DDRAGON_VERSION = "16.21.1"
+const DDRAGON = "https://ddragon.leagueoflegends.com/cdn"
+
+export const SUMMONERS_RIFT_URL = `${DDRAGON}/14.24.1/img/map/map11.png`
 
 export function getChampionImageUrl(internalName: string): string {
-  return `https://ddragon.leagueoflegends.com/cdn/${DDRAGON_VERSION}/img/champion/${internalName}.png`
+  return `${DDRAGON}/${DDRAGON_VERSION}/img/champion/${internalName}.png`
+}
+
+export function getChampionTileUrl(internalName: string): string {
+  return `${DDRAGON}/img/champion/tiles/${internalName}_0.jpg`
+}
+
+export function getChampionLoadingUrl(internalName: string): string {
+  return `${DDRAGON}/img/champion/loading/${internalName}_0.jpg`
+}
+
+export function getChampionSplashUrl(internalName: string): string {
+  return `${DDRAGON}/img/champion/centered/${internalName}_0.jpg`
 }
 
 export function findChampion(name: string): Champion | undefined {

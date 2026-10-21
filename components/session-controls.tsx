@@ -1,155 +1,154 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { Button } from "@/components/ui/button"
+import { CrownIcon, DicesIcon, Loader2Icon, LockIcon, PlayIcon, ScrollTextIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
-import type { SessionWithAssignments } from "@/lib/types"
+import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/session/confirm-dialog"
+import { DeclareWinnerDialog } from "@/components/session/declare-winner-dialog"
+import { useSessionActions } from "@/components/session/use-session-actions"
+import { STALE_CLAIM_MS } from "@/lib/session/constants"
+import type { RoomSession, SessionActionName } from "@/lib/session/types"
+import { cn } from "@/lib/utils"
 
 interface SessionControlsProps {
-  session: SessionWithAssignments
-  onAction: () => void
+  session: RoomSession
+  canControl: boolean
+  isAdmin?: boolean
+  serverNow?: number | null
+  onSignIn?: () => void
+  onAction?: () => void
+  className?: string
 }
 
-export function SessionControls({ session, onAction }: SessionControlsProps) {
-  const { user, isAdmin } = useAuth()
-  const [loading, setLoading] = useState(false)
+type Pending = "cancel" | "close_chaos" | "close_betting" | "declare" | null
 
-  const isCreator = isAdmin || (user && session.created_by === user.id)
+const BIG = "h-11 px-4 text-sm sm:h-10"
 
-  const patchSession = async (
-    action: string,
-    extra?: Record<string, string>
-  ) => {
-    if (loading) return
-    setLoading(true)
+export function SessionControls({ session, canControl, isAdmin = false, serverNow = null, onSignIn, onAction, className }: SessionControlsProps) {
+  const { runAsync, pending } = useSessionActions(session, onSignIn)
+  const [dialog, setDialog] = useState<Pending>(null)
+
+  if (!canControl) return null
+
+  const busy = pending !== null
+  const claimAge = session.resolved_by && serverNow !== null ? serverNow - Date.parse(session.updated_at) : null
+  const resolving = session.status === "in_game" && !!session.resolved_by && claimAge !== null && claimAge < STALE_CLAIM_MS
+  const stalled = session.status === "in_game" && !!session.resolved_by && claimAge !== null && claimAge >= STALE_CLAIM_MS
+  const unlocked = session.session_assignments.filter((a) => !a.locked).length
+
+  const run = async (action: Exclude<SessionActionName, "toggle_lock" | "declare_winner">, after?: () => void) => {
     try {
-      const res = await fetch(`/api/sessions/${session.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...extra }),
-      })
-      if (!res.ok) {
-        const err = await res.json()
-        toast.error(err.error || `Failed to ${action}`)
-      }
-      onAction()
-    } catch {
-      toast.error(`Failed to ${action}`)
-    } finally {
-      setLoading(false)
-    }
+      await runAsync({ action })
+      after?.()
+      onAction?.()
+    } catch {}
+    setDialog(null)
   }
 
-  if (!isCreator) return null
+  const label = (name: SessionActionName, idle: string, working: string) => (pending === name ? working : idle)
+  const spinner = (name: SessionActionName, Icon: typeof PlayIcon) =>
+    pending === name ? <Loader2Icon className="animate-spin" aria-hidden /> : <Icon aria-hidden />
 
-  if (session.status === "coach_draft") {
-    return (
-      <Button
-        onClick={() => patchSession("cancel")}
-        disabled={loading}
-        variant="ghost"
-        className="text-[var(--color-gold-light)]/50"
-      >
-        Cancel Draft
-      </Button>
-    )
-  }
+  const cancelButton = (
+    <Button
+      variant="ghost"
+      className={cn(BIG, "text-muted-foreground hover:text-[var(--color-red-team)]")}
+      onClick={() => setDialog("cancel")}
+      disabled={busy || resolving || (stalled && !isAdmin)}
+    >
+      <XIcon aria-hidden />
+      {session.status === "coach_draft" ? "Cancel draft" : "Cancel game"}
+    </Button>
+  )
 
-  if (session.status === "draft") {
-    return (
-      <>
-        <Button
-          onClick={() => patchSession("start_game")}
-          disabled={loading}
-          className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
-        >
-          {loading ? "Starting..." : "Start Game"}
-        </Button>
-        <Button
-          onClick={() => patchSession("cancel")}
-          disabled={loading}
-          variant="ghost"
-          className="text-[var(--color-gold-light)]/50"
-        >
-          Cancel
-        </Button>
-      </>
-    )
-  }
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+      {session.status === "draft" && (
+        <>
+          <Button className={cn(BIG, "font-semibold")} onClick={() => run("start_game")} disabled={busy}>
+            {spinner("start_game", PlayIcon)}
+            {label("start_game", "Start game", "Opening decrees...")}
+          </Button>
+          <Button variant="outline" className={BIG} onClick={() => run("reroll")} disabled={busy || unlocked === 0}>
+            {spinner("reroll", DicesIcon)}
+            {label("reroll", "Re-roll", "Rolling...")}
+            {pending !== "reroll" && unlocked < 10 && (
+              <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground" aria-label={`${unlocked} unlocked`}>
+                {unlocked}
+              </span>
+            )}
+          </Button>
+        </>
+      )}
 
-  if (session.status === "chaos") {
-    return (
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Button
-          onClick={() => patchSession("close_chaos")}
-          disabled={loading}
-          className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
-        >
-          {loading ? "Closing..." : "Skip to Betting"}
+      {session.status === "chaos" && (
+        <Button variant="outline" className={BIG} onClick={() => setDialog("close_chaos")} disabled={busy}>
+          {spinner("close_chaos", ScrollTextIcon)}
+          Close decrees now
         </Button>
-        <Button
-          onClick={() => patchSession("cancel")}
-          disabled={loading}
-          variant="ghost"
-          className="text-[var(--color-gold-light)]/50"
-        >
-          Cancel
-        </Button>
-      </div>
-    )
-  }
+      )}
 
-  if (session.status === "betting") {
-    return (
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Button
-          onClick={() => patchSession("close_betting")}
-          disabled={loading}
-          className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
-        >
-          {loading ? "Closing..." : "Close Betting Early"}
+      {session.status === "betting" && (
+        <Button variant="outline" className={BIG} onClick={() => setDialog("close_betting")} disabled={busy}>
+          {spinner("close_betting", LockIcon)}
+          Lock bets now
         </Button>
-        <Button
-          onClick={() => patchSession("cancel")}
-          disabled={loading}
-          variant="ghost"
-          className="text-[var(--color-gold-light)]/50"
-        >
-          Cancel
-        </Button>
-      </div>
-    )
-  }
+      )}
 
-  if (session.status === "in_game") {
-    return (
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <Button
-          onClick={() => patchSession("declare_winner", { winner_side: "blue" })}
-          disabled={loading}
-          className="bg-[var(--color-blue-team)] font-bold text-white hover:bg-[var(--color-blue-team)]/80"
-        >
-          {loading ? "Saving..." : "Blue Side Wins"}
+      {session.status === "in_game" && (
+        <Button className={cn(BIG, "font-semibold")} onClick={() => setDialog("declare")} disabled={busy || resolving}>
+          {resolving || pending === "declare_winner" ? <Loader2Icon className="animate-spin" aria-hidden /> : <CrownIcon aria-hidden />}
+          {resolving ? "Settling the gold..." : stalled ? "Retry declaration" : "Declare winner"}
         </Button>
-        <Button
-          onClick={() => patchSession("declare_winner", { winner_side: "red" })}
-          disabled={loading}
-          className="bg-[var(--color-red-team)] font-bold text-white hover:bg-[var(--color-red-team)]/80"
-        >
-          {loading ? "Saving..." : "Red Side Wins"}
-        </Button>
-        <Button
-          onClick={() => patchSession("cancel")}
-          disabled={loading}
-          variant="ghost"
-          className="text-[var(--color-gold-light)]/50"
-        >
-          Cancel
-        </Button>
-      </div>
-    )
-  }
+      )}
 
-  return null
+      {cancelButton}
+
+      <ConfirmDialog
+        open={dialog === "cancel"}
+        onOpenChange={(open) => setDialog(open ? "cancel" : null)}
+        title={session.status === "coach_draft" ? "Scrap the coach draft?" : "Cancel this game?"}
+        description="Nothing gets recorded. Every bet, insurance premium, decree and duel stake goes straight back to its owner."
+        confirmLabel={pending === "cancel" ? "Canceling..." : "Cancel the game"}
+        cancelLabel="Keep playing"
+        destructive
+        pending={pending === "cancel"}
+        onConfirm={() => run("cancel", () => toast("Game canceled. Every wager was refunded."))}
+      />
+      <ConfirmDialog
+        open={dialog === "close_chaos"}
+        onOpenChange={(open) => setDialog(open ? "close_chaos" : null)}
+        title="Close the decree window?"
+        description="Nobody can cast a decree after this. Betting opens right away for five minutes."
+        confirmLabel="Close decrees"
+        pending={pending === "close_chaos"}
+        onConfirm={() => run("close_chaos")}
+      />
+      <ConfirmDialog
+        open={dialog === "close_betting"}
+        onOpenChange={(open) => setDialog(open ? "close_betting" : null)}
+        title="Lock all bets now?"
+        description="Nobody can bet or buy insurance after this, even with time left on the clock."
+        confirmLabel="Lock bets"
+        pending={pending === "close_betting"}
+        onConfirm={() => run("close_betting")}
+      />
+      {session.status === "in_game" && (
+        <DeclareWinnerDialog
+          session={session}
+          open={dialog === "declare"}
+          onOpenChange={(open) => setDialog(open ? "declare" : null)}
+          pending={pending === "declare_winner"}
+          onConfirm={async (side) => {
+            try {
+              await runAsync({ action: "declare_winner", winner_side: side })
+              onAction?.()
+            } catch {}
+            setDialog(null)
+          }}
+        />
+      )}
+    </div>
+  )
 }

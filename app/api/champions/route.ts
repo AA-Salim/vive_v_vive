@@ -3,9 +3,8 @@ import { getChampionPools } from "@/lib/champions-db"
 
 export async function GET() {
   try {
-    const pools = await getChampionPools()
-    return NextResponse.json(pools)
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(await getChampionPools())
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not load champions" }, { status: 500 })
   }
 }

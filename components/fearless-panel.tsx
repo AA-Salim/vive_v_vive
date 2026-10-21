@@ -1,121 +1,186 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useRef, useState } from "react"
 import Image from "next/image"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible"
-import { Button } from "@/components/ui/button"
-import { findChampion, getChampionImageUrl } from "@/lib/champions"
-import { XIcon, Trash2Icon } from "lucide-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { FlameIcon, PencilIcon, RotateCcwIcon, Trash2Icon, XIcon } from "lucide-react"
 import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { ConfirmDialog } from "@/components/session/confirm-dialog"
+import { findChampion, getChampionImageUrl } from "@/lib/champions"
+import { cn } from "@/lib/utils"
 
 interface FearlessPanelProps {
   refreshKey?: number
+  signedIn?: boolean
+  isAdmin?: boolean
 }
 
-export function FearlessPanel({ refreshKey }: FearlessPanelProps) {
-  const [champions, setChampions] = useState<string[]>([])
-  const [open, setOpen] = useState(false)
+const FEARLESS_KEY = ["fearless", "today"] as const
+const PREVIEW_COUNT = 18
 
-  const fetchChampions = useCallback(() => {
-    fetch("/api/fearless")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setChampions(data)
-      })
-      .catch(() => {})
-  }, [])
+async function fetchFearless(): Promise<string[]> {
+  const res = await fetch("/api/fearless", { cache: "no-store" })
+  if (!res.ok) throw new Error("fearless")
+  const body = await res.json()
+  return Array.isArray(body) ? body.filter((c): c is string => typeof c === "string") : []
+}
 
+async function deleteFearless(champion: string | null) {
+  const res = await fetch("/api/fearless", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(champion ? { champion } : {}),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null)
+    throw new Error(typeof body?.error === "string" ? body.error : "Could not update fearless bans")
+  }
+}
+
+export function FearlessPanel({ refreshKey, signedIn = false, isAdmin = false }: FearlessPanelProps) {
+  const queryClient = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const query = useQuery({ queryKey: FEARLESS_KEY, queryFn: fetchFearless, staleTime: 15_000 })
+  const { refetch } = query
+
+  const seenKey = useRef(refreshKey)
   useEffect(() => {
-    fetchChampions()
-  }, [refreshKey, fetchChampions])
+    if (seenKey.current === refreshKey) return
+    seenKey.current = refreshKey
+    refetch()
+  }, [refreshKey, refetch])
 
-  const handleRemove = async (champion: string) => {
-    const res = await fetch("/api/fearless", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ champion }),
-    })
-    if (res.ok) {
-      setChampions((prev) => prev.filter((c) => c !== champion))
-      toast.success(`Removed ${champion} from fearless`)
-    }
-  }
+  const remove = useMutation({
+    mutationFn: deleteFearless,
+    onMutate: async (champion) => {
+      await queryClient.cancelQueries({ queryKey: FEARLESS_KEY })
+      const previous = queryClient.getQueryData<string[]>(FEARLESS_KEY)
+      queryClient.setQueryData<string[]>(FEARLESS_KEY, (list) => (champion ? (list ?? []).filter((c) => c !== champion) : []))
+      return { previous }
+    },
+    onSuccess: (_data, champion) => {
+      toast.success(champion ? `${champion} is back in the pool.` : "Fearless list wiped. Every champion is fair game.")
+      if (!champion) setConfirmClear(false)
+    },
+    onError: (error, _champion, context) => {
+      if (context?.previous) queryClient.setQueryData(FEARLESS_KEY, context.previous)
+      toast.error(error instanceof Error ? error.message : "Could not update fearless bans")
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["fearless"] }),
+  })
 
-  const handleClearAll = async () => {
-    const res = await fetch("/api/fearless", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    })
-    if (res.ok) {
-      setChampions([])
-      toast.success("Cleared all fearless bans")
-    }
-  }
-
-  if (champions.length === 0) return null
+  const champions = query.data ?? []
+  const visible = expanded ? champions : champions.slice(0, PREVIEW_COUNT)
+  const canEdit = signedIn && champions.length > 0
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-lg border border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] px-4 py-2 text-sm text-[var(--color-gold-light)]/70 transition-colors hover:bg-[var(--color-navy-lighter)]">
-        <span className="flex-1 text-left">
-          Fearless Draft: {champions.length} champion
-          {champions.length !== 1 ? "s" : ""} banned today
+    <section aria-labelledby="fearless-title" className="rounded-xl border border-border bg-card p-4">
+      <header className="flex items-center gap-2">
+        <FlameIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+        <h2 id="fearless-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
+          Fearless bans
+        </h2>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          {query.isPending ? "" : `${champions.length} today`}
         </span>
-        <span className="text-xs">{open ? "▲" : "▼"}</span>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <div className="mt-2 rounded-lg border border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] p-4">
-          <div className="mb-3 flex justify-end">
-            <Button
-              onClick={handleClearAll}
-              variant="outline"
-              size="sm"
-              className="border-[var(--color-red-team)]/30 text-xs text-[var(--color-red-team)]"
-            >
-              <Trash2Icon className="mr-1 h-3 w-3" />
-              Clear All
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {champions.map((name) => {
-              const champ = findChampion(name)
-              const internal = champ?.internal ?? name
+        {canEdit && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10"
+            aria-pressed={editing}
+            aria-label={editing ? "Done editing fearless bans" : "Edit fearless bans"}
+            onClick={() => setEditing((v) => !v)}
+          >
+            {editing ? <XIcon aria-hidden /> : <PencilIcon aria-hidden />}
+          </Button>
+        )}
+      </header>
+
+      {query.isPending ? (
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Loading fearless bans">
+          {Array.from({ length: 8 }, (_, i) => (
+            <Skeleton key={i} className="size-9 rounded-md" />
+          ))}
+        </div>
+      ) : query.isError ? (
+        <div className="mt-3 flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          The fearless ledger is unreadable right now.
+          <Button variant="outline" className="h-10" onClick={() => refetch()}>
+            <RotateCcwIcon aria-hidden />
+            Retry
+          </Button>
+        </div>
+      ) : champions.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">No bans yet today. Every champion is fair game until someone plays it.</p>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-muted-foreground">Played today, so they cannot be rolled again until tomorrow.</p>
+          <ul className="mt-3 flex flex-wrap gap-2">
+            {visible.map((name) => {
+              const internal = findChampion(name)?.internal ?? name.replace(/[^A-Za-z]/g, "")
               return (
-                <div
-                  key={name}
-                  className="group relative flex flex-col items-center gap-0.5"
-                  title={name}
-                >
-                  <div className="relative overflow-hidden rounded-full opacity-40 grayscale">
+                <li key={name} className="relative">
+                  <span className="block size-9 overflow-hidden rounded-md ring-1 ring-border" title={name}>
                     <Image
                       src={getChampionImageUrl(internal)}
                       alt={name}
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 object-cover"
+                      width={36}
+                      height={36}
                       unoptimized
+                      className={cn("size-full scale-110 object-cover grayscale", !editing && "opacity-60")}
                     />
-                    <button
-                      onClick={() => handleRemove(name)}
-                      className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100"
-                    >
-                      <XIcon className="h-4 w-4 text-[var(--color-red-team)]" />
-                    </button>
-                  </div>
-                  <span className="max-w-[48px] truncate text-[9px] text-[var(--color-gold-light)]/40">
-                    {name}
                   </span>
-                </div>
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate(name)}
+                      disabled={remove.isPending}
+                      aria-label={`Unban ${name}`}
+                      className="absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border border-border bg-[var(--color-navy)] text-[var(--color-red-team)] shadow outline-none focus-visible:ring-2 focus-visible:ring-ring after:absolute after:-inset-2"
+                    >
+                      <XIcon className="size-3.5" aria-hidden />
+                    </button>
+                  )}
+                </li>
               )
             })}
+          </ul>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {champions.length > PREVIEW_COUNT && (
+              <Button variant="ghost" className="h-10 text-xs" onClick={() => setExpanded((v) => !v)}>
+                {expanded ? "Show less" : `Show all ${champions.length}`}
+              </Button>
+            )}
+            {editing && isAdmin && (
+              <Button
+                variant="destructive"
+                className="ml-auto h-10 text-xs"
+                onClick={() => setConfirmClear(true)}
+                disabled={remove.isPending}
+              >
+                <Trash2Icon aria-hidden />
+                Wipe the list
+              </Button>
+            )}
           </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+        </>
+      )}
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Wipe today's fearless bans?"
+        description={`All ${champions.length} champions go back into the pool for the next rolls. Games already played are not affected.`}
+        confirmLabel="Wipe the list"
+        destructive
+        pending={remove.isPending}
+        onConfirm={() => remove.mutate(null)}
+      />
+    </section>
   )
 }

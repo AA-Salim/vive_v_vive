@@ -36,7 +36,8 @@ export function assignChampions(
   lockedAssignments: Map<string, Assignment>,
   championPools: Record<Role, Champion[]> = CHAMPION_POOLS
 ): Assignment[] {
-  const usedInThisRound = new Set<string>()
+  // Locked picks from both sides are reserved before anyone rolls, so a re-roll can never duplicate them.
+  const usedInThisRound = new Set<string>([...lockedAssignments.values()].map((a) => a.champion))
   const results: Assignment[] = []
 
   const allSlots = [
@@ -48,7 +49,6 @@ export function assignChampions(
     const locked = lockedAssignments.get(slot.player.id)
     if (locked) {
       results.push(locked)
-      usedInThisRound.add(locked.champion)
       continue
     }
 

@@ -1,148 +1,73 @@
 "use client"
 
 import Image from "next/image"
-import { getChampionImageUrl, ROLE_LABELS } from "@/lib/champions"
-import type { Assignment, PlayerRevealState, Role } from "@/lib/types"
+import { CrownIcon } from "lucide-react"
+import { ChampionAvatar } from "@/components/session/champion-avatar"
+import { outcomeFor, slotShuffle, slotState, type BoardViewProps } from "@/components/session/board-types"
+import { SUMMONERS_RIFT_URL } from "@/lib/champions"
+import type { Role, Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-interface MapViewProps {
-  assignments: Assignment[]
-  playerStates?: Map<string, PlayerRevealState>
-  shuffleImageUrls?: Map<string, string>
-  activeLane?: Role | null
+const BLUE_POSITIONS: Record<Role, { top: number; left: number }> = {
+  top: { top: 28, left: 9 },
+  jungle: { top: 50, left: 25 },
+  mid: { top: 60, left: 41 },
+  support: { top: 83, left: 51 },
+  adc: { top: 91, left: 64 },
 }
 
-const BLUE_POSITIONS: Record<Role, { top: string; left: string }> = {
-  top: { top: "28%", left: "10%" },
-  jungle: { top: "55%", left: "28%" },
-  mid: { top: "58%", left: "38%" },
-  adc: { top: "90%", left: "58%" },
-  support: { top: "86%", left: "50%" },
+// The Rift mirrors along its main diagonal: red sits where blue would be with the axes swapped.
+function positionOf(side: Side, lane: Role) {
+  const p = BLUE_POSITIONS[lane]
+  return side === "blue" ? { top: `${p.top}%`, left: `${p.left}%` } : { top: `${p.left}%`, left: `${p.top}%` }
 }
 
-const RED_POSITIONS: Record<Role, { top: string; left: string }> = {
-  top: { top: "10%", left: "42%" },
-  jungle: { top: "40%", left: "68%" },
-  mid: { top: "38%", left: "58%" },
-  adc: { top: "65%", left: "90%" },
-  support: { top: "70%", left: "84%" },
-}
+type MapViewProps = Pick<BoardViewProps, "assignments" | "frame" | "winner"> & { className?: string }
 
-function MapOverlay({
-  assignment,
-  position,
-  state,
-  shuffleImageUrl,
-  isActiveLane,
-}: {
-  assignment: Assignment
-  position: { top: string; left: string }
-  state: PlayerRevealState
-  shuffleImageUrl?: string
-  isActiveLane: boolean
-}) {
-  if (state === "hidden") return null
-
-  const isSilhouette = state === "silhouette"
-  const isShuffling = state === "shuffling"
-  const isLocking = state === "locking"
-  const isRevealed = state === "revealed"
-
-  const imageUrl =
-    isShuffling && shuffleImageUrl
-      ? shuffleImageUrl
-      : isSilhouette
-        ? getChampionImageUrl(assignment.championInternal)
-        : getChampionImageUrl(assignment.championInternal)
-
+export function MapView({ assignments, frame, winner, className }: MapViewProps) {
   return (
     <div
       className={cn(
-        "absolute z-10 -translate-x-1/2 -translate-y-1/2",
-        isSilhouette && "animate-silhouette",
-        (isShuffling || isRevealed) && "animate-player-enter"
+        "relative aspect-square w-full overflow-hidden rounded-xl border border-border shadow-2xl shadow-black/50",
+        className
       )}
-      style={{ top: position.top, left: position.left }}
     >
-      <div className="flex flex-col items-center gap-0.5">
-        <div
-          className={cn(
-            "relative overflow-hidden rounded-full",
-            assignment.side === "blue"
-              ? "ring-[3px] ring-[var(--color-blue-team)] shadow-[0_0_12px_rgba(10,132,255,0.5)]"
-              : "ring-[3px] ring-[var(--color-red-team)] shadow-[0_0_12px_rgba(255,69,58,0.5)]",
-            isShuffling && "animate-champion-shuffle",
-            isLocking && (assignment.side === "blue" ? "animate-lock-in-blue" : "animate-lock-in-red"),
-            isActiveLane && isSilhouette && "animate-lane-highlight"
-          )}
-          style={{ width: 64, height: 64 }}
-        >
-          <Image
-            src={imageUrl}
-            alt={isRevealed || isLocking ? assignment.champion : "?"}
-            width={64}
-            height={64}
-            className={cn(
-              "h-full w-full object-cover",
-              isSilhouette && "silhouette-placeholder"
-            )}
-            unoptimized
-          />
-        </div>
-        <span className="max-w-[90px] truncate text-center text-[11px] font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
-          {isRevealed || isLocking ? assignment.champion : "???"}
-        </span>
-        <span
-          className={cn(
-            "max-w-[90px] truncate text-center text-[10px] text-[var(--color-gold-light)] drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]",
-            (isRevealed || isLocking) && "animate-name-reveal"
-          )}
-        >
-          {isRevealed || isLocking ? assignment.player.name : ""}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-export function MapView({
-  assignments,
-  playerStates,
-  shuffleImageUrls,
-  activeLane,
-}: MapViewProps) {
-  return (
-    <div className="hidden md:block">
-      <div className="relative mx-auto aspect-square w-full max-w-[720px] overflow-hidden rounded-xl border-2 border-[var(--color-gold)]/20 shadow-2xl shadow-black/50">
-        <Image
-          src="https://ddragon.leagueoflegends.com/cdn/14.24.1/img/map/map11.png"
-          alt="Summoner's Rift"
-          fill
-          className="object-cover"
-          unoptimized
-          priority
-        />
-        <div className="absolute inset-0 bg-black/20" />
-
-        {assignments.map((assignment) => {
-          const positions =
-            assignment.side === "blue" ? BLUE_POSITIONS : RED_POSITIONS
-          const position = positions[assignment.lane]
-          const state: PlayerRevealState = playerStates?.get(assignment.player.id) ?? "revealed"
-          const isActiveLaneForPlayer = activeLane === assignment.lane
-
+      <Image src={SUMMONERS_RIFT_URL} alt="Summoner's Rift" fill unoptimized priority sizes="520px" className="object-cover" />
+      <div className="absolute inset-0 bg-[var(--color-navy)]/40" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_40%,var(--color-navy)_100%)] opacity-70" />
+      <ul aria-hidden>
+        {assignments.map((a) => {
+          const state = slotState(frame, a.player_id)
+          const shuffle = slotShuffle(frame, a.player_id)
+          const outcome = outcomeFor(winner, a.side)
+          const active = frame?.activeLane === a.lane
+          const revealed = state === "revealed" || state === "locking"
           return (
-            <MapOverlay
-              key={assignment.player.id}
-              assignment={assignment}
-              position={position}
-              state={state}
-              shuffleImageUrl={shuffleImageUrls?.get(assignment.player.id)}
-              isActiveLane={isActiveLaneForPlayer}
-            />
+            <li
+              key={a.player_id}
+              title={revealed ? `${a.champion} (${a.players.name})` : undefined}
+              className={cn(
+                "absolute z-10 -translate-x-1/2 -translate-y-1/2 rounded-full transition-[top,left,opacity,box-shadow] duration-700 ease-out",
+                active && "shadow-[0_0_22px_4px_var(--color-gold)]",
+                outcome === "lost" && "opacity-60 grayscale-[40%]"
+              )}
+              style={positionOf(a.side, a.lane)}
+            >
+              <ChampionAvatar
+                assignment={a}
+                state={state}
+                shuffleChampion={shuffle}
+                size={42}
+                rounded="full"
+                className="ring-[3px] shadow-lg shadow-black/60"
+              />
+              {outcome === "won" && (
+                <CrownIcon className="absolute -top-3.5 left-1/2 size-4 -translate-x-1/2 text-[var(--color-gold)] drop-shadow" aria-hidden />
+              )}
+            </li>
           )
         })}
-      </div>
+      </ul>
     </div>
   )
 }

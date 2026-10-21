@@ -4,12 +4,16 @@ import type { GameHook } from "@/lib/game-hooks/types"
 
 type RpcError = { code?: string; message?: string } | null
 
-// The v2 functions are race-safe and idempotent; the legacy ones keep games settling until the migration lands.
+const isRuleViolation = (error: NonNullable<RpcError>) => /chaos:[a-z_]+/.test(error.message ?? "")
+
+// The v2 functions are race-safe and idempotent, so a transient failure is retried once. Their own refusals
+// (chaos:*) are final. The legacy functions only stand in while the migration is missing.
 async function withLegacyFallback(
   run: () => PromiseLike<{ error: RpcError }>,
   legacy: () => PromiseLike<{ error: RpcError }>
 ) {
-  const { error } = await run()
+  let { error } = await run()
+  if (error && !isMissingSchema(error) && !isRuleViolation(error)) ({ error } = await run())
   if (!error) return
   if (!isMissingSchema(error) && error.code !== "42501") throw new Error(error.message ?? "chaos hook failed")
   const fallback = await legacy()

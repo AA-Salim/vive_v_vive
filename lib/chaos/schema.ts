@@ -3,6 +3,8 @@ import { z } from "zod"
 const side = z.enum(["blue", "red"])
 const playerId = z.uuid()
 
+export const sessionIdSchema = z.uuid()
+
 export const decreeRequestSchema = z.discriminatedUnion("action_type", [
   z.object({ action_type: z.literal("double_or_nothing"), side }),
   z.object({ action_type: z.literal("royal_pardon"), target_player_id: playerId }),

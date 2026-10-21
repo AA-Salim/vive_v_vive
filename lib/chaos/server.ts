@@ -5,7 +5,14 @@ import { parseChaosError } from "@/lib/chaos/errors"
 import { legacyIssueDecree } from "@/lib/chaos/legacy"
 import { DEFAULT_RULES, mergeRules, type RuleRow } from "@/lib/chaos/rules"
 import { requestSide, requestTargets, type DecreeRequest } from "@/lib/chaos/schema"
-import type { ChaosBoard, ChaosSchema, DecreeDetails, DecreeRuleBook, DecreeStatus } from "@/lib/chaos/types"
+import type {
+  ChaosBoard,
+  ChaosDecreeEntry,
+  ChaosSchema,
+  DecreeDetails,
+  DecreeRuleBook,
+  DecreeStatus,
+} from "@/lib/chaos/types"
 import { isMissingSchema } from "@/lib/db-errors"
 import type { Role, Side } from "@/lib/types"
 
@@ -85,6 +92,19 @@ function rowFromRpc(result: DecreeRpcResult, sessionId: string, userId: string):
     changed_assignment_ids: result.changed_assignment_ids,
     details: result.details,
   }
+}
+
+// The one player a decree is aimed at, so they get a personal alert. Team-wide and two-seat decrees have none.
+export async function decreeTargetUserId(supabase: SupabaseClient, entry: ChaosDecreeEntry): Promise<string | null> {
+  const playerId =
+    entry.action_type === "swap_teammate"
+      ? entry.target_player_2_id
+      : entry.action_type === "champion_ban" || entry.action_type === "royal_pardon"
+        ? entry.target_player_id
+        : null
+  if (!playerId) return null
+  const { data } = await supabase.from("players").select("auth_user_id").eq("id", playerId).maybeSingle()
+  return (data?.auth_user_id as string | null | undefined) ?? null
 }
 
 export async function issueDecree(

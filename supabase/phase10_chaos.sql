@@ -552,7 +552,8 @@ BEGIN
   IF v_session.status NOT IN ('in_game', 'blue_win', 'red_win') THEN
     RAISE EXCEPTION 'chaos:not_resolvable';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM games WHERE id = p_game_id AND winner_side = p_winner_side) THEN
+  IF (v_session.game_id IS NOT NULL AND v_session.game_id IS DISTINCT FROM p_game_id)
+     OR NOT EXISTS (SELECT 1 FROM games WHERE id = p_game_id AND winner_side = p_winner_side) THEN
     RAISE EXCEPTION 'chaos:game_mismatch';
   END IF;
 
@@ -603,7 +604,13 @@ BEGIN
   IF NOT chaos_can_officiate(v_session.created_by) THEN
     RAISE EXCEPTION 'chaos:forbidden';
   END IF;
-  IF v_session.status IN ('blue_win', 'red_win') THEN
+  -- A recorded game or a settled wager means the match was played: its decrees stand.
+  IF v_session.status IN ('blue_win', 'red_win')
+     OR v_session.game_id IS NOT NULL
+     OR EXISTS (
+       SELECT 1 FROM chaos_actions
+       WHERE session_id = p_session_id AND action_type = 'double_or_nothing' AND status IN ('won', 'lost')
+     ) THEN
     RAISE EXCEPTION 'chaos:already_resolved';
   END IF;
 

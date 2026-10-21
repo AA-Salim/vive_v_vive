@@ -33,7 +33,7 @@ interface TreasuryStripProps {
 export function TreasuryStrip({ signedIn, balance, mine, onSignIn }: TreasuryStripProps) {
   if (!signedIn) {
     return (
-      <div className="flex flex-col items-start gap-2 rounded-xl border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col items-start gap-2 rounded-xl border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 p-3 @md:flex-row @md:items-center @md:justify-between">
         <p className="text-xs text-[var(--color-gold-light)]/70">
           Log in with Discord to issue decrees in the name of the exiled king.
         </p>

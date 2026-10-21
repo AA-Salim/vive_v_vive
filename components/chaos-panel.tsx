@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { MotionConfig } from "motion/react"
 import { RefreshCwIcon, ScrollTextIcon } from "lucide-react"
 import { toast } from "sonner"
@@ -75,6 +75,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const issue = useIssueDecree(session.id)
   const { item: proclamation, proclaim } = useProclamation()
   const [dialog, setDialog] = useState<DialogState>({ type: null, open: false, nonce: 0, phrase: "" })
+  const sealing = useRef(false)
 
   const assignments = useMemo(() => toBoardAssignments(session), [session])
   const ctx: DecreeContext = useMemo(
@@ -120,12 +121,18 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
 
   const openDecree = (type: DecreeType) => {
     issue.reset()
+    sealing.current = false
     const phrase = getActContent(act?.act_number ?? 2).getRandomPhrase()
     setDialog((d) => ({ type, open: true, nonce: d.nonce + 1, phrase }))
   }
 
   const submit = (request: DecreeRequest) => {
+    if (sealing.current) return
+    sealing.current = true
     issue.mutate(request, {
+      onSettled: () => {
+        sealing.current = false
+      },
       onSuccess: (result) => {
         setDialog((d) => ({ ...d, open: false }))
         const line = decreeToast(result.decree)
@@ -143,67 +150,69 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
 
   return (
     <MotionConfig reducedMotion="user">
-      <section
-        aria-labelledby="royal-decrees-heading"
-        className="relative space-y-3 overflow-hidden rounded-2xl border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-3 sm:space-y-4 sm:p-5"
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/60 to-transparent"
-        />
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h2
-              id="royal-decrees-heading"
-              className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)] sm:text-xl"
-            >
-              <ScrollTextIcon aria-hidden className="size-5 shrink-0" />
-              Royal Decrees
-            </h2>
-            <p className="mt-0.5 text-xs text-[var(--color-gold-light)]/55">
-              {windowOpen
-                ? "Issued in the name of the exiled king. Bend the draft before the window slams shut."
-                : "The decree window is closed. What is written is written."}
-            </p>
-          </div>
-          <WindowChip open={windowOpen} remainingMs={remainingMs} />
-        </header>
+      <div className="@container">
+        <section
+          aria-labelledby="royal-decrees-heading"
+          className="relative space-y-3 overflow-hidden rounded-2xl border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-3 @lg:space-y-4 @lg:p-5"
+        >
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/60 to-transparent"
+          />
+          <header className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2
+                id="royal-decrees-heading"
+                className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)] @lg:text-xl"
+              >
+                <ScrollTextIcon aria-hidden className="size-5 shrink-0" />
+                Royal Decrees
+              </h2>
+              <p className="mt-0.5 text-xs text-[var(--color-gold-light)]/55">
+                {windowOpen
+                  ? "Issued in the name of the exiled king. Bend the draft before the window slams shut."
+                  : "The decree window is closed. What is written is written."}
+              </p>
+            </div>
+            <WindowChip open={windowOpen} remainingMs={remainingMs} />
+          </header>
 
-        <Proclamation item={proclamation} />
+          <Proclamation item={proclamation} />
 
-        {isLoading ? (
-          <>
-            <TreasuryStripSkeleton />
-            <EdictBoardSkeleton />
-            <DecreeLedgerSkeleton />
-          </>
-        ) : isError && !board ? (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-red-team)]/25 bg-[var(--color-red-team)]/5 p-6 text-center">
-            <p className="text-sm text-[var(--color-gold-light)]/75">
-              The royal scribes dropped the ledger. The decrees are fine, the scribes are not.
-            </p>
-            <Button variant="outline" onClick={() => refetch()} className="h-10">
-              <RefreshCwIcon aria-hidden className="size-4" />
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <>
-            {(ctx.viewer || !roundOver) && (
-              <TreasuryStrip signedIn={!!ctx.viewer} balance={ctx.viewer?.balance ?? null} mine={mine} onSignIn={signIn} />
-            )}
-            {!roundOver && (
-              <>
-                <EdictBoard cards={cards} onSelect={openDecree} />
-                <p className="text-center text-[11px] text-[var(--color-gold-light)]/40">
-                  Decrees are final and public. Every point comes back if the game is canceled.
-                </p>
-              </>
-            )}
-            <DecreeLedger entries={ctx.actions} viewerId={viewerId} windowOpen={windowOpen} />
-          </>
-        )}
-      </section>
+          {isLoading ? (
+            <>
+              <TreasuryStripSkeleton />
+              <EdictBoardSkeleton />
+              <DecreeLedgerSkeleton />
+            </>
+          ) : isError && !board ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-red-team)]/25 bg-[var(--color-red-team)]/5 p-6 text-center">
+              <p className="text-sm text-[var(--color-gold-light)]/75">
+                The royal scribes dropped the ledger. The decrees are fine, the scribes are not.
+              </p>
+              <Button variant="outline" onClick={() => refetch()} className="h-10">
+                <RefreshCwIcon aria-hidden className="size-4" />
+                Try again
+              </Button>
+            </div>
+          ) : (
+            <>
+              {(ctx.viewer || !roundOver) && (
+                <TreasuryStrip signedIn={!!ctx.viewer} balance={ctx.viewer?.balance ?? null} mine={mine} onSignIn={signIn} />
+              )}
+              {!roundOver && (
+                <>
+                  <EdictBoard cards={cards} onSelect={openDecree} />
+                  <p className="text-center text-[11px] text-[var(--color-gold-light)]/40">
+                    Decrees are final and public. Every point comes back if the game is canceled.
+                  </p>
+                </>
+              )}
+              <DecreeLedger entries={ctx.actions} viewerId={viewerId} windowOpen={windowOpen} />
+            </>
+          )}
+        </section>
+      </div>
 
       <DecreeDialog
         key={dialog.nonce}

@@ -3,8 +3,8 @@ import { getDecree } from "@/lib/chaos/catalog"
 import { loadEntries } from "@/lib/chaos/entries"
 import { CHAOS_ERRORS } from "@/lib/chaos/errors"
 import { decreeTargetName } from "@/lib/chaos/format"
-import { decreeRequestSchema } from "@/lib/chaos/schema"
-import { issueDecree, loadBoard } from "@/lib/chaos/server"
+import { decreeRequestSchema, sessionIdSchema } from "@/lib/chaos/schema"
+import { decreeTargetUserId, issueDecree, loadBoard } from "@/lib/chaos/server"
 import type { ChaosDecreeEntry } from "@/lib/chaos/types"
 import { migrationPending } from "@/lib/db-errors"
 import { emitLive } from "@/lib/live/server"
@@ -32,6 +32,7 @@ function eventSide(entry: ChaosDecreeEntry) {
 
 export async function GET(request: Request, { params }: RouteContext) {
   const { id } = await params
+  if (!sessionIdSchema.safeParse(id).success) return failure("session_not_found")
   const supabase = await createClient()
   const view = new URL(request.url).searchParams.get("view")
   try {
@@ -44,6 +45,7 @@ export async function GET(request: Request, { params }: RouteContext) {
 
 export async function POST(request: Request, { params }: RouteContext) {
   const { id } = await params
+  if (!sessionIdSchema.safeParse(id).success) return failure("session_not_found")
   const json: unknown = await request.json().catch(() => null)
   if (json && typeof json === "object" && (json as { action_type?: unknown }).action_type === "target_reroll") {
     return failure("retired_decree")
@@ -66,6 +68,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { response } = outcome
   const entry = response.decree
   const def = getDecree(entry.action_type)
+  const targetUserId = await decreeTargetUserId(supabase, entry)
   emitLive("chaos.decree", {
     sessionId: id,
     actor: { userId: user.id, name: entry.actor_name, avatarUrl: entry.discord_avatar_url },
@@ -75,6 +78,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       cost: entry.cost,
       targetName: decreeTargetName(entry),
       side: eventSide(entry),
+      targetUserId,
       tier: def?.tier,
       headline: response.headline,
       actionId: entry.id,

@@ -118,7 +118,14 @@ function LedgerEntry({ entry, mine, now }: { entry: ChaosDecreeEntry; mine: bool
         </motion.div>
       </div>
 
-      <div className="shrink-0 text-right text-xs font-semibold tabular-nums text-[var(--color-gold)]/80">-{entry.cost}</div>
+      <div
+        className={cn(
+          "shrink-0 text-right text-xs font-semibold tabular-nums text-[var(--color-gold)]/80",
+          entry.status === "refunded" && "text-[var(--color-gold-light)]/45 line-through"
+        )}
+      >
+        -{entry.cost}
+      </div>
     </motion.li>
   )
 }

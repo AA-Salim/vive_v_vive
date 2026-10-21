@@ -34,6 +34,13 @@ export interface LiveEventPayloads {
   "fearless.changed": { action: "cleared" | "removed" | "added"; champion?: string | null }
   "points.changed": { userId: string; delta: number; reason: string }
   "act.changed": { actNumber: number; status: string }
+  "duel.challenged": { challengerName: string; opponentName: string | null; amount: number; side: Side }
+  "duel.accepted": { challengerName: string; opponentName: string; amount: number }
+  "duel.declined": { challengerName: string; opponentName: string }
+  "duel.resolved": { winnerName: string; loserName: string; amount: number }
+  "vote.opened": { closesAt: string }
+  "vote.cast": { category: string }
+  "vote.closed": { mvpName: string | null; interName: string | null }
 }
 
 export type LiveEventType = keyof LiveEventPayloads
@@ -55,6 +62,8 @@ export function domainOf(type: LiveEventType): LiveDomain {
 
 const RESOLUTION_KEYS = [
   "session",
+  "duels",
+  "votes",
   "sessions",
   "bets",
   "chaos",
@@ -85,6 +94,8 @@ const DOMAIN_KEYS: Record<LiveDomain, string[]> = {
   fearless: ["fearless"],
   points: ["points", "leaderboard"],
   act: ["acts"],
+  duel: ["duels", "points"],
+  vote: ["votes", "sidebets", "points", "shame"],
 }
 
 // Query-key roots to invalidate when an event arrives. Feature queries must start with one of these roots.

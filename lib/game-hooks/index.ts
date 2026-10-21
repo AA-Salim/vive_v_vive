@@ -1,12 +1,13 @@
 import { betsHook } from "@/lib/game-hooks/bets"
 import { bountiesHook } from "@/lib/game-hooks/bounties"
 import { chaosHook } from "@/lib/game-hooks/chaos"
+import { duelsHook } from "@/lib/game-hooks/duels"
 import { perksHook } from "@/lib/game-hooks/perks"
 import { sideBetsHook } from "@/lib/game-hooks/side-bets"
 import type { GameCanceledContext, GameHook, GameResolvedContext } from "@/lib/game-hooks/types"
 
 // Order matters: perks read the settled results of every earlier hook.
-const HOOKS: GameHook[] = [betsHook, chaosHook, bountiesHook, sideBetsHook, perksHook]
+const HOOKS: GameHook[] = [betsHook, chaosHook, bountiesHook, sideBetsHook, duelsHook, perksHook]
 
 export async function runGameResolvedHooks(ctx: GameResolvedContext): Promise<string[]> {
   const failures: string[] = []

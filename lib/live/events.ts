@@ -52,8 +52,8 @@ export interface LiveEventPayloads {
     changedAssignmentIds?: string[]
     changedPlayerIds?: string[]
   }
-  "praise.sung": { excerpt: string; reward: number }
-  "praise.judged": { verdict: string; authorName: string; delta: number; authorUserId?: string | null }
+  "praise.sung": { excerpt: string; reward: number; praiseId?: string }
+  "praise.judged": { verdict: string; authorName: string; delta: number; authorUserId?: string | null; praiseId?: string; note?: string | null }
   "sidebet.placed": { market: string; label: string; amount: number }
   "sidebet.resolved": { market: string; label: string; winners: number; payout: number }
   "bounty.placed": { targetName: string; amount: number; targetUserId?: string | null }
@@ -187,6 +187,7 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   prophecy_wagers: ["sidebets", "points"],
   post_game_votes: ["votes", "sidebets", "points"],
   post_game_ballots: ["votes"],
+  praises: ["praise"],
 }
 
 export const ACTIVE_STATUSES: SessionStatus[] = ["coach_draft", "draft", "chaos", "betting", "in_game"]

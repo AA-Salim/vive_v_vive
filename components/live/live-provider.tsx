@@ -74,6 +74,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const playerName = profile?.players?.name ?? null
   const discordName = profile?.discord_username ?? null
   const sessionStatus = session?.status ?? null
+  // A game that ended moments ago (served as a recent result) still has its aftermath ahead after a reload.
+  const resolvedAt = session && RESOLVED_STATUSES.includes(session.status) ? Date.parse(session.updated_at) : null
+  // Whole seconds: the measured delta jitters on every session refetch and would re-render every consumer.
+  const clockOffset = Math.round(serverTimeDelta / 1000) * 1000
 
   const viewer = useMemo<Viewer>(
     () => ({ userId, names: [playerName, discordName].filter((n): n is string => !!n) }),
@@ -152,8 +156,11 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     const wasActive = !!p.status && ACTIVE_STATUSES.includes(p.status)
     const isActive = !!sessionStatus && ACTIVE_STATUSES.includes(sessionStatus)
     if (wasActive && !isActive) p.endedAt = Date.now()
+    else if (!isActive && p.endedAt === null && resolvedAt !== null && Number.isFinite(resolvedAt)) {
+      p.endedAt = Math.min(Date.now(), resolvedAt + clockOffset)
+    }
     p.status = sessionStatus
-  }, [sessionStatus])
+  }, [sessionStatus, resolvedAt, clockOffset])
 
   useEffect(() => {
     const supabase = createClient()
@@ -239,9 +246,6 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("keydown", prime)
     }
   }, [prefs.sound])
-
-  // Whole seconds: the measured delta jitters on every session refetch and would re-render every consumer.
-  const clockOffset = Math.round(serverTimeDelta / 1000) * 1000
 
   const value = useMemo<LiveContextValue>(
     () => ({ status, feed, userId, subscribe, lastEventAt, clockOffset, resync }),

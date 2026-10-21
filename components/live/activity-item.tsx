@@ -35,12 +35,14 @@ export function ActivityItem({ item, clockOffset }: { item: FeedItem; clockOffse
         <Icon className="size-4" aria-hidden />
       </span>
       <div className="relative min-w-0 flex-1">
-        <p className="text-[13px] leading-snug text-foreground">
+        <p className="text-[13px] leading-snug wrap-break-word text-foreground">
           <span className="sr-only">{meta.label}: </span>
           {line.title}
         </p>
         {line.description && (
-          <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{line.description}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs leading-snug wrap-break-word text-muted-foreground">
+            {line.description}
+          </p>
         )}
       </div>
       <RelativeTime

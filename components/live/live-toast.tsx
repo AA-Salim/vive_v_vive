@@ -172,14 +172,16 @@ export function LiveToast({
           </div>
           <p
             className={cn(
-              "mt-0.5 line-clamp-2 text-sm leading-snug font-semibold text-foreground",
+              "mt-0.5 line-clamp-2 text-sm leading-snug font-semibold wrap-break-word text-foreground",
               tone === "royal" && "font-display"
             )}
           >
             {title}
           </p>
           {description && (
-            <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug text-muted-foreground">{description}</p>
+            <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug wrap-break-word text-muted-foreground">
+              {description}
+            </p>
           )}
         </div>
       </div>

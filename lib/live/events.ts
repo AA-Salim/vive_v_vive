@@ -240,12 +240,18 @@ export function isPersistedType(type: string): boolean {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
 
+// Avatars come from Discord: a forged event must not make every client load an image from any host.
+const AVATAR_HOSTS: readonly string[] = ["https://cdn.discordapp.com/", "https://media.discordapp.net/"]
+
+const safeAvatar = (value: unknown): string | null =>
+  typeof value === "string" && value.length <= 512 && AVATAR_HOSTS.some((host) => value.startsWith(host)) ? value : null
+
 function parseActor(value: unknown): LiveActor | null {
   if (!isRecord(value) || typeof value.name !== "string") return null
   return {
     userId: typeof value.userId === "string" ? value.userId : null,
     name: value.name.slice(0, 64),
-    avatarUrl: typeof value.avatarUrl === "string" ? value.avatarUrl : null,
+    avatarUrl: safeAvatar(value.avatarUrl),
   }
 }
 

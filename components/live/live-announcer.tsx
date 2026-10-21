@@ -1,6 +1,6 @@
 "use client"
 
-import { HistoryIcon } from "lucide-react"
+import { HistoryIcon, ZapIcon } from "lucide-react"
 import { toast } from "sonner"
 import { LiveToast } from "@/components/live/live-toast"
 import { metaFor, type DomainMeta } from "@/components/live/domain-meta"
@@ -26,18 +26,33 @@ interface Burst {
   version: number
 }
 
+interface Spill {
+  toastId: string
+  items: Announced[]
+  startedAt: number
+  lastAt: number
+  version: number
+}
+
+interface Announced {
+  event: LiveEvent
+  line: Narration
+}
+
 interface RenderOptions {
   count: number
   version: number
   personal: boolean
-  digest?: boolean
+  // Catch-all toasts (away digest, flood spillover) carry their own label and no actor.
+  meta?: DomainMeta
 }
 
 // A burst keeps updating one toast while related events arrive less than COALESCE_MS apart.
 const COALESCE_MS = 2_500
 const BURST_MAX_MS = 15_000
 const BURST_LIMIT = 50
-// Flood guard: at most this many new toasts per window (personal alerts are exempt).
+// Flood guard: at most this many new toasts per window (personal alerts are exempt). Events over
+// budget are not dropped: they pile into a single "rapid fire" toast that updates in place.
 const BUDGET = 5
 const BUDGET_WINDOW_MS = 8_000
 const AWAY_LIMIT = 30
@@ -51,11 +66,24 @@ const DURATION: Record<LiveTone, number> = {
 }
 
 const DIGEST_META: DomainMeta = { icon: HistoryIcon, label: "Catch up" }
+const SPILL_META: DomainMeta = { icon: ZapIcon, label: "Rapid fire" }
+
+function digest(items: Announced[], title: string): Narration {
+  const recent = items.slice(-2).reverse().map((m) => m.line.title)
+  const more = items.length - recent.length
+  const tones = items.map((m) => liveTone(m.line.tone))
+  return {
+    title,
+    description: recent.join(" · ") + (more > 0 ? ` · +${more} more in the Herald` : ""),
+    tone: TONE_RANK.find((t) => tones.includes(t)) ?? "info",
+  }
+}
 
 export class LiveAnnouncer {
   private bursts = new Map<string, Burst>()
+  private spill: Spill | null = null
   private shown: number[] = []
-  private away: { event: LiveEvent; line: Narration }[] = []
+  private away: Announced[] = []
 
   announce(event: LiveEvent, ctx: AnnounceContext): void {
     const decision = toastDecision(event, { phase: ctx.phase, viewer: ctx.viewer, quiet: ctx.prefs.quiet })
@@ -82,7 +110,11 @@ export class LiveAnnouncer {
       return
     }
 
-    if (!decision.personal && !this.takeBudget(now)) return
+    if (!decision.personal && !this.takeBudget(now)) {
+      this.spillOver({ event, line }, now)
+      if (decision.big) this.cue(liveTone(line.tone), ctx.prefs)
+      return
+    }
     const toastId = `live-${event.id}`
     if (key) this.bursts.set(key, { toastId, events: [event], startedAt: now, lastAt: now, version: 0 })
     this.prune(now)
@@ -100,21 +132,40 @@ export class LiveAnnouncer {
       this.render(`live-${latest.event.id}`, latest.line, latest.event, { count: 1, version: 0, personal: false })
       return
     }
-    const recent = missed.slice(-2).reverse().map((m) => m.line.title)
-    const more = missed.length - recent.length
-    const tones = missed.map((m) => liveTone(m.line.tone))
-    const digest: Narration = {
-      title: `${missed.length} updates while you were away`,
-      description: recent.join(" · ") + (more > 0 ? ` · +${more} more in the Herald` : ""),
-      tone: TONE_RANK.find((t) => tones.includes(t)) ?? "info",
-    }
-    this.render(`live-away-${latest.event.id}`, digest, latest.event, { count: 1, version: 0, personal: false, digest: true })
+    const summary = digest(missed, `${missed.length} updates while you were away`)
+    this.render(`live-away-${latest.event.id}`, summary, latest.event, {
+      count: 1,
+      version: 0,
+      personal: false,
+      meta: DIGEST_META,
+    })
   }
 
   reset(): void {
     this.bursts.clear()
+    this.spill = null
     this.shown = []
     this.away = []
+  }
+
+  private spillOver(item: Announced, now: number) {
+    const open = this.spill && now - this.spill.lastAt < BUDGET_WINDOW_MS && now - this.spill.startedAt < BURST_MAX_MS
+    if (!this.spill || !open) {
+      this.spill = { toastId: `live-spill-${item.event.id}`, items: [item], startedAt: now, lastAt: now, version: 0 }
+      this.render(this.spill.toastId, item.line, item.event, { count: 1, version: 0, personal: false })
+      return
+    }
+    const spill = this.spill
+    spill.items = [...spill.items, item].slice(-BURST_LIMIT)
+    spill.lastAt = now
+    spill.version += 1
+    const summary = digest(spill.items, `${spill.items.length} more updates`)
+    this.render(spill.toastId, summary, item.event, {
+      count: spill.items.length,
+      version: spill.version,
+      personal: false,
+      meta: SPILL_META,
+    })
   }
 
   private takeBudget(now: number): boolean {
@@ -128,6 +179,7 @@ export class LiveAnnouncer {
     for (const [key, burst] of this.bursts) {
       if (now - burst.lastAt > BURST_MAX_MS) this.bursts.delete(key)
     }
+    if (this.spill && now - this.spill.lastAt > BURST_MAX_MS) this.spill = null
   }
 
   private cue(tone: LiveTone, prefs: LivePrefs) {
@@ -136,10 +188,10 @@ export class LiveAnnouncer {
   }
 
   private render(toastId: string, line: Narration, event: LiveEvent, opts: RenderOptions) {
-    const meta = opts.digest ? DIGEST_META : metaFor(event.type)
+    const meta = opts.meta ?? metaFor(event.type)
     const tone = liveTone(line.tone)
-    const duration = DURATION[tone] + (opts.personal || opts.digest ? 2_000 : 0) + opts.version
-    const actor = opts.count > 1 || opts.digest ? null : event.actor
+    const duration = DURATION[tone] + (opts.personal || opts.meta ? 2_000 : 0) + opts.version
+    const actor = opts.count > 1 || opts.meta ? null : event.actor
     toast.custom(
       (id) => (
         <LiveToast

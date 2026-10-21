@@ -58,7 +58,7 @@ BEGIN
   IF p_type IS NULL OR p_type !~ '^[a-z][a-z_]{0,23}\.[a-z][a-z_]{0,31}$' THEN
     RAISE EXCEPTION 'Invalid event type' USING ERRCODE = '22023';
   END IF;
-  IF p_data IS NULL OR jsonb_typeof(p_data) <> 'object' OR octet_length(p_data::text) > 4096 THEN
+  IF p_data IS NULL OR jsonb_typeof(p_data) <> 'object' OR octet_length(p_data::text) > 8192 THEN
     RAISE EXCEPTION 'Invalid event payload' USING ERRCODE = '22023';
   END IF;
   IF p_actor IS NOT NULL AND (jsonb_typeof(p_actor) <> 'object' OR octet_length(p_actor::text) > 1024) THEN

@@ -3,10 +3,73 @@ import { narrate, type Narration } from "@/lib/live/narration"
 
 const fmt = new Intl.NumberFormat("en-US")
 
+const text = (value: unknown, fallback: string) => (typeof value === "string" && value ? value : fallback)
+const points = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? fmt.format(value) : "some")
+
+// Only used when the narration has no line for an event the live policy promises to announce:
+// duel alerts aimed at the viewer, the tribunal and a new act must never vanish silently.
+function fallbackLine(event: LiveEvent): Narration | null {
+  switch (event.type) {
+    case "duel.challenged": {
+      const d = event.data as LiveEventPayloads["duel.challenged"]
+      const challenger = text(d.challengerName, "Someone")
+      return {
+        title: d.opponentName ? `${challenger} challenged ${d.opponentName} to a duel` : `${challenger} threw down an open duel`,
+        description: `${points(d.amount)} points · ${challenger} backs ${d.side === "red" ? "Red" : "Blue"}`,
+        tone: "hype",
+      }
+    }
+    case "duel.accepted": {
+      const d = event.data as LiveEventPayloads["duel.accepted"]
+      const duel = d.challengerName ? `${d.challengerName}'s duel` : "a duel"
+      return {
+        title: `${text(d.opponentName, "Someone")} accepted ${duel}`,
+        description: `${points(d.amount)} points on the line`,
+        tone: "hype",
+      }
+    }
+    case "duel.declined": {
+      const d = event.data as LiveEventPayloads["duel.declined"]
+      const duel = d.challengerName ? `${d.challengerName}'s duel` : "a duel"
+      return {
+        title: `${text(d.opponentName, "Someone")} declined ${duel}`,
+        description: "The gauntlet stays on the floor.",
+        tone: "roast",
+      }
+    }
+    case "duel.resolved": {
+      const d = event.data as LiveEventPayloads["duel.resolved"]
+      return {
+        title: `${text(d.winnerName, "Someone")} won the duel against ${text(d.loserName, "someone")}`,
+        description: `${points(d.amount)} points change hands`,
+        tone: "hype",
+      }
+    }
+    case "vote.opened":
+      return { title: "The tribunal is open", description: "Name the MVP and the inter before it closes.", tone: "royal" }
+    case "vote.closed": {
+      const d = event.data as LiveEventPayloads["vote.closed"]
+      const verdict = [d.mvpName ? `MVP: ${d.mvpName}` : null, d.interName ? `Inter: ${d.interName}` : null]
+      return {
+        title: "The tribunal has spoken",
+        description: verdict.filter(Boolean).join(" · ") || "No verdict this time.",
+        tone: "royal",
+      }
+    }
+    case "act.changed": {
+      const d = event.data as LiveEventPayloads["act.changed"]
+      const act = typeof d.actNumber === "number" ? `Act ${d.actNumber}` : "A new act"
+      return { title: d.status === "active" ? `${act} begins` : `${act} closes its curtain`, tone: "royal" }
+    }
+    default:
+      return null
+  }
+}
+
 // Events come off the network: a malformed payload must never break the feed or the toasts.
 export function safeNarrate(event: LiveEvent): Narration | null {
   try {
-    const line = narrate(event)
+    const line = narrate(event) ?? fallbackLine(event)
     return line && typeof line.title === "string" && line.title ? line : null
   } catch {
     return null

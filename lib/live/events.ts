@@ -17,9 +17,27 @@ export interface LiveEventPayloads {
   "session.rerolled": { lockedCount: number }
   "session.lock": { playerName: string; locked: boolean }
   "coachdraft.pick": { coachName: string; playerName: string; side: Side; lane?: Role | null }
-  "bet.placed": { side: Side; amount: number; insured: boolean }
+  "bet.placed": {
+    side: Side
+    amount: number
+    insured: boolean
+    raised?: boolean
+    total?: number
+    allIn?: boolean
+    early?: boolean
+    whale?: boolean
+  }
   "bet.insured": { side: Side; amount: number; premium: number }
-  "bet.resolved": { winner: Side; totalPool: number; topWinner?: { name: string; payout: number } | null }
+  "bet.resolved": {
+    winner: Side
+    totalPool: number
+    topWinner?: { name: string; payout: number; profit?: number } | null
+    biggestLoser?: { name: string; loss: number } | null
+    allInLosers?: string[]
+    refunded?: boolean
+    bettors?: number
+    insurancePaid?: number
+  }
   "chaos.decree": {
     decree: string
     label: string

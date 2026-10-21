@@ -1,309 +1,172 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { z } from "zod"
+import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
+import { emitLive, getActor } from "@/lib/live/server"
+import { BET_RULES } from "@/lib/betting/rules"
+import { legacyInsureBet, legacyPlaceBet } from "@/lib/betting/server/legacy"
+import { betError, betErrorFromDb } from "@/lib/betting/server/respond"
+import { viewerId } from "@/lib/betting/server/rows"
+import { buildMarketSnapshot } from "@/lib/betting/server/snapshot"
+import type { BetRow, InsureBetResult, PlaceBetResult } from "@/lib/betting/types"
+import type { Side } from "@/lib/types"
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: sessionId } = await params
-  const supabase = await createClient()
+type Params = { params: Promise<{ id: string }> }
 
-  const { data: bets, error } = await supabase
-    .from("bets")
-    .select("*")
-    .eq("session_id", sessionId)
+const SessionIdSchema = z.uuid()
+const RulesSchema = z.union([z.literal(1), z.literal(2)]).optional()
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
+const PlaceSchema = z.object({
+  side: z.enum(["blue", "red"]),
+  amount: z.number().int().min(1).max(BET_RULES.maxStake),
+  insure: z.boolean().optional(),
+  insured: z.boolean().optional(),
+  all_in: z.boolean().optional(),
+  rules: RulesSchema,
+})
 
-  const allBets = bets ?? []
+const InsureSchema = z.object({ rules: RulesSchema })
 
-  const userIds = [...new Set(allBets.map((b) => b.user_id))]
-  const profileMap = new Map<string, { discord_username: string; discord_avatar_url: string | null }>()
-
-  if (userIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from("user_profiles")
-      .select("id, discord_username, discord_avatar_url")
-      .in("id", userIds)
-
-    for (const p of profiles ?? []) {
-      profileMap.set(p.id, {
-        discord_username: p.discord_username,
-        discord_avatar_url: p.discord_avatar_url,
-      })
-    }
-  }
-
-  const activeBets = allBets.filter((b) => b.status === "pending" || b.status === "won" || b.status === "lost")
-  const blueTotal = activeBets
-    .filter((b) => b.side === "blue")
-    .reduce((s, b) => s + b.amount, 0)
-  const redTotal = activeBets
-    .filter((b) => b.side === "red")
-    .reduce((s, b) => s + b.amount, 0)
-  const total = blueTotal + redTotal
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  const userBet = user
-    ? allBets.find((b) => b.user_id === user.id) ?? null
-    : null
-
-  const betDetails = allBets
-    .filter((b) => b.status !== "refunded")
-    .map((b) => {
-      const profile = profileMap.get(b.user_id)
-      return {
-        id: b.id,
-        user_id: b.user_id,
-        side: b.side,
-        amount: b.amount,
-        payout: b.payout,
-        status: b.status,
-        insured: b.insured,
-        discord_username: profile?.discord_username ?? "Unknown",
-        discord_avatar_url: profile?.discord_avatar_url ?? null,
-      }
-    })
-
-  return NextResponse.json({
-    blue_total: blueTotal,
-    red_total: redTotal,
-    total,
-    blue_multiplier: blueTotal > 0 ? total / blueTotal : null,
-    red_multiplier: redTotal > 0 ? total / redTotal : null,
-    bet_count: activeBets.length,
-    user_bet: userBet,
-    bets: betDetails,
-  })
+interface PlaceRpcResult {
+  bet: BetRow
+  staked: number
+  premium: number
+  early: boolean
+  raised: boolean
+  all_in: boolean
+  balance: number
 }
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: sessionId } = await params
-  const supabase = await createClient()
+interface InsureRpcResult {
+  bet: BetRow
+  premium: number
+  balance: number
+}
 
+async function readJson(request: Request): Promise<unknown> {
+  try {
+    return await request.json()
+  } catch {
+    return {}
+  }
+}
+
+export async function GET(_request: Request, { params }: Params) {
+  const { id: sessionId } = await params
+  if (!SessionIdSchema.safeParse(sessionId).success) return betError("session_not_found")
+  const supabase = await createClient()
+  try {
+    const snapshot = await buildMarketSnapshot(supabase, sessionId, viewerId(supabase))
+    return NextResponse.json(snapshot, {
+      headers: { "x-server-time": snapshot.server_time, "cache-control": "no-store" },
+    })
+  } catch {
+    return NextResponse.json({ error: "The bookmaker lost his notebook. Try again." }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request, { params }: Params) {
+  const { id: sessionId } = await params
+  if (!SessionIdSchema.safeParse(sessionId).success) return betError("session_not_found")
+  const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  if (!user) return betError("not_authenticated")
 
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  const parsed = PlaceSchema.safeParse(await readJson(request))
+  if (!parsed.success) {
+    const sideIssue = parsed.error.issues.some((issue) => issue.path[0] === "side")
+    return betError(sideIssue ? "invalid_side" : "invalid_amount")
+  }
+  const body = parsed.data
+  const insure = body.insure ?? body.insured ?? false
+  const allIn = body.all_in ?? false
+
+  let placed: PlaceBetResult | null = null
+  let response: NextResponse
+
+  const v2 =
+    body.rules === 2
+      ? await supabase.rpc("place_bet_v2", {
+          p_session_id: sessionId,
+          p_side: body.side,
+          p_amount: body.amount,
+          p_insure: insure,
+          p_all_in: allIn,
+        })
+      : null
+
+  if (v2 && !v2.error) {
+    const result = v2.data as PlaceRpcResult
+    placed = { ...result, rules: 2 }
+    response = NextResponse.json(placed, { status: result.raised ? 200 : 201 })
+  } else if (v2?.error && !isMissingSchema(v2.error)) {
+    if (allIn && /bet:invalid_amount/.test(v2.error.message ?? "")) {
+      return betError("invalid_amount", "Your purse is empty. There is nothing to shove.")
+    }
+    return betErrorFromDb(v2.error)
+  } else {
+    const legacy = await legacyPlaceBet(supabase, user.id, sessionId, body.side, body.amount, insure)
+    placed = legacy.placed
+    response = legacy.response
   }
 
-  const { side, amount, insured } = (await request.json()) as {
-    side: string
-    amount: number
-    insured?: boolean
+  if (placed) {
+    const total = typeof placed.bet?.amount === "number" ? placed.bet.amount : placed.staked
+    emitLive("bet.placed", {
+      sessionId,
+      actor: await getActor(supabase, user.id),
+      data: {
+        side: body.side,
+        amount: placed.staked,
+        insured: placed.premium > 0 || !!placed.bet?.insured,
+        raised: placed.raised,
+        total,
+        allIn: placed.all_in,
+        early: placed.early,
+        whale: total >= BET_RULES.whaleAmount,
+      },
+    })
+  }
+  return response
+}
+
+export async function PATCH(request: Request, { params }: Params) {
+  const { id: sessionId } = await params
+  if (!SessionIdSchema.safeParse(sessionId).success) return betError("session_not_found")
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return betError("not_authenticated")
+
+  const parsed = InsureSchema.safeParse(await readJson(request))
+  const rules = parsed.success ? parsed.data.rules : undefined
+
+  let insured: (InsureBetResult & { side: Side; amount: number }) | null = null
+  let response: NextResponse
+
+  const v2 = rules === 2 ? await supabase.rpc("insure_bet_v2", { p_session_id: sessionId }) : null
+
+  if (v2 && !v2.error) {
+    const result = v2.data as InsureRpcResult
+    insured = { ...result, rules: 2, side: result.bet.side, amount: result.bet.amount }
+    response = NextResponse.json({ bet: result.bet, premium: result.premium, balance: result.balance, rules: 2 })
+  } else if (v2?.error && !isMissingSchema(v2.error)) {
+    return betErrorFromDb(v2.error)
+  } else {
+    const legacy = await legacyInsureBet(supabase, user.id, sessionId)
+    insured = legacy.insured
+    response = legacy.response
   }
 
-  if (!side || !["blue", "red"].includes(side)) {
-    return NextResponse.json({ error: "Invalid side" }, { status: 400 })
-  }
-  if (!amount || amount < 1 || !Number.isInteger(amount)) {
-    return NextResponse.json(
-      { error: "Amount must be a positive integer" },
-      { status: 400 }
-    )
-  }
-
-  const { data: session } = await supabase
-    .from("game_sessions")
-    .select("status, betting_ends_at")
-    .eq("id", sessionId)
-    .single()
-
-  if (!session || session.status !== "betting") {
-    return NextResponse.json(
-      { error: "Betting is not open" },
-      { status: 400 }
-    )
-  }
-
-  if (
-    session.betting_ends_at &&
-    new Date(session.betting_ends_at) < new Date()
-  ) {
-    return NextResponse.json(
-      { error: "Betting window has closed" },
-      { status: 400 }
-    )
-  }
-
-  // Deduct bet amount
-  const { error: deductError } = await supabase.rpc("adjust_balance", {
-    p_user_id: user.id,
-    p_amount: -amount,
-    p_reason: "bet_placed",
-    p_reference_id: sessionId,
-  })
-
-  if (deductError) {
-    const msg = deductError.message.includes("Debt limit")
-      ? "Debt limit reached (-300 max)"
-      : deductError.message.includes("Insufficient")
-        ? "Insufficient balance"
-        : deductError.message
-    return NextResponse.json({ error: msg }, { status: 400 })
-  }
-
-  // Deduct insurance if requested
-  let insuranceCharged = false
   if (insured) {
-    const { error: insError } = await supabase.rpc("adjust_balance", {
-      p_user_id: user.id,
-      p_amount: -17,
-      p_reason: "insurance_bought",
-      p_reference_id: sessionId,
+    emitLive("bet.insured", {
+      sessionId,
+      actor: await getActor(supabase, user.id),
+      data: { side: insured.side, amount: insured.amount, premium: insured.premium },
     })
-    if (insError) {
-      // Refund the bet amount since insurance failed
-      await supabase.rpc("adjust_balance", {
-        p_user_id: user.id,
-        p_amount: amount,
-        p_reason: "bet_refunded",
-        p_reference_id: sessionId,
-      })
-      return NextResponse.json(
-        { error: "Insufficient balance for insurance" },
-        { status: 400 }
-      )
-    }
-    insuranceCharged = true
   }
-
-  const { data: bet, error: betError } = await supabase
-    .from("bets")
-    .insert({
-      session_id: sessionId,
-      user_id: user.id,
-      side,
-      amount,
-      insured: insuranceCharged,
-    })
-    .select()
-    .single()
-
-  if (betError) {
-    // Refund bet
-    await supabase.rpc("adjust_balance", {
-      p_user_id: user.id,
-      p_amount: amount,
-      p_reason: "bet_refunded",
-      p_reference_id: sessionId,
-    })
-    // Refund insurance if charged
-    if (insuranceCharged) {
-      await supabase.rpc("adjust_balance", {
-        p_user_id: user.id,
-        p_amount: 17,
-        p_reason: "insurance_refunded",
-        p_reference_id: sessionId,
-      })
-    }
-
-    if (betError.code === "23505") {
-      return NextResponse.json(
-        { error: "You already placed a bet on this game" },
-        { status: 409 }
-      )
-    }
-    return NextResponse.json({ error: betError.message }, { status: 500 })
-  }
-
-  return NextResponse.json(bet, { status: 201 })
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id: sessionId } = await params
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-  }
-
-  const { data: session } = await supabase
-    .from("game_sessions")
-    .select("status, betting_ends_at")
-    .eq("id", sessionId)
-    .single()
-
-  if (!session || session.status !== "betting") {
-    return NextResponse.json(
-      { error: "Betting is not open" },
-      { status: 400 }
-    )
-  }
-
-  if (
-    session.betting_ends_at &&
-    new Date(session.betting_ends_at) < new Date()
-  ) {
-    return NextResponse.json(
-      { error: "Betting window has closed" },
-      { status: 400 }
-    )
-  }
-
-  const { data: existingBet } = await supabase
-    .from("bets")
-    .select("*")
-    .eq("session_id", sessionId)
-    .eq("user_id", user.id)
-    .single()
-
-  if (!existingBet) {
-    return NextResponse.json(
-      { error: "No bet found to insure" },
-      { status: 404 }
-    )
-  }
-
-  if (existingBet.insured) {
-    return NextResponse.json(
-      { error: "Bet is already insured" },
-      { status: 409 }
-    )
-  }
-
-  if (existingBet.status !== "pending") {
-    return NextResponse.json(
-      { error: "Can only insure pending bets" },
-      { status: 400 }
-    )
-  }
-
-  const { error: insError } = await supabase.rpc("adjust_balance", {
-    p_user_id: user.id,
-    p_amount: -17,
-    p_reason: "insurance_bought",
-    p_reference_id: existingBet.id,
-  })
-
-  if (insError) {
-    const msg = insError.message.includes("Debt limit")
-      ? "Debt limit reached (-300 max)"
-      : "Insufficient balance for insurance"
-    return NextResponse.json({ error: msg }, { status: 400 })
-  }
-
-  await supabase
-    .from("bets")
-    .update({ insured: true })
-    .eq("id", existingBet.id)
-
-  return NextResponse.json({ ...existingBet, insured: true })
+  return response
 }

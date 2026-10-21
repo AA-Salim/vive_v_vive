@@ -12,18 +12,12 @@ import { StakePicker } from "@/components/betting/stake-picker"
 import { usePlaceBet, type Market } from "@/components/betting/use-market"
 import type { MarketClock } from "@/components/betting/use-clock"
 import { MARKET_COPY } from "@/lib/betting/copy"
-import {
-  coverageFor,
-  maxAffordableAdd,
-  otherSide,
-  premiumFor,
-  projectBet,
-  sideLabel,
-  usesLegacyTerms,
-} from "@/lib/betting/math"
+import { maxAffordableAdd, otherSide, projectBet, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
 import type { PlaceBetInput, PlaceBetResult } from "@/lib/betting/types"
 import type { Side } from "@/lib/types"
+
+const NO_POOLS = { blue: 0, red: 0 }
 
 interface BetSlipProps {
   sessionId: string
@@ -67,7 +61,6 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
 
   const side = current?.side ?? pickedSide
   const purse = balance ?? 0
-  const legacy = usesLegacyTerms(rules, current)
   const allInStake = Math.max(purse, 0)
   const amount = allIn ? allInStake : Number.parseInt(amountText, 10) || 0
   const allInBonus = allIn && rules === 2
@@ -75,20 +68,22 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
   const insureNow = !allInBonus && (alreadyInsured || insure)
   const early = rules === 2 && clock.isEarly
 
-  const projection = side
-    ? projectBet({
-        rules,
-        side,
-        pools: { blue: market.blue_total, red: market.red_total },
-        current,
-        add: amount,
-        early,
-        allIn: allInBonus,
-        insure: insureNow,
-      })
-    : null
+  // Before a side is picked, premiums are quoted at the even-odds floor.
+  const project = (add: number, withInsurance: boolean) =>
+    projectBet({
+      rules,
+      side: side ?? "blue",
+      pools: side ? { blue: market.blue_total, red: market.red_total } : NO_POOLS,
+      current,
+      add,
+      early,
+      allIn: allInBonus,
+      insure: withInsurance,
+    })
+  const projection = side ? project(amount, insureNow) : null
+  const insuredQuote = project(amount, true)
 
-  const maxAdd = maxAffordableAdd(purse, rules, current, insureNow)
+  const maxAdd = maxAffordableAdd(purse, (add) => project(add, insureNow).cost)
   const sliderMax = purse > 0 ? Math.min(purse, maxAdd) : maxAdd
   const stakeAfter = (current?.amount ?? 0) + amount
   const allInEnabled = rules === 2 ? purse >= 1 && (current?.amount ?? 0) + purse >= BET_RULES.allInMin && !alreadyInsured : purse >= 1
@@ -99,12 +94,6 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
       ? `Covers stakes of ${BET_RULES.insuranceMin} or more.`
       : null
   const quoteStake = stakeAfter > 0 ? stakeAfter : 0
-  const premiumQuote = alreadyInsured || insure
-    ? projection?.premiumAdd ?? 0
-    : legacy
-      ? BET_RULES.legacyPremium
-      : Math.max(premiumFor(quoteStake) - (current?.premium ?? 0), 0)
-  const coverageQuote = projection?.insured ? projection.lose.coverage : coverageFor(quoteStake, legacy ? BET_RULES.legacyCoveragePct : BET_RULES.coveragePct)
 
   const reason = clock.isExpired
     ? "Betting has closed."
@@ -160,6 +149,8 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
       insure: insureNow,
       allIn: allInBonus,
       rules,
+      current: current?.amount ?? 0,
+      maxPremium: rules === 2 ? projection.premiumAdd : null,
     }
     if (purse - projection.cost < 0) {
       setPledge({ input, cost: projection.cost })
@@ -206,8 +197,9 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           locked={alreadyInsured}
           onCheckedChange={setInsure}
           disabledReason={insuranceReason}
-          premiumNow={premiumQuote}
-          coverage={coverageQuote}
+          premiumNow={insuredQuote.premiumAdd}
+          premiumPct={insuredQuote.premiumPct}
+          coverage={insuredQuote.lose.coverage}
           stake={quoteStake}
           otherSide={side ? otherSide(side) : null}
         />

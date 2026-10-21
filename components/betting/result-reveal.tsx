@@ -63,7 +63,17 @@ export function ResultReveal({ sessionId, result, bet, viewerId, canceled = fals
     if (settledStatus === "won") fireWinConfetti(settledSide)
   }, [sessionId, settledStatus, settledSide])
 
-  const kind = !settled ? null : settled.status === "refunded" ? "refund" : won ? "win" : settled.insured ? "insured" : "loss"
+  const kind = !settled
+    ? null
+    : settled.status === "refunded"
+      ? canceled
+        ? "canceled"
+        : "refund"
+      : won
+        ? "win"
+        : settled.insured
+          ? "insured"
+          : "loss"
   const flavor =
     settled && settled.status === "lost" && settled.all_in
       ? allInSelfRoast(sessionId)
@@ -74,7 +84,12 @@ export function ResultReveal({ sessionId, result, bet, viewerId, canceled = fals
   const roasts = result.all_in_losers.filter((name) => name !== settled?.name || !settled?.all_in).slice(0, 2)
 
   const banner = result.refunded || canceled
-    ? { icon: RotateCcwIcon, title: canceled ? "Game called off" : "No contest", text: resultLine("refund", sessionId), tone: "text-[var(--color-gold-light)]" }
+    ? {
+        icon: RotateCcwIcon,
+        title: canceled ? "Game called off" : "No contest",
+        text: resultLine(canceled ? "canceled" : "refund", sessionId),
+        tone: "text-[var(--color-gold-light)]",
+      }
     : {
         icon: TrophyIcon,
         title: `${result.winner ? sideLabel(result.winner) : "The"} side wins`,

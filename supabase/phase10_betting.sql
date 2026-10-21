@@ -7,8 +7,10 @@
 --   payout        floor(stake * total_pool / winning_pool), refund everyone when one side is empty
 --   early boost   stake placed in the first 60 s of the window earns +10% of its share of the profit
 --   all-in        staking the whole balance (total stake >= 100) earns +15% of the profit, cannot be insured
---   insurance     premium ceil(33% of stake) paid now and kept on a win; a loss returns floor(60% of stake);
---                 premiums are refunded only when the bet itself is refunded
+--   insurance     a loss returns floor(60% of stake). The premium is priced from the pool when bought:
+--                 ceil(66% x the other side's share of the pool), between 33% and 60% of the stake, so it stays
+--                 negative EV for long shots too. Paid now, kept on a win, refunded only with the bet itself.
+--                 Raising an insured bet prices only the added stake.
 --   legacy bets   rows placed before this migration keep their terms (flat 17 premium refunded on a win,
 --                 50% of the stake back on a loss)
 
@@ -84,6 +86,8 @@ LANGUAGE sql IMMUTABLE AS $$
     'all_in_bonus_pct', 15,
     'all_in_min', 100,
     'premium_pct', 33,
+    'premium_max_pct', 60,
+    'premium_load_pct', 110,
     'coverage_pct', 60,
     'insurance_min', 10,
     'debt_floor', -300,
@@ -104,16 +108,46 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   )
 $$;
 
+-- Guardian Angel premium in percent of the insured stake, priced from the pending pools at purchase time
+-- (p_side_pool already includes the stake being insured). The other side's share of the pool is the implied
+-- chance of losing: a flat price would make insuring long shots free money.
+CREATE OR REPLACE FUNCTION bet_v2_premium_pct(p_side_pool INTEGER, p_other_pool INTEGER) RETURNS INTEGER
+LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT CASE
+    WHEN COALESCE(p_other_pool, 0) <= 0 OR COALESCE(p_side_pool, 0) <= 0 THEN (r->>'premium_pct')::INT
+    ELSE LEAST(
+      GREATEST(
+        CEIL(
+          (r->>'coverage_pct')::INT * (r->>'premium_load_pct')::INT * p_other_pool::NUMERIC
+            / (100 * (p_side_pool + p_other_pool))
+        )::INT,
+        (r->>'premium_pct')::INT
+      ),
+      (r->>'premium_max_pct')::INT
+    )
+  END
+  FROM (SELECT bet_rules_v2() AS r) rules
+$$;
+
 -- ============================================================
 -- PLACE / RAISE
 -- ============================================================
 
+-- Earlier drafts of these functions had shorter signatures; drop them so PostgREST resolves a single candidate.
+DROP FUNCTION IF EXISTS place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN);
+DROP FUNCTION IF EXISTS insure_bet_v2(UUID);
+
+-- p_current is the stake the client saw (0 for a new bet): a double submit or a stale tab is rejected instead of
+-- silently becoming a raise. For an all-in, p_amount must equal the purse the client showed. p_max_premium is the
+-- premium the client showed: if the odds moved against the bettor before the call landed, it is rejected.
 CREATE OR REPLACE FUNCTION place_bet_v2(
   p_session_id UUID,
   p_side TEXT,
   p_amount INTEGER,
   p_insure BOOLEAN DEFAULT false,
-  p_all_in BOOLEAN DEFAULT false
+  p_all_in BOOLEAN DEFAULT false,
+  p_current INTEGER DEFAULT NULL,
+  p_max_premium INTEGER DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -124,10 +158,14 @@ DECLARE
   v_balance INTEGER;
   v_bet bets%ROWTYPE;
   v_has_bet BOOLEAN;
+  v_was_insured BOOLEAN;
   v_all_in BOOLEAN := COALESCE(p_all_in, false);
   v_insured BOOLEAN;
   v_stake INTEGER;
   v_total INTEGER;
+  v_side_pool INTEGER;
+  v_other_pool INTEGER;
+  v_premium_pct INTEGER := 0;
   v_premium INTEGER := 0;
   v_cost INTEGER;
   v_opened TIMESTAMPTZ;
@@ -151,6 +189,10 @@ BEGIN
   SELECT * INTO v_bet FROM bets WHERE session_id = p_session_id AND user_id = v_user FOR UPDATE;
   v_has_bet := FOUND;
 
+  IF p_current IS NOT NULL AND p_current <> (CASE WHEN v_has_bet THEN v_bet.amount ELSE 0 END) THEN
+    RAISE EXCEPTION 'bet:stale_position';
+  END IF;
+
   IF v_has_bet THEN
     IF v_bet.status <> 'pending' THEN RAISE EXCEPTION 'bet:bet_settled'; END IF;
     IF v_bet.side <> p_side THEN RAISE EXCEPTION 'bet:side_locked'; END IF;
@@ -158,11 +200,14 @@ BEGIN
     IF v_bet.scheme = 'legacy' AND v_bet.insured THEN RAISE EXCEPTION 'bet:legacy_locked'; END IF;
   END IF;
 
-  v_insured := (v_has_bet AND v_bet.insured) OR COALESCE(p_insure, false);
+  v_was_insured := v_has_bet AND v_bet.insured;
+  v_insured := v_was_insured OR COALESCE(p_insure, false);
 
   IF v_all_in THEN
     IF v_insured THEN RAISE EXCEPTION 'bet:all_in_uninsurable'; END IF;
     v_stake := v_balance;
+    IF v_stake < 1 THEN RAISE EXCEPTION 'bet:invalid_amount'; END IF;
+    IF p_amount IS NOT NULL AND p_amount <> v_balance THEN RAISE EXCEPTION 'bet:purse_changed'; END IF;
   ELSE
     v_stake := p_amount;
   END IF;
@@ -179,12 +224,17 @@ BEGIN
 
   IF v_insured THEN
     IF v_total < (v_rules->>'insurance_min')::INT THEN RAISE EXCEPTION 'bet:insurance_too_small'; END IF;
-    -- Premium is always ceil(33% of the total stake); raises only pay the difference.
-    v_premium := GREATEST(
-      CEIL(v_total::NUMERIC * (v_rules->>'premium_pct')::INT / 100)::INT
-        - CASE WHEN v_has_bet THEN v_bet.premium ELSE 0 END,
-      0
-    );
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE side = p_side), 0) + v_stake,
+      COALESCE(SUM(amount) FILTER (WHERE side <> p_side), 0)
+    INTO v_side_pool, v_other_pool
+    FROM bets WHERE session_id = p_session_id AND status = 'pending';
+    v_premium_pct := bet_v2_premium_pct(v_side_pool, v_other_pool);
+    -- An insured bet only pays for the points it adds; insuring now covers the whole stake.
+    v_premium := CEIL(
+      (CASE WHEN v_was_insured THEN v_stake ELSE v_total END)::NUMERIC * v_premium_pct / 100
+    )::INT;
+    IF p_max_premium IS NOT NULL AND v_premium > p_max_premium THEN RAISE EXCEPTION 'bet:premium_changed'; END IF;
   END IF;
 
   v_cost := v_stake + v_premium;
@@ -226,13 +276,14 @@ BEGIN
 
   PERFORM adjust_balance(v_user, -v_stake, 'bet_placed', p_session_id);
   IF v_premium > 0 THEN
-    PERFORM adjust_balance(v_user, -v_premium, 'insurance_bought', p_session_id);
+    PERFORM adjust_balance(v_user, -v_premium, 'insurance_bought', v_bet.id);
   END IF;
 
   RETURN jsonb_build_object(
     'bet', to_jsonb(v_bet),
     'staked', v_stake,
     'premium', v_premium,
+    'premium_pct', v_premium_pct,
     'early', v_early,
     'raised', v_has_bet,
     'all_in', v_all_in,
@@ -245,7 +296,7 @@ $$;
 -- INSURE AN EXISTING BET
 -- ============================================================
 
-CREATE OR REPLACE FUNCTION insure_bet_v2(p_session_id UUID) RETURNS JSONB
+CREATE OR REPLACE FUNCTION insure_bet_v2(p_session_id UUID, p_max_premium INTEGER DEFAULT NULL) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_user UUID := auth.uid();
@@ -253,6 +304,9 @@ DECLARE
   v_session game_sessions%ROWTYPE;
   v_balance INTEGER;
   v_bet bets%ROWTYPE;
+  v_side_pool INTEGER;
+  v_other_pool INTEGER;
+  v_premium_pct INTEGER;
   v_premium INTEGER;
 BEGIN
   IF v_user IS NULL THEN RAISE EXCEPTION 'bet:not_authenticated'; END IF;
@@ -274,10 +328,14 @@ BEGIN
   IF v_bet.all_in THEN RAISE EXCEPTION 'bet:all_in_uninsurable'; END IF;
   IF v_bet.amount < (v_rules->>'insurance_min')::INT THEN RAISE EXCEPTION 'bet:insurance_too_small'; END IF;
 
-  v_premium := GREATEST(
-    CEIL(v_bet.amount::NUMERIC * (v_rules->>'premium_pct')::INT / 100)::INT - v_bet.premium,
-    0
-  );
+  SELECT
+    COALESCE(SUM(amount) FILTER (WHERE side = v_bet.side), 0),
+    COALESCE(SUM(amount) FILTER (WHERE side <> v_bet.side), 0)
+  INTO v_side_pool, v_other_pool
+  FROM bets WHERE session_id = p_session_id AND status = 'pending';
+  v_premium_pct := bet_v2_premium_pct(v_side_pool, v_other_pool);
+  v_premium := CEIL(v_bet.amount::NUMERIC * v_premium_pct / 100)::INT;
+  IF p_max_premium IS NOT NULL AND v_premium > p_max_premium THEN RAISE EXCEPTION 'bet:premium_changed'; END IF;
   IF v_balance - v_premium < (v_rules->>'debt_floor')::INT THEN RAISE EXCEPTION 'bet:debt_limit'; END IF;
 
   UPDATE bets SET
@@ -288,11 +346,14 @@ BEGIN
   WHERE id = v_bet.id
   RETURNING * INTO v_bet;
 
-  IF v_premium > 0 THEN
-    PERFORM adjust_balance(v_user, -v_premium, 'insurance_bought', v_bet.id);
-  END IF;
+  PERFORM adjust_balance(v_user, -v_premium, 'insurance_bought', v_bet.id);
 
-  RETURN jsonb_build_object('bet', to_jsonb(v_bet), 'premium', v_premium, 'balance', v_balance - v_premium);
+  RETURN jsonb_build_object(
+    'bet', to_jsonb(v_bet),
+    'premium', v_premium,
+    'premium_pct', v_premium_pct,
+    'balance', v_balance - v_premium
+  );
 END;
 $$;
 
@@ -333,7 +394,6 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   v_rules JSONB := bet_rules_v2();
   v_session game_sessions%ROWTYPE;
-  v_loser_status TEXT;
   v_total INTEGER;
   v_win_pool INTEGER;
   v_count INTEGER;
@@ -353,8 +413,9 @@ BEGIN
   SELECT * INTO v_session FROM game_sessions WHERE id = p_session_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'bet:session_not_found'; END IF;
   IF NOT bet_v2_can_settle(v_session.created_by) THEN RAISE EXCEPTION 'bet:not_authorized'; END IF;
-  v_loser_status := (CASE WHEN p_winner_side = 'blue' THEN 'red' ELSE 'blue' END) || '_win';
-  IF v_session.status IN ('canceled', 'expired', v_loser_status) THEN
+  -- Only a game that is being played (the declare flow settles before flipping the status) or already won by
+  -- this side: never while the betting window is open.
+  IF v_session.status NOT IN ('in_game', p_winner_side || '_win') THEN
     RAISE EXCEPTION 'bet:invalid_state';
   END IF;
 
@@ -459,11 +520,11 @@ $$;
 -- PRIVILEGES
 -- ============================================================
 
-REVOKE EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN) TO authenticated;
+REVOKE EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN, INTEGER, INTEGER) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN, INTEGER, INTEGER) TO authenticated;
 
-REVOKE EXECUTE ON FUNCTION insure_bet_v2(UUID) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION insure_bet_v2(UUID) TO authenticated;
+REVOKE EXECUTE ON FUNCTION insure_bet_v2(UUID, INTEGER) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION insure_bet_v2(UUID, INTEGER) TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION resolve_bets_v2(UUID, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION resolve_bets_v2(UUID, TEXT) TO authenticated;
@@ -473,6 +534,24 @@ GRANT EXECUTE ON FUNCTION refund_all_bets_v2(UUID) TO authenticated;
 
 REVOKE EXECUTE ON FUNCTION bet_v2_refund_pending(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION bet_v2_can_settle(UUID) FROM PUBLIC, anon, authenticated;
+
+-- The pre-v2 route inserts bets with the caller's role, so direct inserts stay allowed, but only as a plain pending
+-- row on an open window: premiums, coverage, boosts and settled rows can only come from the functions above.
+DROP POLICY IF EXISTS "bets_insert" ON bets;
+CREATE POLICY "bets_insert" ON bets FOR INSERT WITH CHECK (
+  auth.uid() = user_id
+  AND status = 'pending'
+  AND payout IS NULL
+  AND scheme = 'legacy'
+  AND premium = 0
+  AND coverage_pct = 0
+  AND early_amount = 0
+  AND NOT all_in
+  AND bonus = 0
+  AND raises = 0
+  AND raised_at IS NULL
+  AND EXISTS (SELECT 1 FROM game_sessions g WHERE g.id = bets.session_id AND g.status = 'betting')
+);
 
 -- bets and game_sessions are already published; kept for completeness on fresh projects.
 SELECT vvv_add_to_realtime('bets');

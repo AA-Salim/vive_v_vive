@@ -30,8 +30,18 @@ export function poolPayout(stake: number, sidePool: number, total: number): numb
   return Math.floor((stake * total) / sidePool)
 }
 
-export function premiumFor(stake: number): number {
-  return Math.ceil((stake * BET_RULES.premiumPct) / 100)
+// Mirrors bet_v2_premium_pct(): the other side's share of the pool is the implied chance of losing, so long
+// shots cost more to insure. sidePool must already include the stake being insured.
+export function premiumPctFor(sidePool: number, otherPool: number): number {
+  if (otherPool <= 0 || sidePool <= 0) return BET_RULES.premiumPct
+  const scaled = Math.ceil(
+    (BET_RULES.coveragePct * BET_RULES.premiumLoadPct * otherPool) / (100 * (sidePool + otherPool))
+  )
+  return Math.min(Math.max(scaled, BET_RULES.premiumPct), BET_RULES.premiumMaxPct)
+}
+
+export function premiumFor(stake: number, pct: number): number {
+  return Math.ceil((stake * pct) / 100)
 }
 
 export function coverageFor(stake: number, pct: number): number {
@@ -69,6 +79,7 @@ export interface Projection {
   cost: number
   premiumAdd: number
   premiumTotal: number
+  premiumPct: number
   insured: boolean
   allIn: boolean
   legacyTerms: boolean
@@ -88,22 +99,26 @@ export function projectBet(input: ProjectionInput): Projection {
   const legacyTerms = usesLegacyTerms(rules, current)
   const stake = (current?.amount ?? 0) + add
   const sidePool = (side === "blue" ? pools.blue : pools.red) + add
-  const total = pools.blue + pools.red + add
-  const oneSided = total - sidePool <= 0
-  const insured = !!current?.insured || insure
+  const otherPool = side === "blue" ? pools.red : pools.blue
+  const total = sidePool + otherPool
+  const oneSided = otherPool <= 0
+  const wasInsured = !!current?.insured
+  const insured = wasInsured || insure
   const allIn = !legacyTerms && (!!current?.all_in || input.allIn)
 
   let premiumTotal = 0
   let premiumAdd = 0
+  let premiumPct = 0
   let coverage = 0
   if (insured && stake > 0) {
     if (legacyTerms) {
       premiumTotal = BET_RULES.legacyPremium
-      premiumAdd = current?.insured ? 0 : BET_RULES.legacyPremium
+      premiumAdd = wasInsured ? 0 : BET_RULES.legacyPremium
       coverage = coverageFor(stake, BET_RULES.legacyCoveragePct)
     } else {
-      premiumTotal = Math.max(premiumFor(stake), current?.premium ?? 0)
-      premiumAdd = premiumTotal - (current?.premium ?? 0)
+      premiumPct = premiumPctFor(sidePool, otherPool)
+      premiumAdd = premiumFor(wasInsured ? add : stake, premiumPct)
+      premiumTotal = (current?.premium ?? 0) + premiumAdd
       coverage = coverageFor(stake, current?.insured && current.coverage_pct > 0 ? current.coverage_pct : BET_RULES.coveragePct)
     }
   }
@@ -121,6 +136,7 @@ export function projectBet(input: ProjectionInput): Projection {
     cost: add + premiumAdd,
     premiumAdd,
     premiumTotal,
+    premiumPct,
     insured,
     allIn,
     legacyTerms,
@@ -143,28 +159,17 @@ export function projectBet(input: ProjectionInput): Projection {
   }
 }
 
-// Largest extra stake that keeps the balance above the debt floor once the premium is included.
-export function maxAffordableAdd(
-  balance: number,
-  rules: RulesVersion,
-  current: ExistingStake | null,
-  insure: boolean
-): number {
+// Largest extra stake that keeps the balance above the debt floor once the premium is included. The result is
+// always affordable; a pool-priced premium can step down as the stake grows, so it may sit a point under the
+// true maximum.
+export function maxAffordableAdd(balance: number, costOf: (add: number) => number): number {
   const budget = balance - BET_RULES.debtFloor
   if (budget <= 0) return 0
-  const insured = !!current?.insured || insure
-  const legacyTerms = usesLegacyTerms(rules, current)
-  const cost = (add: number) => {
-    if (!insured) return add
-    if (legacyTerms) return add + (current?.insured ? 0 : BET_RULES.legacyPremium)
-    const stake = (current?.amount ?? 0) + add
-    return add + Math.max(premiumFor(stake) - (current?.premium ?? 0), 0)
-  }
   let lo = 0
   let hi = Math.min(budget, BET_RULES.maxStake)
   while (lo < hi) {
     const mid = Math.ceil((lo + hi) / 2)
-    if (cost(mid) <= budget) lo = mid
+    if (costOf(mid) <= budget) lo = mid
     else hi = mid - 1
   }
   return lo

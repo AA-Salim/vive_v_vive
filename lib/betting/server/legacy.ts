@@ -1,11 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { isMissingSchema } from "@/lib/db-errors"
 import { BET_RULES } from "@/lib/betting/rules"
 import { betError, betErrorFromDb } from "@/lib/betting/server/respond"
 import type { InsureBetResult, PlaceBetResult } from "@/lib/betting/types"
 import type { Side } from "@/lib/types"
 
 // Pre-migration betting flow, kept so bets keep working until phase10_betting.sql is applied.
+
+// Once the migration is live, a client that does not speak the v2 rules is a tab opened before the deploy: it
+// must refresh instead of buying the old flat insurance, which pays out far more than it costs.
+export async function legacyFlowStatus(supabase: SupabaseClient): Promise<NextResponse | null> {
+  const { error } = await supabase.from("bets").select("scheme").limit(1)
+  if (!error) return betError("refresh_required")
+  return isMissingSchema(error) ? null : betErrorFromDb(error)
+}
 
 async function openWindowError(supabase: SupabaseClient, sessionId: string) {
   const { data: session } = await supabase

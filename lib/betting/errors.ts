@@ -20,6 +20,9 @@ export type BetErrorCode =
   | "not_authorized"
   | "invalid_state"
   | "refresh_required"
+  | "stale_position"
+  | "purse_changed"
+  | "premium_changed"
 
 export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string }> = {
   not_authenticated: { status: 401, message: "Log in with Discord to bet." },
@@ -41,6 +44,12 @@ export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string 
   not_authorized: { status: 403, message: "Only the game creator or an admin can settle bets." },
   invalid_state: { status: 409, message: "This game cannot be settled right now." },
   refresh_required: { status: 409, message: "The betting rules changed. Refresh the page to keep betting." },
+  stale_position: { status: 409, message: "Your wager already changed. Check it in the notebook before betting again." },
+  purse_changed: { status: 409, message: "Your purse changed. Check the new all-in amount and shove again." },
+  premium_changed: {
+    status: 409,
+    message: "The odds moved and the Guardian Angel raised her price. Check the new premium and confirm again.",
+  },
 }
 
 const CODE_PATTERN = /bet:([a-z_]+)/

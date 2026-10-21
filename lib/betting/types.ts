@@ -93,12 +93,17 @@ export interface PlaceBetInput {
   insure: boolean
   allIn: boolean
   rules: RulesVersion
+  // The stake the slip was built on (0 for a new bet) and the premium it showed: the server rejects the bet
+  // if either is out of date instead of charging something the bettor never saw.
+  current: number
+  maxPremium: number | null
 }
 
 export interface PlaceBetResult {
   bet: Partial<BetRow> | null
   staked: number
   premium: number
+  premium_pct?: number
   early: boolean
   raised: boolean
   all_in: boolean
@@ -109,6 +114,7 @@ export interface PlaceBetResult {
 export interface InsureBetResult {
   bet: Partial<BetRow> | null
   premium: number
+  premium_pct?: number
   balance: number | null
   rules: RulesVersion
 }

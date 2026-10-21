@@ -58,7 +58,12 @@ const INSURED_LOSS_LINES = [
 
 const REFUND_LINES = [
   "Nobody took the other side. Stakes and premiums returned.",
+  "A one-sided pool pays nobody. The notebook hands everything back.",
+]
+
+const CANCELED_LINES = [
   "The game was called off. The notebook tears out the page.",
+  "No game, no wager. Stakes and premiums returned, pride intact.",
 ]
 
 function seededIndex(seed: string, length: number): number {
@@ -75,7 +80,15 @@ export function allInSelfRoast(seed: string): string {
   return ALL_IN_SELF_ROASTS[seededIndex(seed, ALL_IN_SELF_ROASTS.length)]
 }
 
-export function resultLine(kind: "win" | "loss" | "insured" | "refund", seed: string): string {
-  const pool = kind === "win" ? WIN_LINES : kind === "loss" ? LOSS_LINES : kind === "insured" ? INSURED_LOSS_LINES : REFUND_LINES
+const RESULT_LINES = {
+  win: WIN_LINES,
+  loss: LOSS_LINES,
+  insured: INSURED_LOSS_LINES,
+  refund: REFUND_LINES,
+  canceled: CANCELED_LINES,
+} as const
+
+export function resultLine(kind: keyof typeof RESULT_LINES, seed: string): string {
+  const pool = RESULT_LINES[kind]
   return pool[seededIndex(seed, pool.length)]
 }

@@ -7,6 +7,8 @@ export const BET_RULES = {
   allInBonusPct: 15,
   allInMin: 100,
   premiumPct: 33,
+  premiumMaxPct: 60,
+  premiumLoadPct: 110,
   coveragePct: 60,
   insuranceMin: 10,
   debtFloor: -300,

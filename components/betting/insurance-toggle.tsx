@@ -18,6 +18,7 @@ interface InsuranceToggleProps {
   onCheckedChange: (checked: boolean) => void
   disabledReason: string | null
   premiumNow: number
+  premiumPct: number
   coverage: number
   stake: number
   otherSide: Side | null
@@ -36,14 +37,18 @@ export function InsuranceTerms({ rules }: { rules: RulesVersion }) {
     <div className="space-y-1.5 text-xs leading-relaxed">
       <p className="font-semibold text-[var(--color-gold)]">{MARKET_COPY.insuranceTitle}: the exact terms</p>
       <p>
-        <span className="font-semibold">Premium:</span> {BET_RULES.premiumPct}% of your stake, rounded up, paid now. Kept by the house if you win.
+        <span className="font-semibold">Premium:</span> priced from the pool the moment you buy. {BET_RULES.premiumPct}% of your stake
+        at even odds or as the favorite, more for a long shot, up to {BET_RULES.premiumMaxPct}%. Paid now, kept by the house if you win.
       </p>
       <p>
         <span className="font-semibold">Coverage:</span> {BET_RULES.coveragePct}% of your stake, rounded down, paid only if your side loses.
       </p>
-      <p>Raising an insured bet adds premium for the new points. Stakes of {BET_RULES.insuranceMin}+ only. All-in bets cannot be insured.</p>
+      <p>
+        Raising an insured bet insures the new points at the current price. Stakes of {BET_RULES.insuranceMin}+ only. All-in bets cannot
+        be insured.
+      </p>
       <p>Canceled game or nobody on the other side: stake and premium both come back.</p>
-      <p className="text-muted-foreground">At 50/50 odds it costs about 3% of your stake on average. It buys peace of mind, not profit.</p>
+      <p className="text-muted-foreground">Priced so it never pays for itself on average. It buys peace of mind, not profit.</p>
     </div>
   )
 }
@@ -56,23 +61,25 @@ export function InsuranceToggle({
   onCheckedChange,
   disabledReason,
   premiumNow,
+  premiumPct,
   coverage,
   stake,
   otherSide,
 }: InsuranceToggleProps) {
   const on = checked || locked
   const loser = otherSide ? sideLabel(otherSide) : "the other side"
+  const rate = premiumPct > 0 ? ` (${premiumPct}%)` : ""
   const quote =
     stake <= 0
       ? rules === 2
-        ? `Costs ${BET_RULES.premiumPct}% of your stake. Returns ${BET_RULES.coveragePct}% if your side loses.`
+        ? `From ${BET_RULES.premiumPct}% of your stake, more for a long shot. Returns ${BET_RULES.coveragePct}% if your side loses.`
         : `Costs ${BET_RULES.legacyPremium}. Returns half your stake if you lose, refunded if you win.`
       : locked
         ? premiumNow > 0
-          ? `Covers the raise for ${premiumNow} more. If ${loser} wins, ${coverage} comes back.`
+          ? `Covers the raise for ${premiumNow} more${rate}. If ${loser} wins, ${coverage} comes back.`
           : `Insured. If ${loser} wins, ${coverage} comes back.`
         : rules === 2
-          ? `Pay ${premiumNow} now. If ${loser} wins, ${coverage} of your ${stake} comes back.`
+          ? `Pay ${premiumNow} now${rate}. If ${loser} wins, ${coverage} of your ${stake} comes back.`
           : `Pay ${premiumNow} now. If ${loser} wins, ${coverage} comes back. Refunded if you win.`
 
   return (
@@ -114,7 +121,7 @@ export function InsuranceToggle({
         <Switch
           id={id}
           checked={on}
-          disabled={locked || !!disabledReason}
+          disabled={locked || (!!disabledReason && !checked)}
           onCheckedChange={(value) => onCheckedChange(value)}
           aria-describedby={`${id}-quote`}
           className="data-checked:bg-emerald-500"

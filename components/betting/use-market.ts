@@ -23,7 +23,7 @@ export class BetRequestError extends Error {
 }
 
 export const marketKey = (sessionId: string) => ["bets", sessionId] as const
-export const bettingBalanceKey = (userId: string | null) => ["points", "balance", "betting", userId] as const
+export const bettingBalanceKey = (userId: string | null) => ["points", userId ?? "anonymous", "betting"] as const
 
 async function fetchMarket(sessionId: string): Promise<Market> {
   const res = await fetch(`/api/sessions/${sessionId}/bets`, { cache: "no-store" })
@@ -133,6 +133,8 @@ export function usePlaceBet(sessionId: string, userId: string | null) {
         amount: input.amount,
         insure: input.insure,
         all_in: input.allIn,
+        current: input.current,
+        max_premium: input.maxPremium,
         rules: input.rules,
       }),
     onMutate: async (input) => {
@@ -150,7 +152,7 @@ export function usePlaceBet(sessionId: string, userId: string | null) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: marketKey(sessionId) })
-      queryClient.invalidateQueries({ queryKey: ["points"] })
+      queryClient.invalidateQueries({ queryKey: ["points", userId ?? "anonymous"] })
     },
   })
 }
@@ -158,13 +160,17 @@ export function usePlaceBet(sessionId: string, userId: string | null) {
 export function useInsureBet(sessionId: string, userId: string | null) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (rules: RulesVersion) => send<InsureBetResult>(`/api/sessions/${sessionId}/bets`, "PATCH", { rules }),
+    mutationFn: (input: { rules: RulesVersion; maxPremium: number | null }) =>
+      send<InsureBetResult>(`/api/sessions/${sessionId}/bets`, "PATCH", {
+        rules: input.rules,
+        max_premium: input.maxPremium,
+      }),
     onSuccess: (result) => {
       if (typeof result.balance === "number") queryClient.setQueryData(bettingBalanceKey(userId), result.balance)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: marketKey(sessionId) })
-      queryClient.invalidateQueries({ queryKey: ["points"] })
+      queryClient.invalidateQueries({ queryKey: ["points", userId ?? "anonymous"] })
     },
   })
 }

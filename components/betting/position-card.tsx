@@ -9,7 +9,7 @@ import { BetTags } from "@/components/betting/bet-tags"
 import { PayoutPreview } from "@/components/betting/payout-preview"
 import { useInsureBet, type Market } from "@/components/betting/use-market"
 import { MARKET_COPY } from "@/lib/betting/copy"
-import { coverageFor, otherSide, premiumFor, projectBet, sideLabel } from "@/lib/betting/math"
+import { coverageFor, otherSide, premiumFor, premiumPctFor, projectBet, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
 import type { MarketBet } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -24,16 +24,35 @@ interface PositionCardProps {
   onRaise?: () => void
 }
 
-function insuranceQuote(market: Market, bet: MarketBet): { premium: number; coverage: number; available: boolean; reason: string | null } {
-  if (bet.insured) return { premium: 0, coverage: 0, available: false, reason: null }
-  if (bet.all_in) return { premium: 0, coverage: 0, available: false, reason: "All-in bets cannot be insured." }
+interface InsuranceQuote {
+  premium: number
+  pct: number
+  coverage: number
+  available: boolean
+  reason: string | null
+}
+
+const NO_QUOTE = { premium: 0, pct: 0, coverage: 0, available: false }
+
+function insuranceQuote(market: Market, bet: MarketBet): InsuranceQuote {
+  if (bet.insured) return { ...NO_QUOTE, reason: null }
+  if (bet.all_in) return { ...NO_QUOTE, reason: "All-in bets cannot be insured." }
   if (market.rules_version === 1) {
-    return { premium: 0, coverage: 0, available: false, reason: "Under the current rules, insurance is bought together with the bet." }
+    return { ...NO_QUOTE, reason: "Under the current rules, insurance is bought together with the bet." }
   }
   if (bet.amount < BET_RULES.insuranceMin) {
-    return { premium: 0, coverage: 0, available: false, reason: `Insurance covers stakes of ${BET_RULES.insuranceMin} or more.` }
+    return { ...NO_QUOTE, reason: `Insurance covers stakes of ${BET_RULES.insuranceMin} or more.` }
   }
-  return { premium: premiumFor(bet.amount), coverage: coverageFor(bet.amount, BET_RULES.coveragePct), available: true, reason: null }
+  const mine = bet.side === "blue" ? market.blue_total : market.red_total
+  const theirs = bet.side === "blue" ? market.red_total : market.blue_total
+  const pct = premiumPctFor(mine, theirs)
+  return {
+    premium: premiumFor(bet.amount, pct),
+    pct,
+    coverage: coverageFor(bet.amount, BET_RULES.coveragePct),
+    available: true,
+    reason: null,
+  }
 }
 
 export function PositionCard({ sessionId, market, bet, userId, balance, open, onRaise }: PositionCardProps) {
@@ -56,10 +75,10 @@ export function PositionCard({ sessionId, market, bet, userId, balance, open, on
   const overLimit = purse - quote.premium < BET_RULES.debtFloor
 
   const buyInsurance = () => {
-    insure.mutate(market.rules_version, {
+    insure.mutate({ rules: market.rules_version, maxPremium: quote.premium }, {
       onSuccess: (result) =>
         toast.success(`${MARKET_COPY.insuranceTitle} hired.`, {
-          description: `${quote.coverage} comes back if ${sideLabel(otherSide(bet.side))} wins. The ${result.premium} premium is the house's either way.`,
+          description: `${quote.coverage} comes back if ${sideLabel(otherSide(bet.side))} wins. The ${result.premium} premium stays with the house unless the game is called off.`,
         }),
       onError: (error) => toast.error(error.message),
     })
@@ -101,7 +120,7 @@ export function PositionCard({ sessionId, market, bet, userId, balance, open, on
                 Hire the {MARKET_COPY.insuranceTitle} for {quote.premium}
               </span>
               <span className="text-[11px] font-normal text-emerald-300/75">
-                {quote.coverage} back if {sideLabel(otherSide(bet.side))} wins
+                {quote.coverage} back if {sideLabel(otherSide(bet.side))} wins · {quote.pct}% of your stake
               </span>
             </Button>
           )}

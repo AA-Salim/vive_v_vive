@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
 import { emitLive, getActor } from "@/lib/live/server"
 import { BET_RULES } from "@/lib/betting/rules"
-import { legacyInsureBet, legacyPlaceBet } from "@/lib/betting/server/legacy"
+import { legacyFlowStatus, legacyInsureBet, legacyPlaceBet } from "@/lib/betting/server/legacy"
 import { betError, betErrorFromDb } from "@/lib/betting/server/respond"
 import { viewerId } from "@/lib/betting/server/rows"
 import { buildMarketSnapshot } from "@/lib/betting/server/snapshot"
@@ -15,6 +15,7 @@ type Params = { params: Promise<{ id: string }> }
 
 const SessionIdSchema = z.uuid()
 const RulesSchema = z.union([z.literal(1), z.literal(2)]).optional()
+const PointsSchema = z.number().int().min(0).max(BET_RULES.maxStake)
 
 const PlaceSchema = z.object({
   side: z.enum(["blue", "red"]),
@@ -22,15 +23,18 @@ const PlaceSchema = z.object({
   insure: z.boolean().optional(),
   insured: z.boolean().optional(),
   all_in: z.boolean().optional(),
+  current: PointsSchema.optional(),
+  max_premium: PointsSchema.nullable().optional(),
   rules: RulesSchema,
 })
 
-const InsureSchema = z.object({ rules: RulesSchema })
+const InsureSchema = z.object({ rules: RulesSchema, max_premium: PointsSchema.nullable().optional() })
 
 interface PlaceRpcResult {
   bet: BetRow
   staked: number
   premium: number
+  premium_pct: number
   early: boolean
   raised: boolean
   all_in: boolean
@@ -40,6 +44,7 @@ interface PlaceRpcResult {
 interface InsureRpcResult {
   bet: BetRow
   premium: number
+  premium_pct: number
   balance: number
 }
 
@@ -83,6 +88,11 @@ export async function POST(request: Request, { params }: Params) {
   const insure = body.insure ?? body.insured ?? false
   const allIn = body.all_in ?? false
 
+  if (body.rules !== 2) {
+    const blocked = await legacyFlowStatus(supabase)
+    if (blocked) return blocked
+  }
+
   let placed: PlaceBetResult | null = null
   let response: NextResponse
 
@@ -94,6 +104,8 @@ export async function POST(request: Request, { params }: Params) {
           p_amount: body.amount,
           p_insure: insure,
           p_all_in: allIn,
+          p_current: body.current ?? null,
+          p_max_premium: body.max_premium ?? null,
         })
       : null
 
@@ -142,17 +154,32 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!user) return betError("not_authenticated")
 
   const parsed = InsureSchema.safeParse(await readJson(request))
-  const rules = parsed.success ? parsed.data.rules : undefined
+  if (!parsed.success) return betError("invalid_amount", "That premium makes no sense to the bookmaker.")
+  const { rules, max_premium: maxPremium } = parsed.data
+
+  if (rules !== 2) {
+    const blocked = await legacyFlowStatus(supabase)
+    if (blocked) return blocked
+  }
 
   let insured: (InsureBetResult & { side: Side; amount: number }) | null = null
   let response: NextResponse
 
-  const v2 = rules === 2 ? await supabase.rpc("insure_bet_v2", { p_session_id: sessionId }) : null
+  const v2 =
+    rules === 2
+      ? await supabase.rpc("insure_bet_v2", { p_session_id: sessionId, p_max_premium: maxPremium ?? null })
+      : null
 
   if (v2 && !v2.error) {
     const result = v2.data as InsureRpcResult
     insured = { ...result, rules: 2, side: result.bet.side, amount: result.bet.amount }
-    response = NextResponse.json({ bet: result.bet, premium: result.premium, balance: result.balance, rules: 2 })
+    response = NextResponse.json({
+      bet: result.bet,
+      premium: result.premium,
+      premium_pct: result.premium_pct,
+      balance: result.balance,
+      rules: 2,
+    })
   } else if (v2?.error && !isMissingSchema(v2.error)) {
     return betErrorFromDb(v2.error)
   } else {

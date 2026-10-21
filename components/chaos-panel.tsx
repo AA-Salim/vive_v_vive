@@ -1,775 +1,225 @@
 "use client"
 
-import { useState } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { usePoints } from "@/hooks/use-points"
-import { useChaos } from "@/hooks/use-chaos"
-import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog"
-import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
+import { useMemo, useState } from "react"
+import { MotionConfig } from "motion/react"
+import { RefreshCwIcon, ScrollTextIcon } from "lucide-react"
 import { toast } from "sonner"
-import type { SessionWithAssignments, Side, ChaosActionWithNames } from "@/lib/types"
+import { useAct } from "@/hooks/use-act"
+import { useAuth } from "@/hooks/use-auth"
+import { useChaos, useIssueDecree } from "@/hooks/use-chaos"
+import { useSession } from "@/hooks/use-session"
+import { useLiveSignal } from "@/components/live/live-provider"
+import { getActContent } from "@/lib/act-content"
+import { BOARD_DECREES, getDecree, type DecreeType } from "@/lib/chaos/catalog"
+import { decreeHeadline, decreeToast } from "@/lib/chaos/format"
+import {
+  DEFAULT_RULES,
+  decreeBlock,
+  decreeUsage,
+  goesIntoDebt,
+  ruleFor,
+  toBoardAssignments,
+  type DecreeContext,
+} from "@/lib/chaos/rules"
+import type { DecreeRequest } from "@/lib/chaos/schema"
+import type { LiveEventPayloads } from "@/lib/live/events"
+import type { SessionWithAssignments } from "@/lib/types"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { DecreeDialog } from "@/components/chaos/decree-dialog"
+import { DecreeLedger, DecreeLedgerSkeleton } from "@/components/chaos/decree-ledger"
+import { EdictBoard, EdictBoardSkeleton } from "@/components/chaos/edict-board"
+import { Proclamation, useProclamation } from "@/components/chaos/proclamation"
+import { TreasuryStrip, TreasuryStripSkeleton } from "@/components/chaos/treasury-strip"
+import { formatClock, useRemainingMs } from "@/components/chaos/use-now"
 
 interface ChaosPanelProps {
   session: SessionWithAssignments
   isOpen: boolean
 }
 
-const TIER_CONFIG = {
-  medium: {
-    label: "GAMBLE",
-    cost: 49,
-    payout: "98",
-    description: "Double or Nothing",
-    color: "text-yellow-400",
-    border: "border-yellow-500/30",
-    bg: "bg-yellow-500/5",
-    hoverBg: "hover:bg-yellow-500/10",
-  },
-  high: {
-    label: "SWAP",
-    cost: 89,
-    payout: null,
-    description: "Swap / Reroll",
-    color: "text-orange-400",
-    border: "border-orange-500/30",
-    bg: "bg-orange-500/5",
-    hoverBg: "hover:bg-orange-500/10",
-  },
-  sabotage: {
-    label: "SABOTAGE",
-    cost: 75,
-    payout: null,
-    description: "Ban / Force",
-    color: "text-purple-400",
-    border: "border-purple-500/30",
-    bg: "bg-purple-500/5",
-    hoverBg: "hover:bg-purple-500/10",
-  },
-  super: {
-    label: "CHAOS",
-    cost: 139,
-    payout: null,
-    description: "Nuclear Option",
-    color: "text-red-400",
-    border: "border-red-500/30",
-    bg: "bg-red-500/5",
-    hoverBg: "hover:bg-red-500/10",
-  },
-} as const
+interface DialogState {
+  type: DecreeType | null
+  open: boolean
+  nonce: number
+  phrase: string
+}
 
-type TierKey = keyof typeof TIER_CONFIG
-type DialogMode = null | "medium" | "high" | "sabotage" | "super"
-type HighAction = "swap_teammate" | "reroll_self"
-type SuperAction = "shuffle_lanes" | "reroll_champs" | "target_reroll"
-type SabotageAction = "champion_ban" | "lane_force"
+function WindowChip({ open, remainingMs }: { open: boolean; remainingMs: number | null }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums",
+        open
+          ? "border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/10 text-red-200"
+          : "border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 text-[var(--color-gold-light)]/55"
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn("size-1.5 rounded-full", open ? "animate-pulse bg-[var(--color-red-team)]" : "bg-[var(--color-gold-light)]/40")}
+      />
+      {open ? (remainingMs !== null ? `Open · ${formatClock(remainingMs)}` : "Open") : "Closed"}
+    </span>
+  )
+}
 
 export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const { user, profile, signIn } = useAuth()
-  const { balance, refetch: refetchPoints } = usePoints(user?.id ?? null)
-  const { actions, refetch: refetchActions } = useChaos(session.id)
-  const [dialogMode, setDialogMode] = useState<DialogMode>(null)
-  const [selectedSide, setSelectedSide] = useState<Side | null>(null)
-  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
-  const [highAction, setHighAction] = useState<HighAction | null>(null)
-  const [superAction, setSuperAction] = useState<SuperAction | null>(null)
-  const [sabotageAction, setSabotageAction] = useState<SabotageAction | null>(null)
-  const [selectedPlayer2Id, setSelectedPlayer2Id] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [debtPledgeOpen, setDebtPledgeOpen] = useState(false)
-  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null)
+  const { serverTimeDelta } = useSession()
+  const { act } = useAct()
+  const remainingMs = useRemainingMs(session.chaos_ends_at, serverTimeDelta)
+  const roundOver = session.status !== "chaos"
+  const windowOpen = isOpen && !roundOver && (remainingMs === null || remainingMs > 0)
+  const { board, isLoading, isError, refetch } = useChaos(session.id, { poll: windowOpen })
+  const issue = useIssueDecree(session.id)
+  const { item: proclamation, proclaim } = useProclamation()
+  const [dialog, setDialog] = useState<DialogState>({ type: null, open: false, nonce: 0, phrase: "" })
 
-  const userPlayerId = profile?.player_id ?? null
-
-  const myAssignment = session.session_assignments.find(
-    (a) => a.player_id === userPlayerId
+  const assignments = useMemo(() => toBoardAssignments(session), [session])
+  const ctx: DecreeContext = useMemo(
+    () => ({
+      rules: board?.rules ?? DEFAULT_RULES,
+      schema: board?.schema ?? "legacy",
+      actions: board?.actions ?? [],
+      assignments,
+      viewer: board?.viewer ?? (user ? { userId: user.id, playerId: profile?.player_id ?? null, balance: null } : null),
+      windowOpen,
+    }),
+    [board, assignments, user, profile?.player_id, windowOpen]
   )
 
-  const teammates = myAssignment
-    ? session.session_assignments.filter(
-        (a) => a.side === myAssignment.side && a.player_id !== myAssignment.player_id
-      )
-    : []
-
-  const userDonCount = actions.filter(
-    (a) => a.user_id === user?.id && a.action_type === "double_or_nothing" && a.status !== "refunded"
-  ).length
-  const userSwapCount = actions.filter(
-    (a) => a.user_id === user?.id && a.action_type === "swap_teammate" && a.status !== "refunded"
-  ).length
-  const userRerollSelfCount = actions.filter(
-    (a) => a.user_id === user?.id && a.action_type === "reroll_self" && a.status !== "refunded"
-  ).length
-  const userSabotageCount = actions.filter(
-    (a) => a.user_id === user?.id && (a.action_type === "champion_ban" || a.action_type === "lane_force") && a.status !== "refunded"
-  ).length
-
-  const canAfford = (tier: TierKey) => balance - TIER_CONFIG[tier].cost >= -300
-  const isLimitReached = (tier: TierKey) => {
-    if (tier === "medium") return userDonCount >= 3
-    if (tier === "high") return userSwapCount >= 1 && userRerollSelfCount >= 1
-    if (tier === "sabotage") return userSabotageCount >= 1
-    return false
-  }
-
-  const isDisabled = (tier: TierKey) => {
-    if (!user) return true
-    if (!isOpen) return true
-    if (!canAfford(tier)) return true
-    if (isLimitReached(tier)) return true
-    if (tier === "high" && !myAssignment) return true
-    return false
-  }
-
-  const resetDialog = () => {
-    setDialogMode(null)
-    setSelectedSide(null)
-    setSelectedPlayerId(null)
-    setHighAction(null)
-    setSuperAction(null)
-    setSabotageAction(null)
-    setSelectedPlayer2Id(null)
-  }
-
-  const doSubmitAction = async (body: Record<string, unknown>) => {
-    setSubmitting(true)
-    try {
-      const res = await fetch(`/api/sessions/${session.id}/chaos`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (res.ok) {
-        toast.success("Decree issued")
-        await refetchActions()
-        await refetchPoints()
-        resetDialog()
-      } else {
-        const err = await res.json()
-        toast.error(err.error || "Failed to issue decree")
-      }
-    } catch {
-      toast.error("Failed to issue decree")
-    } finally {
-      setSubmitting(false)
+  const cards = BOARD_DECREES.map((def) => {
+    const { used, max } = decreeUsage(def.type, ctx)
+    return {
+      def,
+      cost: ruleFor(def.type, ctx.rules).cost,
+      used,
+      max,
+      block: decreeBlock(def.type, ctx),
+      debt: goesIntoDebt(def.type, ctx),
     }
+  })
+
+  const viewerId = ctx.viewer?.userId ?? null
+  const mine = ctx.actions.filter((a) => a.user_id === viewerId)
+
+  useLiveSignal((signal) => {
+    if (signal.kind !== "event" || signal.event.type !== "chaos.decree") return
+    if (signal.event.sessionId && signal.event.sessionId !== session.id) return
+    const data = signal.event.data as LiveEventPayloads["chaos.decree"]
+    if (!getDecree(data.decree)) return
+    proclaim({
+      id: data.actionId ?? signal.event.id,
+      actor: viewerId && signal.event.actor?.userId === viewerId ? "You" : (signal.event.actor?.name ?? "Someone"),
+      type: data.decree as DecreeType,
+      label: data.label,
+      headline: data.headline ?? (data.targetName ? `Target: ${data.targetName}` : ""),
+    })
+  })
+
+  const openDecree = (type: DecreeType) => {
+    issue.reset()
+    const phrase = getActContent(act?.act_number ?? 2).getRandomPhrase()
+    setDialog((d) => ({ type, open: true, nonce: d.nonce + 1, phrase }))
   }
 
-  const submitAction = (body: Record<string, unknown>) => {
-    const action = () => doSubmitAction(body)
-    if (balance < 0) {
-      setPendingAction(() => action)
-      setDebtPledgeOpen(true)
-    } else {
-      action()
-    }
-  }
-
-  const handleMediumConfirm = () => {
-    if (!selectedSide) return
-    submitAction({ action_type: "double_or_nothing", side: selectedSide })
-  }
-
-  const handleHighConfirm = () => {
-    if (!highAction) return
-    if (highAction === "swap_teammate") {
-      if (!selectedPlayerId) return
-      submitAction({ action_type: "swap_teammate", target_player_id: selectedPlayerId })
-    } else {
-      submitAction({ action_type: "reroll_self" })
-    }
-  }
-
-  const handleSabotageConfirm = () => {
-    if (!sabotageAction) return
-    if (sabotageAction === "champion_ban") {
-      if (!selectedPlayerId) return
-      submitAction({ action_type: "champion_ban", target_player_id: selectedPlayerId })
-    } else {
-      if (!selectedPlayerId || !selectedPlayer2Id) return
-      submitAction({
-        action_type: "lane_force",
-        target_player_id: selectedPlayerId,
-        target_player_2_id: selectedPlayer2Id,
-      })
-    }
-  }
-
-  const handleSuperConfirm = () => {
-    if (!superAction) return
-    if (superAction === "target_reroll") {
-      if (!selectedPlayerId) return
-      submitAction({ action_type: "target_reroll", target_player_id: selectedPlayerId })
-    } else {
-      if (!selectedSide) return
-      submitAction({ action_type: superAction, target_team: selectedSide })
-    }
-  }
-
-  const formatAction = (a: ChaosActionWithNames) => {
-    const name = a.discord_username
-    switch (a.action_type) {
-      case "double_or_nothing":
-        return `${name} wagered 49 on ${a.side === "blue" ? "Blue" : "Red"}`
-      case "swap_teammate":
-        return `${name} swapped with ${a.target_player_2_name ?? "?"}`
-      case "reroll_self":
-        return `${name} rerolled their own champion`
-      case "shuffle_lanes":
-        return `${name} shuffled all ${a.target_team === "blue" ? "Blue" : "Red"} lanes`
-      case "reroll_champs":
-        return `${name} rerolled all ${a.target_team === "blue" ? "Blue" : "Red"} champs`
-      case "target_reroll":
-        return `${name} rerolled ${a.target_player_name ?? "?"}'s champion`
-      case "champion_ban":
-        return `${name} banned ${a.banned_champion ?? "a champion"} from ${a.target_player_name ?? "?"}`
-      case "lane_force":
-        return `${name} forced ${a.target_player_name ?? "?"} and ${a.target_player_2_name ?? "?"} to swap lanes`
-      default:
-        return `${name} issued a decree`
-    }
-  }
-
-  const tierStatusLabel = (tier: TierKey) => {
-    if (tier === "medium") return `${userDonCount}/3`
-    if (tier === "high") {
-      if (!myAssignment) return "Players only"
-      if (userSwapCount >= 1 && userRerollSelfCount >= 1) return "Used"
-      return "Available"
-    }
-    if (tier === "sabotage") return userSabotageCount >= 1 ? "Used" : "Available"
-    return "Available"
+  const submit = (request: DecreeRequest) => {
+    issue.mutate(request, {
+      onSuccess: (result) => {
+        setDialog((d) => ({ ...d, open: false }))
+        const line = decreeToast(result.decree)
+        toast.success(line.title, { description: line.description })
+        proclaim({
+          id: result.decree.id,
+          actor: "You",
+          type: result.decree.action_type,
+          label: getDecree(result.decree.action_type)?.name ?? "A royal decree",
+          headline: result.headline || decreeHeadline(result.decree),
+        })
+      },
+    })
   }
 
   return (
-    <>
-      <div className="rounded-lg border border-red-500/20 bg-[var(--color-navy-light)] p-4">
-        <h3 className="mb-4 text-center text-sm font-bold tracking-wider text-red-400">
-          ROYAL DECREES
-        </h3>
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {(["medium", "high", "sabotage", "super"] as TierKey[]).map((tier) => {
-            const config = TIER_CONFIG[tier]
-            const disabled = isDisabled(tier)
-
-            return (
-              <button
-                key={tier}
-                onClick={() => !disabled && setDialogMode(tier)}
-                disabled={disabled}
-                className={`rounded-lg border ${config.border} ${config.bg} ${config.hoverBg} p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-40`}
-              >
-                <div className={`text-[10px] font-bold tracking-wider ${config.color}`}>
-                  {config.label}
-                </div>
-                <div className="mt-1 text-lg font-bold text-[var(--color-gold)]">
-                  {config.cost}
-                </div>
-                <div className="text-[10px] text-[var(--color-gold-light)]/50">
-                  {config.description}
-                </div>
-                {config.payout && (
-                  <div className="mt-1 text-[10px] font-semibold text-green-400/70">
-                    Win: {config.payout}
-                  </div>
-                )}
-                <div className="mt-2 text-[10px] text-[var(--color-gold-light)]/40">
-                  {tierStatusLabel(tier)}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-
-        {actions.length > 0 && (
-          <div className="mt-4">
-            <div className="mb-2 text-center text-[10px] font-semibold tracking-wider text-[var(--color-gold)]/50">
-              DECREE LOG
-            </div>
-            <ScrollArea className="h-24">
-              <div className="space-y-1">
-                {[...actions].reverse().map((a) => (
-                  <div
-                    key={a.id}
-                    className="rounded px-2 py-1 text-xs text-[var(--color-gold-light)]/60"
-                  >
-                    {formatAction(a)}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
+    <MotionConfig reducedMotion="user">
+      <section
+        aria-labelledby="royal-decrees-heading"
+        className="relative space-y-3 overflow-hidden rounded-2xl border border-[var(--color-gold)]/20 bg-[var(--color-navy-light)] p-3 sm:space-y-4 sm:p-5"
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/60 to-transparent"
+        />
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2
+              id="royal-decrees-heading"
+              className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)] sm:text-xl"
+            >
+              <ScrollTextIcon aria-hidden className="size-5 shrink-0" />
+              Royal Decrees
+            </h2>
+            <p className="mt-0.5 text-xs text-[var(--color-gold-light)]/55">
+              {windowOpen
+                ? "Issued in the name of the exiled king. Bend the draft before the window slams shut."
+                : "The decree window is closed. What is written is written."}
+            </p>
           </div>
+          <WindowChip open={windowOpen} remainingMs={remainingMs} />
+        </header>
+
+        <Proclamation item={proclamation} />
+
+        {isLoading ? (
+          <>
+            <TreasuryStripSkeleton />
+            <EdictBoardSkeleton />
+            <DecreeLedgerSkeleton />
+          </>
+        ) : isError && !board ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-[var(--color-red-team)]/25 bg-[var(--color-red-team)]/5 p-6 text-center">
+            <p className="text-sm text-[var(--color-gold-light)]/75">
+              The royal scribes dropped the ledger. The decrees are fine, the scribes are not.
+            </p>
+            <Button variant="outline" onClick={() => refetch()} className="h-10">
+              <RefreshCwIcon aria-hidden className="size-4" />
+              Try again
+            </Button>
+          </div>
+        ) : (
+          <>
+            {(ctx.viewer || !roundOver) && (
+              <TreasuryStrip signedIn={!!ctx.viewer} balance={ctx.viewer?.balance ?? null} mine={mine} onSignIn={signIn} />
+            )}
+            {!roundOver && (
+              <>
+                <EdictBoard cards={cards} onSelect={openDecree} />
+                <p className="text-center text-[11px] text-[var(--color-gold-light)]/40">
+                  Decrees are final and public. Every point comes back if the game is canceled.
+                </p>
+              </>
+            )}
+            <DecreeLedger entries={ctx.actions} viewerId={viewerId} windowOpen={windowOpen} />
+          </>
         )}
+      </section>
 
-        {!user && isOpen && (
-          <div className="mt-3 text-center">
-            <button
-              onClick={signIn}
-              className="text-xs text-[var(--color-gold-light)]/50 underline"
-            >
-              Login with Discord to issue decrees
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Medium: Double or Nothing */}
-      <Dialog open={dialogMode === "medium"} onOpenChange={(open) => !open && resetDialog()}>
-        <DialogContent className="border-yellow-500/20 bg-[var(--color-navy)]">
-          <DialogHeader>
-            <DialogTitle className="text-yellow-400">Double or Nothing</DialogTitle>
-            <DialogDescription className="text-[var(--color-gold-light)]/60">
-              Pick a side. If they win, you get 98 back. Cost: 49 pts.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-center gap-3 py-4">
-            <Button
-              size="lg"
-              variant={selectedSide === "blue" ? "default" : "outline"}
-              onClick={() => setSelectedSide("blue")}
-              className={
-                selectedSide === "blue"
-                  ? "bg-[var(--color-blue-team)] text-white"
-                  : "border-[var(--color-blue-team)]/30 text-[var(--color-blue-team)]"
-              }
-            >
-              Blue Side
-            </Button>
-            <Button
-              size="lg"
-              variant={selectedSide === "red" ? "default" : "outline"}
-              onClick={() => setSelectedSide("red")}
-              className={
-                selectedSide === "red"
-                  ? "bg-[var(--color-red-team)] text-white"
-                  : "border-[var(--color-red-team)]/30 text-[var(--color-red-team)]"
-              }
-            >
-              Red Side
-            </Button>
-          </div>
-          <Button
-            onClick={handleMediumConfirm}
-            disabled={!selectedSide || submitting}
-            className="w-full bg-yellow-500 font-bold text-[var(--color-navy)] hover:bg-yellow-600 disabled:opacity-50"
-          >
-            {submitting ? "Placing..." : "Confirm Wager"}
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* High: Swap / Reroll Self */}
-      <Dialog open={dialogMode === "high"} onOpenChange={(open) => !open && resetDialog()}>
-        <DialogContent className="border-orange-500/20 bg-[var(--color-navy)]">
-          <DialogHeader>
-            <DialogTitle className="text-orange-400">Swap / Reroll Self</DialogTitle>
-            <DialogDescription className="text-[var(--color-gold-light)]/60">
-              Trade with a teammate or reroll your own champion. Cost: 89 pts.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!highAction && (
-            <div className="space-y-2 py-4">
-              <button
-                onClick={() => setHighAction("swap_teammate")}
-                disabled={userSwapCount >= 1}
-                className="w-full rounded-lg border border-orange-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-orange-500/40 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <div className="font-medium text-orange-400">Swap with Teammate</div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Trade your lane + champ with a teammate
-                </div>
-              </button>
-              <button
-                onClick={() => setHighAction("reroll_self")}
-                disabled={userRerollSelfCount >= 1}
-                className="w-full rounded-lg border border-orange-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-orange-500/40 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <div className="font-medium text-orange-400">Reroll Self</div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Reroll your own champion (keep your lane)
-                </div>
-              </button>
-            </div>
-          )}
-
-          {highAction === "swap_teammate" && (
-            <div className="space-y-2 py-4">
-              {teammates.map((t) => (
-                <button
-                  key={t.player_id}
-                  onClick={() => setSelectedPlayerId(t.player_id)}
-                  className={`w-full rounded-lg border p-3 text-left transition-all ${
-                    selectedPlayerId === t.player_id
-                      ? "border-orange-500/50 bg-orange-500/10"
-                      : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-orange-500/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-[var(--color-gold-light)]">
-                      {t.players.name}
-                    </span>
-                    <span className="text-xs text-[var(--color-gold-light)]/50">
-                      {t.lane.toUpperCase()} - {t.champion}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {highAction && (
-            <Button
-              onClick={handleHighConfirm}
-              disabled={(highAction === "swap_teammate" && !selectedPlayerId) || submitting}
-              className="w-full bg-orange-500 font-bold text-[var(--color-navy)] hover:bg-orange-600 disabled:opacity-50"
-            >
-              {submitting
-                ? highAction === "swap_teammate" ? "Swapping..." : "Rerolling..."
-                : highAction === "swap_teammate" ? "Confirm Swap" : "Confirm Reroll"}
-            </Button>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Super: Nuclear Options */}
-      <Dialog open={dialogMode === "super"} onOpenChange={(open) => !open && resetDialog()}>
-        <DialogContent className="border-red-500/20 bg-[var(--color-navy)]">
-          <DialogHeader>
-            <DialogTitle className="text-red-400">Nuclear Option</DialogTitle>
-            <DialogDescription className="text-[var(--color-gold-light)]/60">
-              Choose your chaos. Cost: 139 pts.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!superAction && (
-            <div className="space-y-2 py-4">
-              <button
-                onClick={() => setSuperAction("shuffle_lanes")}
-                className="w-full rounded-lg border border-red-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-red-500/40"
-              >
-                <div className="font-medium text-red-400">Shuffle Lanes</div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Shuffle players across lanes (champions stay in their lane)
-                </div>
-              </button>
-              <button
-                onClick={() => setSuperAction("reroll_champs")}
-                className="w-full rounded-lg border border-red-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-red-500/40"
-              >
-                <div className="font-medium text-red-400">Reroll Champs</div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Reroll all 5 champions on a team (lanes stay)
-                </div>
-              </button>
-              <button
-                onClick={() => setSuperAction("target_reroll")}
-                className="w-full rounded-lg border border-red-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-red-500/40"
-              >
-                <div className="font-medium text-red-400">Target Reroll</div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Reroll one specific player's champion (ally or enemy)
-                </div>
-              </button>
-            </div>
-          )}
-
-          {superAction && superAction !== "target_reroll" && (
-            <div className="py-4">
-              <div className="mb-3 text-center text-sm text-[var(--color-gold-light)]/60">
-                Choose a team
-              </div>
-              <div className="flex justify-center gap-3">
-                <Button
-                  size="lg"
-                  variant={selectedSide === "blue" ? "default" : "outline"}
-                  onClick={() => setSelectedSide("blue")}
-                  className={
-                    selectedSide === "blue"
-                      ? "bg-[var(--color-blue-team)] text-white"
-                      : "border-[var(--color-blue-team)]/30 text-[var(--color-blue-team)]"
-                  }
-                >
-                  Blue Side
-                </Button>
-                <Button
-                  size="lg"
-                  variant={selectedSide === "red" ? "default" : "outline"}
-                  onClick={() => setSelectedSide("red")}
-                  className={
-                    selectedSide === "red"
-                      ? "bg-[var(--color-red-team)] text-white"
-                      : "border-[var(--color-red-team)]/30 text-[var(--color-red-team)]"
-                  }
-                >
-                  Red Side
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {superAction === "target_reroll" && (
-            <div className="space-y-2 py-4">
-              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
-                Choose a player
-              </div>
-              {session.session_assignments.map((a) => (
-                <button
-                  key={a.player_id}
-                  onClick={() => setSelectedPlayerId(a.player_id)}
-                  className={`w-full rounded-lg border p-3 text-left transition-all ${
-                    selectedPlayerId === a.player_id
-                      ? "border-red-500/50 bg-red-500/10"
-                      : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-red-500/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold ${
-                          a.side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
-                        }`}
-                      >
-                        {a.side === "blue" ? "B" : "R"}
-                      </span>
-                      <span className="font-medium text-[var(--color-gold-light)]">
-                        {a.players.name}
-                      </span>
-                    </div>
-                    <span className="text-xs text-[var(--color-gold-light)]/50">
-                      {a.lane.toUpperCase()} - {a.champion}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {superAction && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSuperAction(null)
-                  setSelectedSide(null)
-                  setSelectedPlayerId(null)
-                }}
-                className="border-[var(--color-gold)]/20 text-[var(--color-gold-light)]/60"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleSuperConfirm}
-                disabled={
-                  submitting ||
-                  (superAction === "target_reroll" ? !selectedPlayerId : !selectedSide)
-                }
-                className="flex-1 bg-red-500 font-bold text-white hover:bg-red-600 disabled:opacity-50"
-              >
-                {submitting ? "Executing..." : "Confirm (139 pts)"}
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Sabotage: Champion Ban / Lane Force */}
-      <Dialog open={dialogMode === "sabotage"} onOpenChange={(open) => !open && resetDialog()}>
-        <DialogContent className="border-purple-500/20 bg-[var(--color-navy)]">
-          <DialogHeader>
-            <DialogTitle className="text-purple-400">Sabotage</DialogTitle>
-            <DialogDescription className="text-[var(--color-gold-light)]/60">
-              Disrupt the enemy. 1 sabotage per session.
-            </DialogDescription>
-          </DialogHeader>
-
-          {!sabotageAction && (
-            <div className="space-y-2 py-4">
-              <button
-                onClick={() => setSabotageAction("champion_ban")}
-                className="w-full rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/40"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-purple-400">Champion Ban</div>
-                  <div className="text-sm font-bold text-[var(--color-gold)]">75 pts</div>
-                </div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Ban a player&apos;s champion and force a reroll
-                </div>
-              </button>
-              <button
-                onClick={() => setSabotageAction("lane_force")}
-                className="w-full rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/40"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-purple-400">Lane Force</div>
-                  <div className="text-sm font-bold text-[var(--color-gold)]">120 pts</div>
-                </div>
-                <div className="text-xs text-[var(--color-gold-light)]/50">
-                  Force two players on the same team to swap lanes
-                </div>
-              </button>
-            </div>
-          )}
-
-          {sabotageAction === "champion_ban" && (
-            <div className="space-y-2 py-4">
-              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
-                Choose a player to sabotage
-              </div>
-              {session.session_assignments.map((a) => (
-                <button
-                  key={a.player_id}
-                  onClick={() => setSelectedPlayerId(a.player_id)}
-                  className={`w-full rounded-lg border p-3 text-left transition-all ${
-                    selectedPlayerId === a.player_id
-                      ? "border-purple-500/50 bg-purple-500/10"
-                      : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-purple-500/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold ${
-                          a.side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
-                        }`}
-                      >
-                        {a.side === "blue" ? "B" : "R"}
-                      </span>
-                      <span className="font-medium text-[var(--color-gold-light)]">
-                        {a.players.name}
-                      </span>
-                    </div>
-                    <span className="text-xs text-[var(--color-gold-light)]/50">
-                      {a.lane.toUpperCase()} - {a.champion}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {sabotageAction === "lane_force" && !selectedPlayerId && (
-            <div className="space-y-2 py-4">
-              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
-                Pick the first player
-              </div>
-              {session.session_assignments.map((a) => (
-                <button
-                  key={a.player_id}
-                  onClick={() => setSelectedPlayerId(a.player_id)}
-                  className="w-full rounded-lg border border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] p-3 text-left transition-all hover:border-purple-500/30"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[10px] font-bold ${
-                          a.side === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]"
-                        }`}
-                      >
-                        {a.side === "blue" ? "B" : "R"}
-                      </span>
-                      <span className="font-medium text-[var(--color-gold-light)]">
-                        {a.players.name}
-                      </span>
-                    </div>
-                    <span className="text-xs text-[var(--color-gold-light)]/50">
-                      {a.lane.toUpperCase()} - {a.champion}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {sabotageAction === "lane_force" && selectedPlayerId && (
-            <div className="space-y-2 py-4">
-              <div className="mb-2 text-center text-sm text-[var(--color-gold-light)]/60">
-                Pick their new lane partner (same team)
-              </div>
-              {session.session_assignments
-                .filter((a) => {
-                  const first = session.session_assignments.find((p) => p.player_id === selectedPlayerId)
-                  return first && a.side === first.side && a.player_id !== selectedPlayerId
-                })
-                .map((a) => (
-                  <button
-                    key={a.player_id}
-                    onClick={() => setSelectedPlayer2Id(a.player_id)}
-                    className={`w-full rounded-lg border p-3 text-left transition-all ${
-                      selectedPlayer2Id === a.player_id
-                        ? "border-purple-500/50 bg-purple-500/10"
-                        : "border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] hover:border-purple-500/30"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-[var(--color-gold-light)]">
-                        {a.players.name}
-                      </span>
-                      <span className="text-xs text-[var(--color-gold-light)]/50">
-                        {a.lane.toUpperCase()} - {a.champion}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-            </div>
-          )}
-
-          {sabotageAction && (
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (sabotageAction === "lane_force" && selectedPlayerId && !selectedPlayer2Id) {
-                    setSelectedPlayerId(null)
-                  } else {
-                    setSabotageAction(null)
-                    setSelectedPlayerId(null)
-                    setSelectedPlayer2Id(null)
-                  }
-                }}
-                className="border-[var(--color-gold)]/20 text-[var(--color-gold-light)]/60"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleSabotageConfirm}
-                disabled={
-                  submitting ||
-                  (sabotageAction === "champion_ban" ? !selectedPlayerId : !selectedPlayerId || !selectedPlayer2Id)
-                }
-                className="flex-1 bg-purple-500 font-bold text-white hover:bg-purple-600 disabled:opacity-50"
-              >
-                {submitting
-                  ? "Executing..."
-                  : sabotageAction === "champion_ban"
-                    ? "Ban Champion (75 pts)"
-                    : "Force Lane Swap (120 pts)"}
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <DebtPledgeDialog
-        open={debtPledgeOpen}
-        onOpenChange={setDebtPledgeOpen}
-        currentBalance={balance}
-        onConfirm={() => {
-          if (pendingAction) {
-            pendingAction()
-            setPendingAction(null)
-          }
+      <DecreeDialog
+        key={dialog.nonce}
+        type={dialog.type}
+        open={dialog.open}
+        ctx={ctx}
+        remainingMs={windowOpen ? remainingMs : 0}
+        pending={issue.isPending}
+        error={issue.error?.message ?? null}
+        pledgePhrase={dialog.phrase}
+        onOpenChange={(open) => {
+          if (!open && issue.isPending) return
+          setDialog((d) => ({ ...d, open }))
         }}
+        onSubmit={submit}
       />
-    </>
+    </MotionConfig>
   )
 }

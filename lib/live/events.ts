@@ -27,6 +27,12 @@ export interface LiveEventPayloads {
     targetName?: string | null
     side?: Side | null
     targetUserId?: string | null
+    tier?: string
+    headline?: string
+    actionId?: string
+    affectedSide?: Side | null
+    changedAssignmentIds?: string[]
+    changedPlayerIds?: string[]
   }
   "praise.sung": { excerpt: string; reward: number }
   "praise.judged": { verdict: string; authorName: string; delta: number; authorUserId?: string | null }

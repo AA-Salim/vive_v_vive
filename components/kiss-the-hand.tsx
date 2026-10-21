@@ -5,14 +5,13 @@ import { CrownIcon, MicIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useAct } from "@/hooks/use-act"
+import { useAuth } from "@/hooks/use-auth"
+import { usePoints } from "@/hooks/use-points"
 import { getActContent } from "@/lib/act-content"
 
-interface KissTheHandProps {
-  kissRemaining: number
-  onKiss: () => Promise<{ kissed?: boolean; exhausted?: boolean } | null>
-}
-
-export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
+export function KissTheHand() {
+  const { user } = useAuth()
+  const { kissRemaining, kissTheHand: onKiss } = usePoints(user?.id ?? null)
   const { act } = useAct()
   const content = useMemo(
     () => getActContent(act?.act_number ?? 2),
@@ -44,6 +43,8 @@ export function KissTheHand({ kissRemaining, onKiss }: KissTheHandProps) {
       setLoading(false)
     }
   }
+
+  if (!user) return null
 
   const exhausted = kissRemaining <= 0
   const isAct2 = act && act.act_number >= 2

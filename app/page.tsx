@@ -26,7 +26,6 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useSession } from "@/hooks/use-session"
 import { useAuth } from "@/hooks/use-auth"
-import { usePoints } from "@/hooks/use-points"
 import { toast } from "sonner"
 
 const SHUFFLE_INTERVAL = 50
@@ -88,7 +87,6 @@ function statusColor(status: string) {
 export default function HomePage() {
   const { session, isLoading, refetch, serverTimeDelta } = useSession()
   const { user, profile, isAdmin, signIn } = useAuth()
-  const { kissRemaining, kissTheHand } = usePoints(user?.id ?? null)
   const [fearlessKey, setFearlessKey] = useState(0)
   const [winFlash, setWinFlash] = useState<"blue" | "red" | null>(null)
   const [creating, setCreating] = useState(false)
@@ -461,12 +459,7 @@ export default function HomePage() {
             />
           )}
           <FearlessPanel refreshKey={fearlessKey} />
-          {user && (
-            <KissTheHand
-              kissRemaining={kissRemaining}
-              onKiss={kissTheHand}
-            />
-          )}
+          <KissTheHand />
           <QueuePanel currentPlayerId={profile?.player_id ?? null} />
           <VainqueurControls
             isAdmin={isAdmin}

@@ -160,6 +160,9 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   shame_entries: ["shame"],
   user_titles: ["titles"],
   acts: ["acts"],
+  prophecy_wagers: ["sidebets", "points"],
+  post_game_votes: ["votes", "sidebets", "points"],
+  post_game_ballots: ["votes"],
 }
 
 export const ACTIVE_STATUSES: SessionStatus[] = ["coach_draft", "draft", "chaos", "betting", "in_game"]

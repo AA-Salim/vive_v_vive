@@ -1,119 +1,75 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase"
+import { isMissingSchema, migrationPending } from "@/lib/db-errors"
+import { emitLive, getActor } from "@/lib/live/server"
+import { loadProphecyBoard } from "@/lib/prophecy/board"
+import { PROPHECY_FEATURE } from "@/lib/prophecy/constants"
+import { sealLabel } from "@/lib/prophecy/lines"
+import { isLegacyProphecyBody, sealProphecySchema, sessionIdSchema } from "@/lib/prophecy/schemas"
+import { loadProfiles, playerName, rpcErrorResponse, toWagerView, type WagerRow } from "@/lib/prophecy/server"
 
-const MULTIPLIERS: Record<string, number> = {
-  player_gets_lane: 2.0,
-  player_most_kills: 2.5,
-  side_wins_fast: 3.0,
+const NO_STORE = { "Cache-Control": "no-store" }
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  if (!sessionIdSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "Invalid session id" }, { status: 400 })
+  }
+
+  const supabase = await createClient()
+  try {
+    const board = await loadProphecyBoard(supabase, id)
+    if (!board) return NextResponse.json({ error: "Session not found" }, { status: 404 })
+    return NextResponse.json(board, { headers: NO_STORE })
+  } catch {
+    return NextResponse.json({ error: "The Oracle is unreachable right now." }, { status: 500 })
+  }
 }
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const supabase = await createClient()
+  if (!sessionIdSchema.safeParse(id).success) {
+    return NextResponse.json({ error: "Invalid session id" }, { status: 400 })
+  }
 
-  const { data: prophecies, error } = await supabase
-    .from("prophecies")
-    .select("*")
-    .eq("session_id", id)
-    .order("created_at", { ascending: true })
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Log in with Discord to seal a prophecy." }, { status: 401 })
+
+  const body: unknown = await request.json().catch(() => null)
+  if (isLegacyProphecyBody(body)) {
+    return NextResponse.json(
+      { error: "Lane Calls are retired. Refresh the page to seal an MVP or Inter prophecy.", code: "legacy_prophecy" },
+      { status: 410 }
+    )
+  }
+
+  const parsed = sealProphecySchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Pick MVP or Inter, a player, and a stake from 10 to 50." }, { status: 400 })
+  }
+
+  const { market, playerId, stake } = parsed.data
+  const { data, error } = await supabase.rpc("seal_prophecy", {
+    p_session_id: id,
+    p_market: market,
+    p_player_id: playerId,
+    p_stake: stake,
+  })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    if (isMissingSchema(error)) return migrationPending(PROPHECY_FEATURE)
+    return rpcErrorResponse(error, "The Oracle fumbled your prophecy. Try again.")
   }
 
-  const userIds = [...new Set((prophecies ?? []).map((p: { user_id: string }) => p.user_id))]
+  const [actor, name, profiles] = await Promise.all([
+    getActor(supabase, user.id),
+    playerName(supabase, playerId),
+    loadProfiles(supabase, [user.id]),
+  ])
+  emitLive("sidebet.placed", { sessionId: id, actor, data: { market, label: sealLabel(market, name), amount: stake } })
 
-  const { data: profiles } = userIds.length > 0
-    ? await supabase
-        .from("user_profiles")
-        .select("id, discord_username, discord_avatar_url")
-        .in("id", userIds)
-    : { data: [] }
-
-  const profileMap = new Map(
-    (profiles ?? []).map((p) => [p.id, p])
-  )
-
-  const enriched = (prophecies ?? []).map((p: Record<string, unknown>) => ({
-    ...p,
-    discord_username: profileMap.get(p.user_id as string)?.discord_username ?? "Unknown",
-    discord_avatar_url: profileMap.get(p.user_id as string)?.discord_avatar_url ?? null,
-  }))
-
-  return NextResponse.json(enriched)
-}
-
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-  }
-
-  const body = await request.json()
-  const { prediction_type, prediction_value } = body
-
-  if (!prediction_type || !prediction_value) {
-    return NextResponse.json(
-      { error: "prediction_type and prediction_value required" },
-      { status: 400 }
-    )
-  }
-
-  if (!MULTIPLIERS[prediction_type]) {
-    return NextResponse.json({ error: "Invalid prediction type" }, { status: 400 })
-  }
-
-  const { data: session } = await supabase
-    .from("game_sessions")
-    .select("status")
-    .eq("id", id)
-    .single()
-
-  if (!session || session.status !== "betting") {
-    return NextResponse.json(
-      { error: "Prophecies can only be placed during betting" },
-      { status: 400 }
-    )
-  }
-
-  const { data: existing } = await supabase
-    .from("prophecies")
-    .select("id")
-    .eq("session_id", id)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (existing) {
-    return NextResponse.json(
-      { error: "You already placed a prophecy for this game" },
-      { status: 400 }
-    )
-  }
-
-  const { data: prophecy, error } = await supabase
-    .from("prophecies")
-    .insert({
-      user_id: user.id,
-      session_id: id,
-      prediction_type,
-      prediction_value,
-      multiplier: MULTIPLIERS[prediction_type],
-    })
-    .select()
-    .single()
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ placed: true, prophecy })
+  return NextResponse.json({ placed: true, wager: toWagerView(data as WagerRow, profiles) }, { status: 201 })
 }

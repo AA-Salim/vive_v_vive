@@ -1,104 +1,144 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { z } from "zod"
+import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
+import { emitLive, getActor } from "@/lib/live/server"
+import { perkInfo } from "@/lib/titles/catalog"
+import { titleError, titleErrorKey } from "@/lib/titles/errors"
+import { MAX_ACTIVE_CURSES } from "@/lib/titles/rules"
+import { brandState, earliest, loadIdentities, loadResolvedGames, type TitleRow } from "@/lib/titles/server"
+
+const Body = z.object({
+  title_id: z.guid(),
+  target_user_id: z.guid().optional().nullable(),
+})
+
+type Supabase = Awaited<ReturnType<typeof createClient>>
+
+interface Purchase {
+  recipient: string
+  rebranded: boolean
+  balance: number | null
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient()
-
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
-  }
+  if (!user) return titleError("not_authenticated")
 
-  const body = await request.json()
-  const { title_id, target_user_id } = body
+  const parsed = Body.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return NextResponse.json({ error: "A valid title_id is required" }, { status: 400 })
+  const { title_id: titleId, target_user_id: targetId } = parsed.data
 
-  if (!title_id) {
-    return NextResponse.json({ error: "title_id required" }, { status: 400 })
-  }
-
-  const { data: title } = await supabase
+  const { data: titleData } = await supabase
     .from("titles")
-    .select("*")
-    .eq("id", title_id)
-    .single()
+    .select("id, name, description, price, category, for_self, is_permanent")
+    .eq("id", titleId)
+    .maybeSingle()
+  const title = titleData as TitleRow | null
+  if (!title) return titleError("title_not_found")
 
-  if (!title) {
-    return NextResponse.json({ error: "Title not found" }, { status: 404 })
+  let purchase: Purchase
+  const { data, error } = await supabase.rpc("buy_title", { p_title_id: titleId, p_target_user_id: targetId ?? null })
+  if (error) {
+    if (!isMissingSchema(error)) {
+      const key = titleErrorKey(error)
+      return titleError(key === "already_owned" && !title.for_self ? "already_branded" : key)
+    }
+    const legacy = await legacyPurchase(supabase, user.id, title, targetId ?? null)
+    if ("error" in legacy) return titleError(legacy.error)
+    purchase = legacy
+  } else {
+    const result = data as { recipient: string; rebranded: boolean; balance: number }
+    purchase = { recipient: result.recipient, rebranded: result.rebranded, balance: result.balance }
   }
 
-  if (title.category === "award") {
-    return NextResponse.json(
-      { error: "Award titles cannot be purchased" },
-      { status: 400 }
-    )
+  const actor = await getActor(supabase, user.id)
+  if (title.for_self) {
+    emitLive("title.bought", { actor, data: { title: title.name, price: title.price } })
+  } else {
+    const target = (await loadIdentities(supabase, [purchase.recipient])).get(purchase.recipient)
+    emitLive("title.bestowed", {
+      actor,
+      data: {
+        title: title.name,
+        targetName: target?.name ?? "someone",
+        targetUserId: purchase.recipient,
+        curse: perkInfo(title.name, title.category, actor?.name ?? "the brander")?.summary ?? null,
+      },
+    })
   }
 
-  const recipientId = title.for_self ? user.id : target_user_id
-  if (!recipientId) {
-    return NextResponse.json(
-      { error: "target_user_id required for mockery titles" },
-      { status: 400 }
-    )
-  }
+  return NextResponse.json({
+    purchased: true,
+    title: title.name,
+    recipient: purchase.recipient,
+    rebranded: purchase.rebranded,
+    balance: purchase.balance,
+  })
+}
 
-  if (!title.for_self && recipientId === user.id) {
-    return NextResponse.json(
-      { error: "Cannot assign a mockery title to yourself" },
-      { status: 400 }
-    )
-  }
+// Pre-migration path: same checks as buy_title(), charge first and refund if the grant fails.
+async function legacyPurchase(
+  supabase: Supabase,
+  userId: string,
+  title: TitleRow,
+  targetId: string | null
+): Promise<Purchase | { error: string }> {
+  if (title.category === "award" || title.price <= 0) return { error: "not_for_sale" }
+  const recipient = title.for_self ? userId : targetId
+  if (!recipient) return { error: "target_required" }
+  if (!title.for_self && recipient === userId) return { error: "self_target" }
 
-  // Check if already owned
+  const { data: profile } = await supabase.from("user_profiles").select("id").eq("id", recipient).maybeSingle()
+  if (!profile) return { error: "target_not_found" }
+
   const { data: existing } = await supabase
     .from("user_titles")
     .select("id")
-    .eq("user_id", recipientId)
-    .eq("title_id", title_id)
+    .eq("user_id", recipient)
+    .eq("title_id", title.id)
     .maybeSingle()
+  if (existing) return { error: title.for_self ? "already_owned" : "already_branded" }
 
-  if (existing) {
-    return NextResponse.json(
-      { error: title.for_self ? "You already own this title" : "They already have this title" },
-      { status: 400 }
-    )
+  if (!title.for_self) {
+    const { data: brands } = await supabase
+      .from("user_titles")
+      .select("id, user_id, title_id, is_active, assigned_by, created_at, titles!inner ( for_self, price )")
+      .eq("user_id", recipient)
+      .not("assigned_by", "is", null)
+      .eq("titles.for_self", false)
+    const rows = brands ?? []
+    const resolved = await loadResolvedGames(supabase, earliest(rows.map((r) => r.created_at as string)))
+    const active = rows.filter((r) => brandState(r, 0, resolved).active).length
+    if (active >= MAX_ACTIVE_CURSES) return { error: "curse_limit" }
   }
 
-  // Deduct points
-  const { error: balanceError } = await supabase.rpc("adjust_balance", {
-    p_user_id: user.id,
+  const { data: balance, error: chargeError } = await supabase.rpc("adjust_balance", {
+    p_user_id: userId,
     p_amount: -title.price,
     p_reason: "title_bought",
+    p_reference_id: title.id,
   })
+  if (chargeError) return { error: titleErrorKey(chargeError) ?? "insufficient" }
 
-  if (balanceError) {
-    return NextResponse.json(
-      { error: balanceError.message },
-      { status: 400 }
-    )
-  }
-
-  // Assign title
   const { error: insertError } = await supabase.from("user_titles").insert({
-    user_id: recipientId,
-    title_id: title_id,
-    assigned_by: title.for_self ? null : user.id,
+    user_id: recipient,
+    title_id: title.id,
+    assigned_by: title.for_self ? null : userId,
     is_active: false,
   })
-
   if (insertError) {
-    // Refund on failure
     await supabase.rpc("adjust_balance", {
-      p_user_id: user.id,
+      p_user_id: userId,
       p_amount: title.price,
       p_reason: "title_bought",
+      p_reference_id: title.id,
     })
-    return NextResponse.json(
-      { error: insertError.message },
-      { status: 500 }
-    )
+    return { error: insertError.code === "23505" ? (title.for_self ? "already_owned" : "already_branded") : "unknown" }
   }
 
-  return NextResponse.json({ purchased: true, title: title.name })
+  return { recipient, rebranded: false, balance: typeof balance === "number" ? balance : null }
 }

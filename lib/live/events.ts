@@ -35,9 +35,16 @@ export interface LiveEventPayloads {
   "bounty.placed": { targetName: string; amount: number; targetUserId?: string | null }
   "bounty.claimed": { targetName: string; amount: number; hunters: number; targetUserId?: string | null }
   "shame.posted": { targetName: string; message?: string | null; targetUserId?: string | null }
-  "title.equipped": { title: string }
-  "title.bestowed": { title: string; targetName: string; targetUserId?: string | null }
-  "title.perk": { title: string; perk: string; delta: number }
+  "title.equipped": { title: string; perk?: string | null }
+  "title.bestowed": { title: string; targetName: string; targetUserId?: string | null; curse?: string | null }
+  "title.perk": { title: string; perk: string; delta: number; userId?: string; kind?: "perk" | "curse"; beneficiaryName?: string | null }
+  "title.unequipped": { title: string }
+  "title.bought": { title: string; price: number }
+  "title.claimed": { titles: string[] }
+  "title.dignity": { title: string; cost: number; bestowerName?: string | null }
+  "title.settled": {
+    applications: { userId: string; name: string; title: string; kind: "perk" | "curse"; delta: number; detail: string; beneficiaryId?: string | null; beneficiaryName?: string | null }[]
+  }
   "queue.changed": { action: "joined" | "left" | "cleared" | "reordered" | "advanced"; playerName?: string | null }
   "vainqueur.changed": { action: string; playerName?: string | null }
   "fearless.changed": { action: "cleared" | "removed" | "added"; champion?: string | null }

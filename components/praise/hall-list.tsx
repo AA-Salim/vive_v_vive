@@ -12,6 +12,7 @@ import { PraiseCard } from "@/components/praise/praise-card"
 import { useNow } from "@/components/praise/use-now"
 import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { useJudgePraise, usePraiseHall } from "@/hooks/use-praise"
+import { COURT_WINDOW_DAYS } from "@/lib/praise/rules"
 import type { HallView, PraiseStateReady, PraiseVerdict, PraiseView } from "@/lib/praise/types"
 import { COPY } from "@/lib/praise/voice"
 
@@ -39,17 +40,14 @@ export function HallList({ view, state, userId }: HallListProps) {
   const now = useNow(60_000)
   const me = state.me
 
-  const handleJudge = (praise: PraiseView, verdict: PraiseVerdict, note: string) => {
-    judge.mutate(
-      { id: praise.id, verdict, note },
-      {
-        onSuccess: () => {
-          if (verdict === "crowned") toast.success(`Crowned. ${praise.author.name} receives +${state.favor} Royal Favor.`)
-          else toast(`Scorned. ${praise.author.name} will remember this.`)
-        },
-        onError: (error) => toast.error(error.message),
-      }
-    )
+  const handleJudge = async (praise: PraiseView, verdict: PraiseVerdict, note: string) => {
+    try {
+      await judge.mutateAsync({ id: praise.id, verdict, note })
+      if (verdict === "crowned") toast.success(`Crowned. ${praise.author.name} receives +${state.favor} Royal Favor.`)
+      else toast(`Scorned. ${praise.author.name} will remember this.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : COPY.errorTitle)
+    }
   }
 
   if (hall.isPending) {
@@ -102,7 +100,7 @@ export function HallList({ view, state, userId }: HallListProps) {
             <span className="font-semibold text-foreground">
               {state.court.crownsLeft}/{state.court.crownLimit}
             </span>{" "}
-            crowns left today. Verdicts are final and public.
+            crowns left today. Verdicts are final and public. Songs leave the court after {COURT_WINDOW_DAYS} days.
           </span>
         </p>
       )}
@@ -142,7 +140,7 @@ export function HallList({ view, state, userId }: HallListProps) {
                         authorName={praise.author.name}
                         crownsLeft={state.court.crownsLeft}
                         pending={judge.isPending && judge.variables?.id === praise.id}
-                        onJudge={(verdict, note) => handleJudge(praise, verdict, note)}
+                        onJudge={(verdict, note) => void handleJudge(praise, verdict, note)}
                       />
                     )}
                   </PraiseCard>

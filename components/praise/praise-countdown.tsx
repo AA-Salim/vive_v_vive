@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { formatCountdown } from "@/lib/praise/format"
 
 const HOUR = 60 * 60 * 1000
+const RETRY_MS = 5000
 
 interface PraiseCountdownProps {
   target: string
@@ -14,7 +15,7 @@ interface PraiseCountdownProps {
 
 export function PraiseCountdown({ target, clockOffset, onElapsed, className }: PraiseCountdownProps) {
   const [now, setNow] = useState(() => Date.now())
-  const firedFor = useRef<string | null>(null)
+  const lastFired = useRef<number | null>(null)
   const remaining = Date.parse(target) - (now - clockOffset)
   const fast = remaining < HOUR
 
@@ -23,11 +24,13 @@ export function PraiseCountdown({ target, clockOffset, onElapsed, className }: P
     return () => clearInterval(interval)
   }, [fast])
 
+  // Keeps asking until the server agrees the day has turned: the local clock can run slightly ahead.
   useEffect(() => {
-    if (remaining > 0 || firedFor.current === target) return
-    firedFor.current = target
+    if (remaining > 0) return
+    if (lastFired.current !== null && now - lastFired.current < RETRY_MS) return
+    lastFired.current = now
     onElapsed?.()
-  }, [remaining, target, onElapsed])
+  }, [remaining, now, onElapsed])
 
   return (
     <time dateTime={target} className={className}>

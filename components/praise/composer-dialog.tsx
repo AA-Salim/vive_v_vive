@@ -8,7 +8,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { PraiseComposer } from "@/components/praise/praise-composer"
 import { PraiseSuccess } from "@/components/praise/praise-success"
 import { useSubmitPraise } from "@/hooks/use-praise"
-import { writeDraft } from "@/lib/praise/draft"
 import { normalizePraise, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
 import type { HallPage, SubmitResult } from "@/lib/praise/types"
 import { COMPOSER_INTROS, COPY, seededPick } from "@/lib/praise/voice"
@@ -37,10 +36,7 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
   const handleSubmit = (body: string) => {
     setError(null)
     submit.mutate(body, {
-      onSuccess: (data) => {
-        writeDraft("")
-        setResult(data)
-      },
+      onSuccess: (data) => setResult(data),
       onError: (failure) => {
         if (failure.code === "already_sung") {
           toast(failure.message)

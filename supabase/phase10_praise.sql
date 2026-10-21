@@ -1,6 +1,19 @@
 -- Phase 10: Sing His Praises. A written praise for Salaxe is worth 150 points, once per day.
 -- Requires phase10_foundation.sql (free-form point reasons, vvv_add_to_realtime).
 -- Additive and idempotent: safe to run while the previous app version is deployed.
+-- Days are UTC days (the database default, so the same boundary as claim_daily_bonus), pinned inside each
+-- function so a client-chosen session time zone cannot shift the daily limits.
+
+DO $$
+BEGIN
+  IF to_regprocedure('public.vvv_add_to_realtime(text)') IS NULL OR EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.point_transactions'::regclass AND conname = 'point_transactions_reason_check'
+  ) THEN
+    RAISE EXCEPTION 'Run supabase/phase10_foundation.sql before supabase/phase10_praise.sql';
+  END IF;
+END
+$$;
 
 CREATE TABLE IF NOT EXISTS praises (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -121,8 +134,8 @@ BEGIN
   IF public.praise_word_count(p_clean) < 8 THEN RETURN 'too_few_words'; END IF;
   IF v_norm !~ '(^| )(salax|slx|chalaks|chklat|chklass|goblino)' THEN RETURN 'no_name'; END IF;
 
-  IF v_lowered ~ '(.)\1{5,}'
-    OR v_lowered ~ '(.{2,3})\1{4,}'
+  IF v_norm ~ '(.)\1{5,}'
+    OR v_norm ~ '(.{2,3})\1{4,}'
     OR v_norm ~ '(qwert|werty|ertyu|rtyui|tyuio|yuiop|asdfg|sdfgh|dfghj|fghjk|ghjkl|hjklm|zxcvb|xcvbn|cvbnm|azert|zerty|qsdfg|wxcvb|trewq|ytrew|uytre|iuytr|oiuyt|poiuy|gfdsa|hgfds|jhgfd|kjhgf|lkjhg|bvcxz|nbvcx|mnbvc)'
     OR v_norm ~ '[bcdfghjklmnpqrstvwxz]{6,}'
     OR v_norm ~ '[a-z]{31,}'
@@ -130,11 +143,13 @@ BEGIN
     RETURN 'keyboard_mash';
   END IF;
 
+  -- Function words (a, y, le, un, the...) repeat in any real sentence, so only stray letters and
+  -- repeated words of 4+ letters count as filler.
   SELECT
     coalesce(sum(c), 0),
     count(*) FILTER (WHERE length(w) > 1),
-    coalesce(max(c), 0),
-    coalesce(sum(c) FILTER (WHERE length(w) = 1), 0)
+    coalesce(max(c) FILTER (WHERE length(w) > 3), 0),
+    coalesce(sum(c) FILTER (WHERE length(w) = 1 AND w NOT IN ('a', 'i', 'o', 'y')), 0)
   INTO v_total, v_distinct, v_top, v_single
   FROM (
     SELECT w, count(*) AS c
@@ -188,7 +203,7 @@ $$;
 -- Validates, stores and rewards one praise for the caller. The reward reason stays sing_his_praises
 -- so devotion milestones, the leaderboard and act awards keep counting it.
 CREATE OR REPLACE FUNCTION submit_praise(p_body TEXT) RETURNS JSONB
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET timezone = 'UTC' AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_body TEXT := praise_clean(left(coalesce(p_body, ''), 2000));
@@ -258,7 +273,7 @@ $$;
 
 -- Salaxe (the player named salaxe) crowns (+50 Royal Favor, 3 per day) or scorns a praise. Verdicts are final.
 CREATE OR REPLACE FUNCTION judge_praise(p_praise_id UUID, p_verdict TEXT, p_note TEXT DEFAULT NULL) RETURNS JSONB
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET timezone = 'UTC' AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_note TEXT := NULLIF(btrim(regexp_replace(coalesce(p_note, ''), '\s+', ' ', 'g')), '');
@@ -331,7 +346,7 @@ $$;
 
 -- Everything the praise panel needs about today, the caller and the court, in one call.
 CREATE OR REPLACE FUNCTION praise_state() RETURNS JSONB
-LANGUAGE sql STABLE SET search_path = public AS $$
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   WITH me AS (SELECT auth.uid() AS uid),
        king AS (SELECT praise_salaxe_user_id() AS uid)
   SELECT jsonb_build_object(
@@ -343,7 +358,9 @@ LANGUAGE sql STABLE SET search_path = public AS $$
     'total_count', (SELECT count(*) FROM praises),
     'pending_count', (
       SELECT count(*) FROM praises
-      WHERE verdict IS NULL AND user_id IS DISTINCT FROM (SELECT uid FROM king)
+      WHERE verdict IS NULL
+        AND user_id IS DISTINCT FROM (SELECT uid FROM king)
+        AND created_at >= now() - interval '7 days'
     ),
     'crowns_today', (
       SELECT count(*) FROM praises

@@ -4,6 +4,7 @@ import { PRAISE_PROMPTS } from "@/lib/praise/prompts"
 export const PRAISE_REWARD = 150
 export const ROYAL_FAVOR = 50
 export const CROWNS_PER_DAY = 3
+export const COURT_WINDOW_DAYS = 7
 export const PRAISE_MIN_WORDS = 8
 export const PRAISE_MIN_CHARS = 40
 export const PRAISE_MAX_CHARS = 280
@@ -24,6 +25,7 @@ export type PraiseViolation =
 
 export type PraiseCheck = "words" | "length" | "name" | "original" | "clean"
 export type CheckState = "idle" | "progress" | "ok" | "fail"
+export type PraiseIssue = PraiseViolation | "duplicate"
 
 export interface PraiseAnalysis {
   clean: string
@@ -31,6 +33,7 @@ export interface PraiseAnalysis {
   words: number
   violation: PraiseViolation | null
   checks: Record<PraiseCheck, CheckState>
+  issue: PraiseIssue | null
   ready: boolean
 }
 
@@ -40,9 +43,10 @@ const KEYBOARD_RUN =
   /(qwert|werty|ertyu|rtyui|tyuio|yuiop|asdfg|sdfgh|dfghj|fghjk|ghjkl|hjklm|zxcvb|xcvbn|cvbnm|azert|zerty|qsdfg|wxcvb|trewq|ytrew|uytre|iuytr|oiuyt|poiuy|gfdsa|hgfds|jhgfd|kjhgf|lkjhg|bvcxz|nbvcx|mnbvc)/
 const CONSONANT_RUN = /[bcdfghjklmnpqrstvwxz]{6,}/
 const LONG_WORD = /[a-z]{31,}/
-const CHAR_RUN = /([\s\S])\1{5,}/u
-const UNIT_RUN = /([\s\S]{2,3})\1{4,}/u
+const CHAR_RUN = /([\s\S])\1{5,}/
+const UNIT_RUN = /([\s\S]{2,3})\1{4,}/
 const WORD_RUN = /(^| )([a-z]+)( \2){3,}( |$)/
+const STANDALONE_LETTERS = new Set(["a", "i", "o", "y"])
 
 export function cleanPraise(raw: string): string {
   return raw
@@ -84,27 +88,29 @@ function namesSalaxe(normalized: string): boolean {
   return ALIAS.test(normalized)
 }
 
-function isMash(clean: string, normalized: string): boolean {
-  const lowered = deaccent(clean)
+// Runs are checked on letters only: "!!!!!!" or a row of hearts is enthusiasm, not mash.
+function isMash(normalized: string): boolean {
   return (
-    CHAR_RUN.test(lowered) ||
-    UNIT_RUN.test(lowered) ||
+    CHAR_RUN.test(normalized) ||
+    UNIT_RUN.test(normalized) ||
     KEYBOARD_RUN.test(normalized) ||
     CONSONANT_RUN.test(normalized) ||
     LONG_WORD.test(normalized)
   )
 }
 
+// Function words (a, y, le, un, the...) repeat in any real sentence: only stray letters and
+// repeated words of 4+ letters count as filler.
 function isRepetitive(normalized: string): boolean {
   const words = normalized ? normalized.split(" ") : []
   const counts = new Map<string, number>()
   let singles = 0
   for (const word of words) {
     counts.set(word, (counts.get(word) ?? 0) + 1)
-    if (word.length === 1) singles++
+    if (word.length === 1 && !STANDALONE_LETTERS.has(word)) singles++
   }
   const distinctLong = [...counts.keys()].filter((word) => word.length > 1).length
-  const top = Math.max(0, ...counts.values())
+  const top = Math.max(0, ...[...counts].filter(([word]) => word.length > 3).map(([, count]) => count))
   return (
     distinctLong < 5 ||
     singles * 10 > words.length * 3 ||
@@ -133,7 +139,7 @@ export function findViolation(clean: string): PraiseViolation | null {
   if (countWords(clean) < PRAISE_MIN_WORDS) return "too_few_words"
   const normalized = normalizePraise(clean)
   if (!namesSalaxe(normalized)) return "no_name"
-  if (isMash(clean, normalized)) return "keyboard_mash"
+  if (isMash(normalized)) return "keyboard_mash"
   if (isRepetitive(normalized)) return "repetitive"
   if (hasTooManySymbols(clean)) return "too_many_symbols"
   if (copiesPrompt(normalized)) return "prompt_copy"
@@ -149,24 +155,35 @@ export function analyzePraise(raw: string, knownFingerprints?: ReadonlySet<strin
   const enoughWords = words >= PRAISE_MIN_WORDS
   const knownCopy = !!knownFingerprints?.has(normalized)
   const violation = findViolation(clean)
-
-  const cleanState: CheckState = empty
-    ? "idle"
-    : isMash(clean, normalized) || (enoughWords && (isRepetitive(normalized) || hasTooManySymbols(clean)))
-      ? "fail"
-      : enoughWords
-        ? "ok"
-        : "progress"
+  const mash = isMash(normalized)
+  const repetitive = enoughWords && isRepetitive(normalized)
+  const symbols = enoughWords && hasTooManySymbols(clean)
+  const promptCopy = copiesPrompt(normalized)
 
   const checks: Record<PraiseCheck, CheckState> = {
     words: empty ? "idle" : enoughWords ? "ok" : "progress",
     length: empty ? "idle" : chars > PRAISE_MAX_CHARS ? "fail" : chars >= PRAISE_MIN_CHARS ? "ok" : "progress",
     name: empty ? "idle" : namesSalaxe(normalized) ? "ok" : "progress",
-    original: empty ? "idle" : copiesPrompt(normalized) || knownCopy ? "fail" : enoughWords ? "ok" : "progress",
-    clean: cleanState,
+    original: empty ? "idle" : promptCopy || knownCopy ? "fail" : enoughWords ? "ok" : "progress",
+    clean: empty ? "idle" : mash || repetitive || symbols ? "fail" : enoughWords ? "ok" : "progress",
   }
 
-  return { clean, chars, words, violation, checks, ready: violation === null && !knownCopy }
+  const issue: PraiseIssue | null =
+    checks.length === "fail"
+      ? "too_long"
+      : checks.clean === "fail"
+        ? mash
+          ? "keyboard_mash"
+          : repetitive
+            ? "repetitive"
+            : "too_many_symbols"
+        : checks.original === "fail"
+          ? promptCopy
+            ? "prompt_copy"
+            : "duplicate"
+          : null
+
+  return { clean, chars, words, violation, checks, issue, ready: violation === null && !knownCopy }
 }
 
 export function praiseExcerpt(body: string, max = 90): string {

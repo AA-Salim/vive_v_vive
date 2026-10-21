@@ -3,7 +3,7 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema, migrationPending } from "@/lib/db-errors"
 import { emitLive } from "@/lib/live/server"
-import { cleanPraise, findViolation, PRAISE_INPUT_MAX, praiseExcerpt } from "@/lib/praise/rules"
+import { cleanPraise, COURT_WINDOW_DAYS, findViolation, PRAISE_INPUT_MAX, praiseExcerpt } from "@/lib/praise/rules"
 import {
   PRAISE_COLUMNS,
   asSubmitError,
@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
     query = query.eq("user_id", user.id).order("created_at", { ascending: false })
   } else if (view === "court") {
     const salaxeId = await findSalaxeUserId(supabase)
-    query = query.is("verdict", null).order("created_at", { ascending: false })
+    const since = new Date(Date.now() - COURT_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
+    query = query.is("verdict", null).gte("created_at", since).order("created_at", { ascending: false })
     if (salaxeId) query = query.neq("user_id", salaxeId)
   } else {
     query = query.order("created_at", { ascending: false })

@@ -14,7 +14,7 @@ import {
   PRAISE_MIN_CHARS,
   PRAISE_REWARD,
 } from "@/lib/praise/rules"
-import { COPY } from "@/lib/praise/voice"
+import { COPY, submitErrorMessage } from "@/lib/praise/voice"
 import { cn } from "@/lib/utils"
 
 interface PraiseComposerProps {
@@ -54,8 +54,10 @@ export function PraiseComposer({
   const analysis = useMemo(() => analyzePraise(text, knownFingerprints), [text, knownFingerprints])
   const textareaId = useId()
   const checklistId = useId()
+  const hintId = useId()
   const errorId = useId()
   const over = analysis.chars > PRAISE_MAX_CHARS
+  const hint = !error && analysis.issue ? submitErrorMessage(analysis.issue) : null
   const fill = Math.min(100, (analysis.chars / PRAISE_MAX_CHARS) * 100)
 
   const submit = () => {
@@ -78,7 +80,7 @@ export function PraiseComposer({
           rows={5}
           maxLength={PRAISE_INPUT_MAX}
           placeholder={COPY.placeholder}
-          aria-describedby={error ? `${checklistId} ${errorId}` : checklistId}
+          aria-describedby={error ? `${checklistId} ${errorId}` : `${checklistId} ${hintId}`}
           aria-invalid={error ? true : undefined}
           onChange={(event) => {
             setText(event.target.value)
@@ -117,7 +119,12 @@ export function PraiseComposer({
         <ScrollRod className="-bottom-1.5" />
       </div>
 
-      <PraiseChecklist id={checklistId} analysis={analysis} />
+      <div>
+        <PraiseChecklist id={checklistId} analysis={analysis} />
+        <p id={hintId} aria-live="polite" className={cn("text-xs leading-relaxed text-destructive", hint && "mt-2.5")}>
+          {hint}
+        </p>
+      </div>
 
       {error && (
         <p id={errorId} role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

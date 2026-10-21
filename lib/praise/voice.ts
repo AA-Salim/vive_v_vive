@@ -179,7 +179,7 @@ export const COPY = {
   emptyMine: "You have not sung yet. 150 points are waiting for a few honest lies.",
   emptyCourt: "Nothing to judge. The court is quiet and the King is bored.",
   legacy: (count: number) =>
-    `Before the quill: ${count} silent ${count === 1 ? "kiss" : "kisses"} and songs, archived with honor.`,
+    `Before the quill: ${count} one-click ${count === 1 ? "kiss" : "kisses"}, archived with honor and zero literary merit.`,
 }
 
 const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {

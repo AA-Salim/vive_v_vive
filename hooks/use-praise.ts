@@ -10,9 +10,11 @@ import {
   type QueryKey,
 } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ACTIVE_SESSION_KEY, useLiveSignal } from "@/components/live/live-provider"
+import { useLiveSignal } from "@/components/live/live-provider"
+import { ACTIVE_SESSION_KEY } from "@/lib/live/events"
 import { ACTIVE_STATUSES, type LiveEventPayloads } from "@/lib/live/events"
 import { createClient } from "@/lib/supabase-client"
+import { writeDraft } from "@/lib/praise/draft"
 import { ROYAL_FAVOR } from "@/lib/praise/rules"
 import type {
   HallPage,
@@ -142,6 +144,7 @@ export function useSubmitPraise(userId: string | null) {
       throw new PraiseRequestError(result.error ?? submitErrorMessage(code), code, result.status)
     },
     onSuccess: (result) => {
+      writeDraft("")
       queryClient.setQueryData<PraiseStateData>(praiseKeys.state(userId), (old) => {
         if (!old?.state.available) return old
         const state = old.state

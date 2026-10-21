@@ -15,7 +15,6 @@ import { CollectionGrid } from "@/components/titles/collection-grid"
 import { DignityDialog } from "@/components/titles/dignity-dialog"
 import { HallHeader } from "@/components/titles/hall-header"
 import { MilestonesPanel } from "@/components/titles/milestones-panel"
-import { TitlePerkAnnouncer } from "@/components/titles/perk-announcer"
 import { useAuth } from "@/hooks/use-auth"
 import {
   useBuyTitle,
@@ -81,7 +80,6 @@ export default function TitlesPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <TitlePerkAnnouncer />
       <HallHeader balance={signedIn ? balance : null} signedIn={signedIn} />
 
       {catalog.error && (

@@ -3,6 +3,8 @@
 import { useState, type ReactNode } from "react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { LiveProvider } from "@/components/live/live-provider"
+import { BetResultReveal } from "@/components/betting/bet-result-reveal"
+import { TitlePerkAnnouncer } from "@/components/titles/perk-announcer"
 import { useAuthSync } from "@/hooks/use-auth"
 
 function AuthSync() {
@@ -29,7 +31,11 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSync />
-      <LiveProvider>{children}</LiveProvider>
+      <LiveProvider>
+        {children}
+        <BetResultReveal />
+        <TitlePerkAnnouncer />
+      </LiveProvider>
     </QueryClientProvider>
   )
 }

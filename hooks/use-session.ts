@@ -2,7 +2,7 @@
 
 import { useCallback } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { ACTIVE_SESSION_KEY } from "@/components/live/live-provider"
+import { ACTIVE_SESSION_KEY } from "@/lib/live/events"
 import type { SessionWithAssignments } from "@/lib/types"
 
 interface ActiveSession {

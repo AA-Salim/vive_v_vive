@@ -1,6 +1,5 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
-import { ACT_CATEGORIES } from "@/lib/acts"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -82,11 +81,6 @@ export async function POST(request: Request) {
 
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
   const playerMap = new Map((allPlayers ?? []).map((p) => [p.id, p]))
-  const playerByAuth = new Map(
-    (allPlayers ?? [])
-      .filter((p) => p.auth_user_id)
-      .map((p) => [p.auth_user_id!, p])
-  )
 
   // Warrior: best win rate (min 5 games) - need user_id via auth_user_id
   const linkedPlayers = (allPlayers ?? []).filter(
@@ -118,11 +112,11 @@ export async function POST(request: Request) {
     (a, b) => b[1] - a[1]
   )[0]
 
-  // Devotee: most kisses
+  // Devotee: most kisses and sung praises
   const { data: kissTxns } = await supabase
     .from("point_transactions")
     .select("user_id")
-    .eq("reason", "kiss_the_hand")
+    .in("reason", ["kiss_the_hand", "sing_his_praises"])
     .gte("created_at", actStarted)
     .lte("created_at", actEnded)
 

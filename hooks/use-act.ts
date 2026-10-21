@@ -1,19 +1,22 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useQuery } from "@tanstack/react-query"
 import type { Act } from "@/lib/types"
 
+export const ACTIVE_ACT_KEY = ["acts", "active"] as const
+
+async function fetchActiveAct(signal: AbortSignal): Promise<Act | null> {
+  const res = await fetch("/api/acts", { signal })
+  if (!res.ok) throw new Error(`GET /api/acts failed with ${res.status}`)
+  const data = (await res.json()) as { act?: Act | null }
+  return data.act ?? null
+}
+
 export function useAct() {
-  const [act, setAct] = useState<Act | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    fetch("/api/acts")
-      .then((r) => r.json())
-      .then((data) => setAct(data.act ?? null))
-      .catch(() => {})
-      .finally(() => setIsLoading(false))
-  }, [])
-
-  return { act, isLoading }
+  const query = useQuery({
+    queryKey: ACTIVE_ACT_KEY,
+    queryFn: ({ signal }) => fetchActiveAct(signal),
+    staleTime: 10 * 60_000,
+  })
+  return { act: query.data ?? null, isLoading: query.isPending }
 }

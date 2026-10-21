@@ -1,96 +1,150 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useCallback } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { PointTransaction } from "@/lib/types"
 
-interface PointsState {
+interface PointsSnapshot {
   balance: number
   lastDailyClaim: string | null
   transactions: PointTransaction[]
+}
+
+interface KissSnapshot {
   kissToday: number
   kissRemaining: number
   totalKisses: number
-  isLoading: boolean
+}
+
+const DAILY_KISSES = 3
+const NO_TRANSACTIONS: PointTransaction[] = []
+const DEFAULT_KISS: KissSnapshot = { kissToday: 0, kissRemaining: DAILY_KISSES, totalKisses: 0 }
+
+// Balance queries are ["points", userId, ...]: live events refresh only the affected user's balance.
+export function pointsKey(userId: string | null | undefined) {
+  return ["points", userId ?? "anonymous"] as const
+}
+
+export function kissKey(userId: string | null | undefined) {
+  return ["praise", "kiss", userId ?? "anonymous"] as const
+}
+
+const asNumber = (value: unknown, fallback: number) =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback
+
+async function fetchPoints(signal: AbortSignal): Promise<PointsSnapshot> {
+  const res = await fetch("/api/points", { signal, cache: "no-store" })
+  if (!res.ok) throw new Error(`GET /api/points failed with ${res.status}`)
+  const data = (await res.json()) as { balance?: number; last_daily_claim?: string | null; transactions?: PointTransaction[] }
+  return {
+    balance: asNumber(data.balance, 0),
+    lastDailyClaim: data.last_daily_claim ?? null,
+    transactions: Array.isArray(data.transactions) ? data.transactions : NO_TRANSACTIONS,
+  }
+}
+
+async function fetchKiss(signal: AbortSignal): Promise<KissSnapshot> {
+  const res = await fetch("/api/points/kiss", { signal, cache: "no-store" })
+  if (!res.ok) return DEFAULT_KISS
+  const data = (await res.json()) as { used_today?: number; remaining_today?: number; total_kisses?: number }
+  return {
+    kissToday: asNumber(data.used_today, 0),
+    kissRemaining: asNumber(data.remaining_today, DAILY_KISSES),
+    totalKisses: asNumber(data.total_kisses, 0),
+  }
+}
+
+async function postJson(url: string, body?: unknown) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  return res.json().catch(() => null)
 }
 
 export function usePoints(userId: string | null) {
-  const [state, setState] = useState<PointsState>({
-    balance: 0,
-    lastDailyClaim: null,
-    transactions: [],
-    kissToday: 0,
-    kissRemaining: 3,
-    totalKisses: 0,
-    isLoading: true,
+  const queryClient = useQueryClient()
+  const enabled = !!userId
+
+  const points = useQuery({
+    queryKey: pointsKey(userId),
+    queryFn: ({ signal }) => fetchPoints(signal),
+    enabled,
+    staleTime: 15_000,
   })
 
-  const fetchPoints = useCallback(async () => {
-    if (!userId) {
-      setState({ balance: 0, lastDailyClaim: null, transactions: [], kissToday: 0, kissRemaining: 3, totalKisses: 0, isLoading: false })
-      return
-    }
-    setState((prev) => ({ ...prev, isLoading: true }))
-    try {
-      const [pointsRes, kissRes] = await Promise.all([
-        fetch("/api/points"),
-        fetch("/api/points/kiss"),
-      ])
-      if (!pointsRes.ok) {
-        setState((prev) => ({ ...prev, isLoading: false }))
-        return
-      }
-      const data = await pointsRes.json()
-      const kissData = kissRes.ok ? await kissRes.json() : { used_today: 0, remaining_today: 3, total_kisses: 0 }
-      setState({
-        balance: data.balance,
-        lastDailyClaim: data.last_daily_claim,
-        transactions: data.transactions,
-        kissToday: kissData.used_today,
-        kissRemaining: kissData.remaining_today,
-        totalKisses: kissData.total_kisses,
-        isLoading: false,
-      })
-    } catch {
-      setState((prev) => ({ ...prev, isLoading: false }))
-    }
-  }, [userId])
+  const kiss = useQuery({
+    queryKey: kissKey(userId),
+    queryFn: ({ signal }) => fetchKiss(signal),
+    enabled,
+    staleTime: 60_000,
+  })
 
-  useEffect(() => {
-    fetchPoints()
-    const timeout = setTimeout(() => {
-      setState((prev) => (prev.isLoading ? { ...prev, isLoading: false } : prev))
-    }, 5000)
-    return () => clearTimeout(timeout)
-  }, [fetchPoints])
+  const setBalance = useCallback(
+    (balance: unknown) => {
+      if (typeof balance !== "number" || !userId) return
+      queryClient.setQueryData<PointsSnapshot>(pointsKey(userId), (old) => (old ? { ...old, balance } : old))
+    },
+    [queryClient, userId]
+  )
+
+  const refresh = useCallback(async () => {
+    if (!userId) return
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: pointsKey(userId) }),
+      queryClient.invalidateQueries({ queryKey: kissKey(userId) }),
+    ])
+  }, [queryClient, userId])
 
   const initialize = useCallback(async () => {
-    await fetch("/api/points/initialize", { method: "POST" })
-    await fetchPoints()
-  }, [fetchPoints])
+    const data = await postJson("/api/points/initialize")
+    if (!data?.already_initialized) await refresh()
+    return data
+  }, [refresh])
 
   const claimDaily = useCallback(async () => {
-    const res = await fetch("/api/points/daily", { method: "POST" })
-    const data = await res.json()
-    await fetchPoints()
+    const data = await postJson("/api/points/daily")
+    if (data?.claimed) setBalance(data.balance)
+    await refresh()
     return data
-  }, [fetchPoints])
+  }, [refresh, setBalance])
 
-  const kissTheHand = useCallback(async () => {
-    const res = await fetch("/api/points/kiss", { method: "POST" })
-    const data = await res.json()
-    await fetchPoints()
-    return data
-  }, [fetchPoints])
+  // The optional body is forwarded as JSON (e.g. a written praise).
+  const kissTheHand = useCallback(
+    async (body?: Record<string, unknown>) => {
+      const data = await postJson("/api/points/kiss", body)
+      if (data && typeof data === "object") {
+        setBalance(data.balance)
+        if (typeof data.remaining_today === "number" && userId) {
+          queryClient.setQueryData<KissSnapshot>(kissKey(userId), (old) => {
+            const base = old ?? DEFAULT_KISS
+            const used = data.kissed ? base.kissToday + 1 : base.kissToday
+            return {
+              kissToday: used,
+              kissRemaining: data.remaining_today,
+              totalKisses: data.kissed ? base.totalKisses + 1 : base.totalKisses,
+            }
+          })
+        }
+      }
+      await refresh()
+      return data
+    },
+    [queryClient, refresh, setBalance, userId]
+  )
+
+  const kissData = kiss.data ?? DEFAULT_KISS
 
   return {
-    balance: state.balance,
-    lastDailyClaim: state.lastDailyClaim,
-    transactions: state.transactions,
-    kissToday: state.kissToday,
-    kissRemaining: state.kissRemaining,
-    totalKisses: state.totalKisses,
-    isLoading: state.isLoading,
-    refetch: fetchPoints,
+    balance: points.data?.balance ?? 0,
+    lastDailyClaim: points.data?.lastDailyClaim ?? null,
+    transactions: points.data?.transactions ?? NO_TRANSACTIONS,
+    kissToday: kissData.kissToday,
+    kissRemaining: kissData.kissRemaining,
+    totalKisses: kissData.totalKisses,
+    isLoading: enabled && points.isPending,
+    refetch: refresh,
     initialize,
     claimDaily,
     kissTheHand,

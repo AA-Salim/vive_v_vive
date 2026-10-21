@@ -16,7 +16,16 @@ export interface LiveEventPayloads {
   "session.status": { from: SessionStatus; to: SessionStatus; winner?: Side | null }
   "session.rerolled": { lockedCount: number }
   "session.lock": { playerName: string; locked: boolean }
-  "coachdraft.pick": { coachName: string; playerName: string; side: Side; lane?: Role | null }
+  "coachdraft.pick": {
+    coachName: string
+    playerName: string
+    side: Side
+    lane?: Role | null
+    pickNumber?: number
+    nextSide?: Side | null
+    targetUserId?: string | null
+    playerUserId?: string | null
+  }
   "bet.placed": {
     side: Side
     amount: number
@@ -69,8 +78,22 @@ export interface LiveEventPayloads {
   "title.settled": {
     applications: { userId: string; name: string; title: string; kind: "perk" | "curse"; delta: number; detail: string; beneficiaryId?: string | null; beneficiaryName?: string | null }[]
   }
-  "queue.changed": { action: "joined" | "left" | "cleared" | "reordered" | "advanced"; playerName?: string | null }
-  "vainqueur.changed": { action: string; playerName?: string | null }
+  "queue.changed": {
+    action: "joined" | "left" | "cleared" | "reordered" | "advanced"
+    playerName?: string | null
+    count?: number
+    targetUserId?: string | null
+  }
+  "vainqueur.changed": {
+    action: string
+    playerName?: string | null
+    targetUserId?: string | null
+    targetUserIds?: string[]
+    stayed?: string[]
+    comingIn?: string[]
+    rotatedOut?: string[]
+    mode?: string
+  }
   "fearless.changed": { action: "cleared" | "removed" | "added"; champion?: string | null }
   "points.changed": { userId: string; delta: number; reason: string }
   "act.changed": { actNumber: number; status: string }
@@ -93,6 +116,13 @@ export interface LiveEventPayloads {
   "vote.opened": { closesAt: string }
   "vote.cast": { category: string }
   "vote.closed": { mvpName: string | null; interName: string | null }
+  "coachdraft.undo": { coachName: string; playerName: string; side: Side; pickNumber: number; targetUserId?: string | null }
+  "coachdraft.lanes": { coachName: string; side: Side; lanes: { playerName: string; lane: Role }[] }
+  "roster.changed": {
+    action: "added" | "renamed" | "benched" | "activated" | "removed"
+    playerName: string
+    previousName?: string | null
+  }
 }
 
 export type LiveEventType = keyof LiveEventPayloads
@@ -157,6 +187,7 @@ const DOMAIN_KEYS: Record<LiveDomain, string[]> = {
   act: ["acts"],
   duel: ["duels", "points"],
   vote: ["votes", "sidebets", "points", "shame"],
+  roster: ["sessions", "session", "queue", "vainqueur"],
 }
 
 // Query-key roots to invalidate when an event arrives. Feature queries must start with one of these roots.
@@ -188,6 +219,7 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   post_game_votes: ["votes", "sidebets", "points"],
   post_game_ballots: ["votes"],
   praises: ["praise"],
+  players: ["sessions", "session", "queue", "vainqueur"],
 }
 
 export const ACTIVE_STATUSES: SessionStatus[] = ["coach_draft", "draft", "chaos", "betting", "in_game"]

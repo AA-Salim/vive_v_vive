@@ -1,24 +1,27 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { createClient } from "@/lib/supabase-client"
-import type { Player } from "@/lib/types"
+import { useMemo, useState } from "react"
+import { ChevronRightIcon, DicesIcon, GavelIcon, Loader2Icon, RotateCcwIcon, UserPlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { toast } from "sonner"
-import { cn } from "@/lib/utils"
-
-const SELECTION_KEY = "vvv_last_selected_players"
+import { ConfirmDialog } from "@/components/session/confirm-dialog"
+import { useMediaQuery } from "@/components/session/use-browser-state"
+import { useNow } from "@/components/session/use-clock"
+import { byActivity } from "@/components/lobby/player-stats"
+import { canDelete, type PlayerIntent } from "@/components/lobby/roster/player-admin-menu"
+import { PlayerNameDialog } from "@/components/lobby/roster/player-name-dialog"
+import { RosterList, RosterSearch } from "@/components/lobby/roster/roster-list"
+import { RosterSheet } from "@/components/lobby/roster/roster-sheet"
+import { SelectionTray } from "@/components/lobby/roster/selection-tray"
+import { useRosterActions } from "@/components/lobby/roster/use-roster-actions"
+import { useRosterSelection } from "@/components/lobby/roster/use-roster-selection"
+import { useAuth } from "@/hooks/use-auth"
+import { useSession } from "@/hooks/use-session"
+import { ACTIVE_STATUSES } from "@/lib/live/events"
+import { LOBBY_SIZE } from "@/lib/lobby/constants"
+import { useQueue, useRoster } from "@/lib/lobby/queries"
+import type { RosterPlayer } from "@/lib/lobby/types"
+import type { Player } from "@/lib/types"
 
 interface RosterManagerProps {
   onRandomize: (players: Player[]) => void
@@ -27,369 +30,200 @@ interface RosterManagerProps {
   disabled?: boolean
 }
 
-export function RosterManager({ onRandomize, onCoachDraft, isAdmin, disabled }: RosterManagerProps) {
-  const [players, setPlayers] = useState<Player[]>([])
-  const [loading, setLoading] = useState(true)
-  const [newName, setNewName] = useState("")
+const QUICK_PICKS = 8
+
+type NameConfig = { mode: "add" } | { mode: "rename"; player: RosterPlayer }
+
+function RosterSkeleton() {
+  return (
+    <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading the roster">
+      <Skeleton className="h-5 w-48" />
+      <div className="grid grid-cols-5 gap-1.5">
+        {Array.from({ length: 10 }, (_, i) => (
+          <Skeleton key={i} className="h-10 rounded-lg" />
+        ))}
+      </div>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Skeleton key={i} className="h-12 rounded-xl" />
+      ))}
+    </div>
+  )
+}
+
+export function RosterManager({ onRandomize, onCoachDraft, isAdmin = false, disabled = false }: RosterManagerProps) {
+  const roster = useRoster()
+  const queue = useQueue()
+  const { profile } = useAuth()
+  const { session } = useSession()
+  const actions = useRosterActions()
+  const wide = useMediaQuery("(min-width: 640px)")
+  const now = useNow(60_000) ?? 0
   const [search, setSearch] = useState("")
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [deleteTarget, setDeleteTarget] = useState<Player | null>(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [nameDialog, setNameDialog] = useState<{ open: boolean; config: NameConfig }>({ open: false, config: { mode: "add" } })
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; player: RosterPlayer | null }>({ open: false, player: null })
+  const openNameDialog = (config: NameConfig) => setNameDialog({ open: true, config })
+  const closeNameDialog = () => setNameDialog((dialog) => ({ ...dialog, open: false }))
+  const closeDeleteDialog = () => setDeleteDialog((dialog) => ({ ...dialog, open: false }))
+  const deleteTarget = deleteDialog.player
+  const nameConfig = nameDialog.config
 
-  const fetchPlayers = useCallback(async () => {
-    try {
-      const res = await fetch("/api/players")
-      const data = await res.json()
-      if (Array.isArray(data)) setPlayers(data)
-    } catch {
-      toast.error("Failed to load players")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const players = useMemo(() => roster.data ?? [], [roster.data])
+  const queueEntries = useMemo(() => queue.data ?? [], [queue.data])
+  const lastLineup = useMemo(
+    () => (session && !ACTIVE_STATUSES.includes(session.status) ? session.session_assignments.map((a) => a.player_id) : []),
+    [session]
+  )
+  const selection = useRosterSelection(players, queueEntries, lastLineup)
+  const active = useMemo(() => players.filter((p) => p.is_active).sort(byActivity), [players])
+  const benched = useMemo(() => players.filter((p) => !p.is_active).sort((a, b) => a.name.localeCompare(b.name)), [players])
+  const queuePositions = useMemo(() => new Map(queueEntries.map((e, i) => [e.player_id, i + 1])), [queueEntries])
 
-  useEffect(() => {
-    fetchPlayers()
-  }, [fetchPlayers])
+  const count = selection.selected.length
+  const ready = count === LOBBY_SIZE
 
-  // Restore last selection from localStorage once players are loaded
-  useEffect(() => {
-    if (players.length === 0) return
-    try {
-      const saved = localStorage.getItem(SELECTION_KEY)
-      if (saved) {
-        const ids: string[] = JSON.parse(saved)
-        const valid = ids.filter((id) => players.some((p) => p.id === id && p.is_active))
-        if (valid.length > 0) {
-          setSelectedIds(new Set(valid))
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [players])
-
-  // Save selection to localStorage whenever it changes
-  useEffect(() => {
-    if (selectedIds.size > 0) {
-      localStorage.setItem(SELECTION_KEY, JSON.stringify([...selectedIds]))
-    }
-  }, [selectedIds])
-
-  const addPlayer = async () => {
-    const name = newName.trim()
-    if (!name) return
-
-    const res = await fetch("/api/players", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-    })
-
-    if (res.ok) {
-      const player = await res.json()
-      setPlayers((prev) => [...prev, player].sort((a, b) => a.name.localeCompare(b.name)))
-      setNewName("")
-      toast.success(`${name} added`)
-    } else {
-      const err = await res.json()
-      toast.error(err.error || "Failed to add player")
-    }
+  const onIntent = (intent: PlayerIntent, player: RosterPlayer) => {
+    if (intent === "rename") openNameDialog({ mode: "rename", player })
+    else if (intent === "delete") setDeleteDialog({ open: true, player })
+    else if (intent === "bench" || intent === "activate") actions.bench(player, intent === "activate")
+    else actions.queue.mutate({ player, join: intent === "queue" })
   }
 
-  const deletePlayer = async () => {
-    if (!deleteTarget) return
-
-    const res = await fetch(`/api/players/${deleteTarget.id}`, {
-      method: "DELETE",
-    })
-
-    if (res.ok) {
-      setPlayers((prev) => prev.filter((p) => p.id !== deleteTarget.id))
-      setSelectedIds((prev) => {
-        const next = new Set(prev)
-        next.delete(deleteTarget.id)
-        return next
-      })
-      toast.success(`${deleteTarget.name} removed`)
-    } else {
-      toast.error("Failed to remove player")
-    }
-    setDeleteTarget(null)
+  const listProps = {
+    selectedIds: selection.selectedIds,
+    full: count >= LOBBY_SIZE,
+    meId: profile?.player_id ?? null,
+    queuePositions,
+    isAdmin,
+    now,
+    onToggle: selection.toggle,
+    onIntent,
   }
 
-  const toggleActive = async (player: Player) => {
-    const res = await fetch(`/api/players/${player.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_active: !player.is_active }),
-    })
-
-    if (res.ok) {
-      const updated = await res.json()
-      setPlayers((prev) =>
-        prev.map((p) => (p.id === updated.id ? updated : p))
-      )
-      if (!updated.is_active) {
-        setSelectedIds((prev) => {
-          const next = new Set(prev)
-          next.delete(updated.id)
-          return next
-        })
-      }
-    }
-  }
-
-  const toggleSelection = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const activePlayers = players.filter((p) => p.is_active)
-  const inactivePlayers = players.filter((p) => !p.is_active)
-  const selectedCount = selectedIds.size
-  const selectedPlayers = players.filter((p) => selectedIds.has(p.id))
-
-  const selectAll = () => {
-    setSelectedIds(new Set(activePlayers.map((p) => p.id)))
-  }
-
-  const clearAll = () => {
-    setSelectedIds(new Set())
-    localStorage.removeItem(SELECTION_KEY)
-  }
-
-  const handleRandomize = () => {
-    const selected = players.filter((p) => selectedIds.has(p.id))
-    onRandomize(selected)
-  }
+  const rollLabel = disabled
+    ? "Rolling the dice..."
+    : ready
+      ? "Roll the teams"
+      : count < LOBBY_SIZE
+        ? `Pick ${LOBBY_SIZE - count} more`
+        : `${count - LOBBY_SIZE} too many to roll`
+  const poolHint =
+    count >= LOBBY_SIZE ? `Coaches draft from your ${count} picks.` : "Coaches draft from every active player."
 
   return (
-    <div className="space-y-4">
-      {isAdmin && (
-        <div className="flex gap-2">
-          <Input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addPlayer()}
-            placeholder="Player name..."
-            className="bg-[var(--color-navy)]/50"
-          />
-          <Button onClick={addPlayer} size="sm" variant="outline">
-            Add
-          </Button>
+    <div className="relative overflow-hidden rounded-2xl border border-[var(--color-gold)]/25 bg-card p-4 shadow-[0_18px_48px_-28px_var(--color-gold)] sm:p-5">
+      <div aria-hidden className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/70 to-transparent" />
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-display text-xl font-semibold tracking-wide text-[var(--color-gold)]">The Roster</h2>
+          <p className="text-xs text-muted-foreground">Tap ten names. The regulars sit on top.</p>
         </div>
-      )}
+        {isAdmin && (
+          <Button variant="outline" className="h-10 shrink-0 gap-2" onClick={() => openNameDialog({ mode: "add" })}>
+            <UserPlusIcon aria-hidden />
+            Add player
+          </Button>
+        )}
+      </header>
 
-      <Input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search players..."
-        className="bg-[var(--color-navy)]/30 text-sm"
-      />
-
-      {loading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-10 w-full" />
-          ))}
+      {roster.isPending ? (
+        <RosterSkeleton />
+      ) : roster.isError && players.length === 0 ? (
+        <div role="alert" className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-8 text-center">
+          <p className="text-sm text-muted-foreground">The roster scroll is unreadable right now.</p>
+          <Button variant="outline" className="h-10" onClick={() => roster.refetch()} disabled={roster.isFetching}>
+            <RotateCcwIcon className={roster.isFetching ? "animate-spin" : undefined} aria-hidden />
+            Try again
+          </Button>
         </div>
       ) : (
-        <>
-          <div className="flex items-center justify-between">
-            <span
-              className={cn(
-                "text-sm font-medium",
-                selectedCount === 10
-                  ? "text-green-400"
-                  : selectedCount > 10
-                    ? "text-red-400"
-                    : "text-[var(--color-gold-light)]/70"
-              )}
-            >
-              {selectedCount}/10 selected
-            </span>
-            <div className="flex gap-2">
-              <Button
-                onClick={selectAll}
-                size="sm"
-                variant="ghost"
-                className="text-xs"
-              >
-                Select All
-              </Button>
-              <Button
-                onClick={clearAll}
-                size="sm"
-                variant="ghost"
-                className="text-xs text-red-400/70"
-              >
-                Clear
-              </Button>
-            </div>
-          </div>
+        <div className="flex flex-col gap-4">
+          <SelectionTray
+            selected={selection.selected}
+            queueReady={selection.queueReady}
+            canRematch={selection.canRematch}
+            onRemove={selection.remove}
+            onSeatQueue={selection.seatQueue}
+            onRematch={selection.rematch}
+            onClear={selection.clear}
+          />
 
-          {/* Selected players summary */}
-          {selectedCount > 0 && (
-            <div className="rounded-md border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/40 p-2">
-              <div className="mb-1 text-xs font-medium text-[var(--color-gold-light)]/50">
-                Selected
+          {wide ? (
+            <>
+              <RosterSearch id="roster-search" value={search} onChange={setSearch} />
+              <div className="max-h-[26rem] overflow-y-auto overscroll-contain pr-1 pb-3 [mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)] [scrollbar-width:thin]">
+                <RosterList {...listProps} players={active} benched={isAdmin ? benched : []} search={search} columns />
               </div>
-              <div className="flex flex-wrap gap-1">
-                {selectedPlayers.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => toggleSelection(p.id)}
-                    className="rounded bg-[var(--color-gold)]/15 px-2 py-0.5 text-xs text-[var(--color-gold-light)] transition-colors hover:bg-red-500/20 hover:text-red-300"
-                    title={`Remove ${p.name}`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
+            </>
+          ) : (
+            <>
+              <RosterList {...listProps} players={active.slice(0, QUICK_PICKS)} benched={[]} search="" />
+              <Button variant="outline" className="h-11 justify-between rounded-xl" onClick={() => setSheetOpen(true)}>
+                Search all {active.length} players{isAdmin && benched.length > 0 ? ` and ${benched.length} benched` : ""}
+                <ChevronRightIcon aria-hidden />
+              </Button>
+            </>
           )}
 
-          <div className="max-h-[400px] space-y-1 overflow-y-auto pr-1">
-            {activePlayers
-              .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-              .map((player) => (
-                <div
-                  key={player.id}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-2 py-1.5",
-                    selectedIds.has(player.id)
-                      ? "bg-[var(--color-gold)]/8"
-                      : "hover:bg-[var(--color-navy-lighter)]"
-                  )}
-                >
-                  <Checkbox
-                    checked={selectedIds.has(player.id)}
-                    onCheckedChange={() => toggleSelection(player.id)}
-                  />
-                  <span className={cn(
-                    "flex-1 truncate text-sm",
-                    selectedIds.has(player.id)
-                      ? "text-[var(--color-gold-light)]"
-                      : "text-[var(--color-gold-light)]/60"
-                  )}>
-                    {player.name}
-                  </span>
-                  {isAdmin && (
-                    <>
-                      <Button
-                        onClick={() => toggleActive(player)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1 text-[10px] text-[var(--color-gold-light)]/40"
-                        title="Set inactive"
-                      >
-                        Bench
-                      </Button>
-                      <Button
-                        onClick={() => setDeleteTarget(player)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
-                      >
-                        X
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
-
-            {inactivePlayers.length > 0 && isAdmin && (
-              <>
-                <div className="pt-2 pb-1 text-xs text-[var(--color-gold-light)]/40">
-                  Benched
-                </div>
-                {inactivePlayers
-                  .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-                  .map((player) => (
-                    <div
-                      key={player.id}
-                      className="flex items-center gap-2 rounded-md px-2 py-1.5 opacity-50"
-                    >
-                      <span className="flex-1 truncate text-sm text-[var(--color-gold-light)]/60">
-                        {player.name}
-                      </span>
-                      <Button
-                        onClick={() => toggleActive(player)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1 text-[10px] text-green-400/60"
-                        title="Reactivate"
-                      >
-                        Activate
-                      </Button>
-                      <Button
-                        onClick={() => setDeleteTarget(player)}
-                        size="sm"
-                        variant="ghost"
-                        className="h-6 px-1 text-[10px] text-red-400/60 hover:text-red-400"
-                      >
-                        X
-                      </Button>
-                    </div>
-                  ))}
-              </>
+          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
+            <Button
+              className="h-12 gap-2 rounded-xl text-base font-semibold shadow-[0_8px_24px_-12px_var(--color-gold)] disabled:shadow-none sm:flex-1"
+              disabled={!ready || disabled}
+              onClick={() => onRandomize(selection.selected)}
+            >
+              {disabled ? <Loader2Icon className="animate-spin" aria-hidden /> : <DicesIcon aria-hidden />}
+              {rollLabel}
+            </Button>
+            {onCoachDraft && (
+              <Button variant="outline" className="h-12 gap-2 rounded-xl sm:px-5" disabled={disabled} onClick={onCoachDraft}>
+                <GavelIcon aria-hidden />
+                Coach draft
+              </Button>
             )}
           </div>
-
-          <Button
-            onClick={handleRandomize}
-            disabled={selectedCount !== 10 || disabled}
-            className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)] disabled:opacity-40"
-          >
-            {selectedCount !== 10
-              ? `Select ${10 - selectedCount} more player${10 - selectedCount !== 1 ? "s" : ""}`
-              : "Randomize Teams"}
-          </Button>
-
-          {onCoachDraft && (
-            <Button
-              onClick={onCoachDraft}
-              disabled={disabled}
-              variant="outline"
-              className="w-full border-purple-500/30 text-purple-400 hover:border-purple-500/60 hover:bg-purple-500/10"
-            >
-              Coach Draft
-            </Button>
-          )}
-
-          {selectedCount > 10 && (
-            <p className="text-center text-xs text-red-400">
-              Too many players selected. Deselect {selectedCount - 10}.
-            </p>
-          )}
-        </>
+          {onCoachDraft && <p className="-mt-2 text-center text-[11px] text-muted-foreground sm:text-right">{poolHint}</p>}
+        </div>
       )}
 
-      <Dialog
-        open={deleteTarget !== null}
-        onOpenChange={() => setDeleteTarget(null)}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove {deleteTarget?.name}?</DialogTitle>
-            <DialogDescription>
-              This will permanently delete this player and all their stats.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={deletePlayer}>
-              Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {!wide && (
+        <RosterSheet
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          count={count}
+          search={<RosterSearch id="roster-sheet-search" value={search} onChange={setSearch} />}
+        >
+          <RosterList {...listProps} players={active} benched={isAdmin ? benched : []} search={search} />
+        </RosterSheet>
+      )}
+
+      <PlayerNameDialog
+        open={nameDialog.open}
+        onOpenChange={(open) => !open && closeNameDialog()}
+        mode={nameConfig.mode}
+        initialName={nameConfig.mode === "rename" ? nameConfig.player.name : ""}
+        pending={actions.add.isPending || actions.update.isPending}
+        onSubmit={(name) => {
+          const done = { onSuccess: closeNameDialog }
+          if (nameConfig.mode === "rename") actions.update.mutate({ id: nameConfig.player.id, patch: { name } }, done)
+          else actions.add.mutate(name, done)
+        }}
+      />
+      <ConfirmDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => !open && closeDeleteDialog()}
+        title={`Strike ${deleteTarget?.name ?? "this player"} from the roster?`}
+        description={
+          deleteTarget && canDelete(deleteTarget)
+            ? "They have never played, so nothing else is lost. This cannot be undone."
+            : "Players with history can only be benched."
+        }
+        confirmLabel="Delete for good"
+        destructive
+        pending={actions.remove.isPending}
+        onConfirm={() => {
+          if (deleteTarget) actions.remove.mutate(deleteTarget, { onSettled: closeDeleteDialog })
+        }}
+      />
     </div>
   )
 }

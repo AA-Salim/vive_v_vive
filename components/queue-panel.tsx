@@ -1,9 +1,23 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import type { QueueEntry } from "@/lib/types"
-import { Button } from "@/components/ui/button"
-import { toast } from "sonner"
+import { useMemo, useState } from "react"
+import Link from "next/link"
+import { AnimatePresence } from "motion/react"
+import { EllipsisVerticalIcon, ListOrderedIcon, Loader2Icon, LogInIcon, RotateCcwIcon, Trash2Icon, UserPlusIcon, UserMinusIcon } from "lucide-react"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ConfirmDialog } from "@/components/session/confirm-dialog"
+import { useNow } from "@/components/session/use-clock"
+import { QueueRow } from "@/components/lobby/queue/queue-row"
+import { useQueueActions } from "@/components/lobby/queue/use-queue-actions"
+import { useAuth } from "@/hooks/use-auth"
+import { useSession } from "@/hooks/use-session"
+import { ACTIVE_STATUSES } from "@/lib/live/events"
+import { LOBBY_SIZE, TEAM_SIZE } from "@/lib/lobby/constants"
+import { useQueue, useVainqueur } from "@/lib/lobby/queries"
+import { planRotation } from "@/lib/lobby/rotation"
+import { cn } from "@/lib/utils"
 
 interface QueuePanelProps {
   currentPlayerId: string | null
@@ -11,120 +25,156 @@ interface QueuePanelProps {
 }
 
 export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
-  const [queue, setQueue] = useState<(QueueEntry & { players?: { id: string; name: string } })[]>([])
-  const [loading, setLoading] = useState(true)
+  const queue = useQueue()
+  const vainqueur = useVainqueur()
+  const { user, profile, isAdmin, isLoading: authLoading, signIn } = useAuth()
+  const { session } = useSession()
+  const now = useNow(30_000) ?? 0
+  const [confirmClear, setConfirmClear] = useState(false)
 
-  const fetchQueue = useCallback(async () => {
-    try {
-      const res = await fetch("/api/queue")
-      const data = await res.json()
-      if (Array.isArray(data)) setQueue(data)
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
+  const playerId = currentPlayerId ?? profile?.player_id ?? null
+  const me = playerId ? { playerId, name: profile?.players?.name ?? "You", userId: user?.id ?? null } : null
+  const action = useQueueActions(me, onUpdate)
+
+  const entries = useMemo(() => queue.data ?? [], [queue.data])
+  const myIndex = playerId ? entries.findIndex((e) => e.player_id === playerId) : -1
+  const rotation = vainqueur.data?.active ? vainqueur.data : null
+  const gameRunning = !!session && ACTIVE_STATUSES.includes(session.status)
+
+  const called = useMemo(() => {
+    if (!rotation) return new Set<string>()
+    if (rotation.lastSessionId) {
+      const plan = planRotation({
+        winners: rotation.winners.map((p) => p.id),
+        satOut: rotation.satOut.map((p) => p.id),
+        losers: rotation.losers.map((p) => p.id),
+        volunteers: rotation.volunteers,
+        queue: entries.map((e) => e.player_id),
+      })
+      return new Set(plan.comingIn)
     }
-  }, [])
+    return new Set(entries.slice(0, LOBBY_SIZE - TEAM_SIZE).map((e) => e.player_id))
+  }, [rotation, entries])
 
-  useEffect(() => {
-    fetchQueue()
-  }, [fetchQueue])
+  const line =
+    entries.length === 0
+      ? "Nobody is waiting. The Rift is short on volunteers."
+      : rotation?.lastSessionId
+        ? called.size > 0
+          ? `The next rotation calls up the first ${called.size}.`
+          : "Nobody here gets called this rotation."
+        : rotation
+          ? `Winners stay. The first ${Math.min(entries.length, TEAM_SIZE)} here take the losers' seats.`
+          : `${entries.length} waiting. The host can seat them from the roster in one tap.`
 
-  // Re-fetch on external updates
-  useEffect(() => {
-    fetchQueue()
-  }, [onUpdate, fetchQueue])
-
-  const isInQueue = currentPlayerId
-    ? queue.some((q) => q.player_id === currentPlayerId)
-    : false
-
-  const handleJoin = async () => {
-    if (!currentPlayerId) return
-    const res = await fetch("/api/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "join", player_id: currentPlayerId }),
-    })
-    if (res.ok) {
-      fetchQueue()
-    } else {
-      const err = await res.json()
-      toast.error(err.error || "Failed to join queue")
-    }
-  }
-
-  const handleLeave = async () => {
-    if (!currentPlayerId) return
-    const res = await fetch("/api/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "leave", player_id: currentPlayerId }),
-    })
-    if (res.ok) {
-      fetchQueue()
-    } else {
-      const err = await res.json()
-      toast.error(err.error || "Failed to leave queue")
-    }
-  }
-
-  if (loading) {
-    return <div className="text-xs text-[var(--color-gold-light)]/40">Loading queue...</div>
-  }
+  const busy = action.isPending
+  const myButton = authLoading ? (
+    <Skeleton className="h-11 w-full rounded-md" aria-label="Checking your seat" />
+  ) : !user ? (
+    <Button variant="outline" className="h-11 w-full gap-2" onClick={signIn}>
+      <LogInIcon aria-hidden />
+      Sign in to queue
+    </Button>
+  ) : !playerId ? (
+    <Link href="/profile" className={cn(buttonVariants({ variant: "outline" }), "h-11 w-full")}>
+      Claim your player to queue
+    </Link>
+  ) : myIndex >= 0 ? (
+    <Button
+      variant="outline"
+      className="h-11 w-full gap-2 hover:border-[var(--color-red-team)]/50 hover:text-[var(--color-red-team)]"
+      disabled={busy}
+      onClick={() => action.mutate({ action: "leave" })}
+    >
+      {busy ? <Loader2Icon className="animate-spin" aria-hidden /> : <UserMinusIcon aria-hidden />}
+      Leave the queue · #{myIndex + 1}
+    </Button>
+  ) : (
+    <Button className="h-11 w-full gap-2 font-semibold" disabled={busy} onClick={() => action.mutate({ action: "join" })}>
+      {busy ? <Loader2Icon className="animate-spin" aria-hidden /> : <UserPlusIcon aria-hidden />}
+      {gameRunning ? "Queue for the next game" : "Join the queue"}
+    </Button>
+  )
 
   return (
-    <div className="space-y-2 rounded-lg border border-[var(--color-gold)]/10 bg-[var(--color-navy-light)] p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-[var(--color-gold)]">
-          Queue ({queue.length})
+    <section aria-labelledby="queue-title" className="rounded-xl border border-border bg-card p-4">
+      <header className="flex items-center gap-2">
+        <ListOrderedIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+        <h2 id="queue-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
+          The Queue
+        </h2>
+        <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground" aria-live="polite">
+          {queue.isPending ? "..." : `${entries.length} waiting`}
         </span>
-        <span className="text-xs text-[var(--color-gold-light)]/50">
-          {queue.length >= 5 ? "Full rotation ready" : `${5 - queue.length} more for full rotation`}
-        </span>
-      </div>
-
-      {queue.length > 0 && (
-        <div className="space-y-1">
-          {queue.map((entry, i) => (
-            <div
-              key={entry.id}
-              className="flex items-center gap-2 text-xs text-[var(--color-gold-light)]/70"
+        {isAdmin && entries.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Queue options"
+              className="-mr-2 flex size-10 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <span className="w-4 text-[var(--color-gold-light)]/40">{i + 1}.</span>
-              <span>{entry.players?.name || "Unknown"}</span>
-            </div>
+              <EllipsisVerticalIcon className="size-4" aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem variant="destructive" className="min-h-10" onClick={() => setConfirmClear(true)}>
+                <Trash2Icon aria-hidden />
+                Clear the queue
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </header>
+
+      {queue.isPending ? (
+        <div className="mt-3 flex flex-col gap-1.5" aria-label="Loading the queue">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} className="h-11 rounded-lg" />
           ))}
         </div>
-      )}
-
-      {queue.length === 0 && (
-        <div className="text-xs text-[var(--color-gold-light)]/40">No players waiting</div>
-      )}
-
-      {currentPlayerId && (
-        <div className="pt-1">
-          {isInQueue ? (
-            <Button
-              onClick={handleLeave}
-              size="sm"
-              variant="outline"
-              className="w-full border-red-500/30 text-xs text-red-400 hover:border-red-500/60"
-            >
-              Leave Queue
-            </Button>
-          ) : (
-            <Button
-              onClick={handleJoin}
-              size="sm"
-              variant="outline"
-              className="w-full border-[var(--color-gold)]/30 text-xs text-[var(--color-gold-light)] hover:border-[var(--color-gold)]/60"
-            >
-              Join Queue
-            </Button>
-          )}
+      ) : queue.isError && entries.length === 0 ? (
+        <div role="alert" className="mt-3 flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          The queue ledger is unreadable.
+          <Button variant="outline" className="h-10" onClick={() => queue.refetch()}>
+            <RotateCcwIcon aria-hidden />
+            Retry
+          </Button>
         </div>
+      ) : (
+        <>
+          <p className="mt-1 text-xs text-muted-foreground">{line}</p>
+          {entries.length > 0 && (
+            <ol className="mt-3 flex flex-col gap-1.5" aria-label="Players in the queue">
+              <AnimatePresence initial={false}>
+                {entries.map((entry, index) => (
+                  <QueueRow
+                    key={entry.player_id}
+                    entry={entry}
+                    index={index}
+                    total={entries.length}
+                    called={called.has(entry.player_id)}
+                    isMe={entry.player_id === playerId}
+                    isAdmin={isAdmin}
+                    now={now}
+                    onMove={(id, to) => action.mutate({ action: "move", player_id: id, to })}
+                    onRemove={(e) => action.mutate({ action: "leave", player_id: e.player_id })}
+                  />
+                ))}
+              </AnimatePresence>
+            </ol>
+          )}
+          <div className="mt-3">{myButton}</div>
+        </>
       )}
-    </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear the queue?"
+        description={`All ${entries.length} waiting players lose their spot. They can queue again with one tap.`}
+        confirmLabel="Clear the queue"
+        destructive
+        pending={busy}
+        onConfirm={() => action.mutate({ action: "clear" }, { onSettled: () => setConfirmClear(false) })}
+      />
+    </section>
   )
 }

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { emitLive, getActor } from "@/lib/live/server"
 import { splitTeams, assignLanes, assignChampions } from "@/lib/randomizer"
 import { getChampionPools } from "@/lib/champions-db"
 import type { Player } from "@/lib/types"
@@ -137,5 +138,6 @@ export async function POST(request: Request) {
     .eq("id", session.id)
     .single()
 
+  emitLive("session.created", { sessionId: session.id, actor: await getActor(supabase, user.id), data: { mode: "standard" } })
   return NextResponse.json(full, { status: 201 })
 }

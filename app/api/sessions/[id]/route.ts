@@ -1,7 +1,10 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { assignChampions } from "@/lib/randomizer"
-import type { Assignment, Player, Role, Side } from "@/lib/types"
+import { runGameCanceledHooks, runGameResolvedHooks } from "@/lib/game-hooks"
+import { emitLive, getActor } from "@/lib/live/server"
+import type { LiveActor } from "@/lib/live/events"
+import type { Assignment, Player, Role, SessionStatus, Side } from "@/lib/types"
 
 const SESSION_SELECT = `
   *,
@@ -62,6 +65,13 @@ export async function PATCH(
     )
   }
 
+  const response = await runAction(supabase, session, body)
+  if (response.ok) emitForAction(body, session, await getActor(supabase, user?.id))
+  return response
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function runAction(supabase: any, session: any, body: ActionBody) {
   switch (body.action) {
     case "reroll":
       return handleReroll(supabase, session)
@@ -79,6 +89,41 @@ export async function PATCH(
       return handleCancel(supabase, session)
     default:
       return NextResponse.json({ error: "Unknown action" }, { status: 400 })
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function emitForAction(body: ActionBody, session: any, actor: LiveActor | null) {
+  const sessionId = session.id as string
+  const from = session.status as SessionStatus
+  const status = (to: SessionStatus, winner: Side | null = null) =>
+    emitLive("session.status", { sessionId, actor, data: { from, to, winner } })
+
+  switch (body.action) {
+    case "reroll":
+      emitLive("session.rerolled", {
+        sessionId,
+        actor,
+        data: { lockedCount: session.session_assignments.filter((a: { locked: boolean }) => a.locked).length },
+      })
+      return
+    case "toggle_lock": {
+      const target = session.session_assignments.find((a: { id: string }) => a.id === body.assignment_id)
+      if (target) {
+        emitLive("session.lock", { sessionId, actor, data: { playerName: target.players.name, locked: !target.locked } })
+      }
+      return
+    }
+    case "start_game":
+      return status("chaos")
+    case "close_chaos":
+      return status("betting")
+    case "close_betting":
+      return status("in_game")
+    case "declare_winner":
+      return status(body.winner_side === "blue" ? "blue_win" : "red_win", body.winner_side)
+    case "cancel":
+      return status("canceled")
   }
 }
 
@@ -341,8 +386,8 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
 
   const assignments = session.session_assignments as Array<{
     player_id: string
-    side: string
-    lane: string
+    side: Side
+    lane: Role
     champion: string
     players: { id: string; name: string }
   }>
@@ -441,66 +486,15 @@ async function handleDeclareWinner(supabase: any, session: any, winnerSide: "blu
     }
   }
 
-  await supabase.rpc("resolve_bets", {
-    p_session_id: session.id,
-    p_winner_side: winnerSide,
+  await runGameResolvedHooks({
+    supabase,
+    sessionId: session.id,
+    gameId: game.id,
+    winnerSide,
+    assignments,
+    winnerIds,
+    loserIds,
   })
-
-  await supabase.rpc("resolve_chaos_wagers", {
-    p_session_id: session.id,
-    p_winner_side: winnerSide,
-  })
-
-  await supabase.rpc("resolve_bounties", {
-    p_session_id: session.id,
-    p_loser_player_ids: loserIds,
-  })
-
-  // Auto-verify player_gets_lane prophecies and apply bonuses
-  const { data: prophecies } = await supabase
-    .from("prophecies")
-    .select("*")
-    .eq("session_id", session.id)
-    .is("correct", null)
-
-  if (prophecies && prophecies.length > 0) {
-    for (const prophecy of prophecies) {
-      if (prophecy.prediction_type === "player_gets_lane") {
-        const pv = prophecy.prediction_value as { player_id: string; lane: string }
-        const match = assignments.find(
-          (a) => a.player_id === pv.player_id && a.lane === pv.lane
-        )
-        const isCorrect = !!match
-
-        await supabase
-          .from("prophecies")
-          .update({ correct: isCorrect })
-          .eq("id", prophecy.id)
-
-        if (isCorrect) {
-          const { data: bet } = await supabase
-            .from("bets")
-            .select("*")
-            .eq("session_id", session.id)
-            .eq("user_id", prophecy.user_id)
-            .eq("status", "won")
-            .maybeSingle()
-
-          if (bet && bet.payout > 0) {
-            const bonus = Math.floor(bet.payout * (prophecy.multiplier - 1))
-            if (bonus > 0) {
-              await supabase.rpc("adjust_balance", {
-                p_user_id: prophecy.user_id,
-                p_amount: bonus,
-                p_reason: "prophecy_bonus",
-                p_reference_id: session.id,
-              })
-            }
-          }
-        }
-      }
-    }
-  }
 
   const { error: updateError } = await supabase
     .from("game_sessions")
@@ -550,13 +544,7 @@ async function handleCancel(supabase: any, session: any) {
     )
   }
 
-  await supabase.rpc("refund_all_bets", {
-    p_session_id: session.id,
-  })
-
-  await supabase.rpc("refund_chaos_actions", {
-    p_session_id: session.id,
-  })
+  await runGameCanceledHooks({ supabase, sessionId: session.id })
 
   const { error } = await supabase
     .from("game_sessions")

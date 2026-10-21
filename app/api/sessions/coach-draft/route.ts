@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { emitLive, getActor } from "@/lib/live/server"
 
 const SESSION_SELECT = `
   *,
@@ -64,5 +65,6 @@ export async function POST(request: Request) {
     )
   }
 
+  emitLive("session.created", { sessionId: session.id, actor: await getActor(supabase, user.id), data: { mode: "coach_draft" } })
   return NextResponse.json(session, { status: 201 })
 }

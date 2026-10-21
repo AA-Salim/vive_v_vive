@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { Nav } from "@/components/nav"
 import { SalaxeBroadcast } from "@/components/salaxe-broadcast"
 import { ActIntroModal } from "@/components/act-intro-modal"
+import { Providers } from "@/components/providers"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -32,13 +33,15 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-[var(--color-navy)]">
-        <Nav />
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-6">
-          {children}
-        </main>
-        <SalaxeBroadcast />
-        <ActIntroModal />
-        <Toaster />
+        <Providers>
+          <Nav />
+          <main className="mx-auto w-full max-w-[1400px] flex-1 px-6 py-6">
+            {children}
+          </main>
+          <SalaxeBroadcast />
+          <ActIntroModal />
+          <Toaster />
+        </Providers>
       </body>
     </html>
   )

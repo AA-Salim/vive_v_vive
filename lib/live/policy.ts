@@ -10,7 +10,7 @@ import type { SessionStatus } from "@/lib/types"
 export type LivePhase = "idle" | "lobby" | "timed" | "aftermath"
 
 // After a game resolves, payouts, duels, perks and the vote keep flowing for a while.
-export const AFTERMATH_MS = 4 * 60_000
+export const AFTERMATH_MS = 7 * 60_000
 
 export function livePhase(status: SessionStatus | null, endedAt: number | null, now: number): LivePhase {
   if (status && TIMED_STATUSES.includes(status)) return "timed"
@@ -45,6 +45,7 @@ const MAJOR_TYPES: ReadonlySet<string> = new Set([
   "bounty.placed",
   "title.bestowed",
   "act.changed",
+  "vote.closed",
 ])
 
 const sameName = (a: string | null | undefined, names: string[]) =>

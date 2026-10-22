@@ -74,6 +74,14 @@ export function isPersonal(event: LiveEvent, viewer: Viewer): boolean {
       const d = event.data as LiveEventPayloads["duel.resolved"]
       return isMe(d.winnerUserId, d.winnerName, viewer) || isMe(d.loserUserId, d.loserName, viewer)
     }
+    case "duel.withdrawn": {
+      const d = event.data as LiveEventPayloads["duel.withdrawn"]
+      return isMe(d.opponentUserId, d.opponentName, viewer)
+    }
+    case "duel.expired": {
+      const d = event.data as LiveEventPayloads["duel.expired"]
+      return !!d.userIds && d.userIds.includes(viewer.userId)
+    }
     case "bounty.placed":
     case "bounty.escaped":
     case "bounty.expired": {

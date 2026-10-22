@@ -106,16 +106,44 @@ export interface LiveEventPayloads {
     amount: number
     side: Side
     opponentUserId?: string | null
+    duelId?: string
   }
-  "duel.accepted": { challengerName: string; opponentName: string; amount: number; challengerUserId?: string | null }
-  "duel.declined": { challengerName: string; opponentName: string; challengerUserId?: string | null }
+  "duel.accepted": {
+    challengerName: string
+    opponentName: string
+    amount: number
+    challengerUserId?: string | null
+    duelId?: string
+    side?: Side
+    opponentUserId?: string | null
+  }
+  "duel.declined": {
+    challengerName: string
+    opponentName: string
+    challengerUserId?: string | null
+    duelId?: string
+    amount?: number
+    opponentUserId?: string | null
+  }
   "duel.resolved": {
     winnerName: string
     loserName: string
     amount: number
     winnerUserId?: string | null
     loserUserId?: string | null
+    duelId?: string
+    payout?: number
+    tax?: number
+    winnerSide?: Side
   }
+  "duel.withdrawn": {
+    challengerName: string
+    opponentName: string | null
+    amount: number
+    duelId?: string
+    opponentUserId?: string | null
+  }
+  "duel.expired": { count: number; amount: number; userIds?: string[] }
   "vote.opened": { closesAt: string }
   "vote.cast": { category: string }
   "vote.closed": { mvpName: string | null; interName: string | null }
@@ -226,6 +254,7 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   post_game_ballots: ["votes"],
   praises: ["praise"],
   players: ["sessions", "session", "queue", "vainqueur"],
+  duels: ["duels"],
 }
 
 export const ACTIVE_STATUSES: SessionStatus[] = ["coach_draft", "draft", "chaos", "betting", "in_game"]
@@ -248,6 +277,8 @@ const ACTOR_BALANCE_TYPES: ReadonlySet<string> = new Set([
   "praise.sung",
   "title.equipped",
   "duel.challenged",
+  "duel.accepted",
+  "duel.withdrawn",
 ])
 
 export function invalidationTargetsFor(event: LiveEvent): LiveTarget[] {

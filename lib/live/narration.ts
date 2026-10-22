@@ -1,5 +1,6 @@
 import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
 import { narrateBountyEvent } from "@/lib/bounties/narration"
+import { narrateDuelEvent } from "@/lib/duels/narration"
 import { narrateLobbyEvent } from "@/lib/lobby/narration"
 import { narrateDecree, narratePraise, narrateShame, narrateVote } from "@/lib/lore/herald/court"
 import {
@@ -108,7 +109,10 @@ export function narrate(event: LiveEvent): Narration | null {
     case "duel.accepted":
     case "duel.declined":
     case "duel.resolved":
-      return narrateDuel(event)
+      return narrateDuel(event) ?? narrateDuelEvent(event)
+    case "duel.withdrawn":
+    case "duel.expired":
+      return narrateDuelEvent(event)
     case "vote.opened":
     case "vote.closed":
       return narrateVote(event)

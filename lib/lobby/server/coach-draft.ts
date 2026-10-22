@@ -14,6 +14,7 @@ export interface DraftSession {
   draft_turn: Side | null
   updated_at: string
   coach_pool?: string[] | null
+  champion_draft_at?: string | null
 }
 
 export interface DraftPick {
@@ -161,7 +162,7 @@ async function applyLaneChanges(supabase: SupabaseClient, draft: Draft, changes:
     let query = supabase.from("coach_draft_picks").update({ lane }).eq("id", pick.id)
     query = pick.lane === null ? query.is("lane", null) : query.eq("lane", pick.lane)
     const { data, error } = await query.select("id").maybeSingle()
-    if (error) return rejected<LaneChange[]>("server", error.message)
+    if (error) return fromDb<LaneChange[]>(error)
     if (!data) return rejected<LaneChange[]>("stale")
   }
   await supabase.from("game_sessions").update({ updated_at: new Date().toISOString() }).eq("id", draft.session.id).eq("status", "coach_draft")
@@ -180,6 +181,7 @@ export async function assignLane(
   lane: Role
 ): Promise<DraftOutcome<LaneChange[]>> {
   if (draft.session.status !== "coach_draft") return rejected("not_drafting")
+  if (draft.session.champion_draft_at) return rejected("teams_locked")
   if (draft.picks.length < 10) return rejected("picks_missing", "Lanes open once all ten players are drafted.")
   const pick = draft.picks.find((p) => p.player_id === playerId)
   if (!pick) return rejected("player_unavailable", "That player is not in this draft.")
@@ -193,6 +195,7 @@ export async function assignLane(
 
 export async function autoAssignLanes(supabase: SupabaseClient, viewer: LobbyViewer, draft: Draft): Promise<DraftOutcome<LaneChange[]>> {
   if (draft.session.status !== "coach_draft") return rejected("not_drafting")
+  if (draft.session.champion_draft_at) return rejected("teams_locked")
   if (draft.picks.length < 10) return rejected("picks_missing", "Lanes open once all ten players are drafted.")
   const mine = sideOfCoach(draft.session, viewer.userId)
   const sides: Side[] = mine ? [mine] : viewer.isAdmin ? ["blue", "red"] : []

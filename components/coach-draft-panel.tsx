@@ -15,6 +15,7 @@ import { useCoachDraftActions } from "@/components/lobby/coach-draft/use-coach-d
 import { useTurnCue } from "@/components/lobby/coach-draft/use-turn-cue"
 import { useAuth } from "@/hooks/use-auth"
 import type { HelpEntry } from "@/lib/help"
+import { championSelectSupported } from "@/lib/lobby/champion-pick"
 import { LANES, sideForPick } from "@/lib/lobby/constants"
 import { COACH_HELP } from "@/lib/lobby/help"
 import { useCoachPicks, useCoachProfiles, useRoster } from "@/lib/lobby/queries"
@@ -84,6 +85,7 @@ export function CoachDraftPanel({ session, userId }: CoachDraftPanelProps) {
   const rosterById = useMemo(() => new Map(players.map((p) => [p.id, p])), [players])
   const pool = (session as GameSession & { coach_pool?: string[] | null }).coach_pool ?? null
   const undoSupported = Object.prototype.hasOwnProperty.call(session, "coach_pool")
+  const championPicks = championSelectSupported(session)
 
   const available = useMemo(() => {
     const picked = new Set(picks.map((p) => p.player_id))
@@ -168,12 +170,12 @@ export function CoachDraftPanel({ session, userId }: CoachDraftPanelProps) {
             {coachName("blue")} and {coachName("red")} pick the teams. {pool && pool.length > 0 ? `${pool.length} players in the pool.` : "Every active player is fair game."}
           </p>
         </div>
-        <DraftRules host={host} undoSupported={undoSupported} />
+        <DraftRules host={host} undoSupported={undoSupported} championPicks={championPicks} />
       </header>
 
       <div className="mt-4 flex flex-col gap-3">
         <PickTrack picks={picks} />
-        <TurnBanner pickCount={pickCount} turnSide={turnSide} isMyTurn={isMyTurn} coachName={coachName} lanesDone={lanesDone} mySide={mySide} />
+        <TurnBanner pickCount={pickCount} turnSide={turnSide} isMyTurn={isMyTurn} coachName={coachName} lanesDone={lanesDone} mySide={mySide} championPicks={championPicks} />
       </div>
 
       <LayoutGroup id={`coach-draft-${session.id}`}>
@@ -257,10 +259,12 @@ export function CoachDraftPanel({ session, userId }: CoachDraftPanelProps) {
             </Tipped>
           )}
           {lanesPhase && (mySide || isAdmin) && (
-            <Tipped help={COACH_HELP.lock} grow>
+            <Tipped help={championPicks ? COACH_HELP.lockPick : COACH_HELP.lock} grow>
               <Button className="h-12 min-w-0 flex-1 gap-2 text-base font-semibold" disabled={!teamsReady || busy} onClick={() => actions.confirm.mutate()}>
                 {actions.confirm.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <GavelIcon aria-hidden />}
-                <span className="truncate">{teamsReady ? "Lock the teams and deal" : "Waiting for all ten lanes"}</span>
+                <span className="truncate">
+                  {teamsReady ? (championPicks ? "Lock the teams, pick champions" : "Lock the teams and deal") : "Waiting for all ten lanes"}
+                </span>
               </Button>
             </Tipped>
           )}

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { getChampionPools } from "@/lib/champions-db"
 import { LANES } from "@/lib/lobby/constants"
+import { openChampionSelect, type ChampionOpenResult } from "@/lib/lobby/server/coach-champions"
 import { sideOfCoach, type Draft, type DraftOutcome } from "@/lib/lobby/server/coach-draft"
 import { removeFromQueue } from "@/lib/lobby/server/queue"
 import type { LobbyViewer } from "@/lib/lobby/server/viewer"
@@ -13,6 +14,13 @@ export interface ConfirmResult {
   session: SessionRow
   changed: boolean
   dequeued: number
+  // Set when the teams moved on to champion select instead of a random deal.
+  championSelect?: ChampionOpenResult
+}
+
+async function reload(supabase: SupabaseClient, sessionId: string, extra: Omit<ConfirmResult, "session">): Promise<DraftOutcome<ConfirmResult>> {
+  const { session } = await loadSession(supabase, sessionId)
+  return session ? { ok: true, value: { session, ...extra } } : { ok: false, code: "session_not_found" }
 }
 
 function lanesComplete(draft: Draft, side: Side): "ok" | "lanes_missing" | "lane_clash" | "picks_missing" {
@@ -22,11 +30,15 @@ function lanesComplete(draft: Draft, side: Side): "ok" | "lanes_missing" | "lane
   return new Set(team.map((p) => p.lane)).size === LANES.length ? "ok" : "lane_clash"
 }
 
-// Locks both teams and deals champions. The status flip is a compare-and-set on the draft version, so two coaches
+// Locks both teams. With supabase/phase10_coach-champions.sql the coaches then pick every champion; without it,
+// champions are dealt here. The deal's status flip is a compare-and-set on the draft version, so two coaches
 // locking at once deal exactly one set of champions, and a pick or lane change in flight makes the lock retry.
 // The flip also stamps updated_at: that is the start of the shared reveal for everyone in the room.
 export async function confirmDraft(supabase: SupabaseClient, viewer: LobbyViewer, draft: Draft): Promise<DraftOutcome<ConfirmResult>> {
   const { session, picks } = draft
+  if (session.status === "coach_draft" && session.champion_draft_at) {
+    return reload(supabase, session.id, { changed: false, dequeued: 0 })
+  }
   if (session.status === "draft") {
     const { session: current } = await loadSession(supabase, session.id)
     return current ? { ok: true, value: { session: current, changed: false, dequeued: 0 } } : { ok: false, code: "session_not_found" }
@@ -37,6 +49,12 @@ export async function confirmDraft(supabase: SupabaseClient, viewer: LobbyViewer
   for (const side of ["blue", "red"] as const) {
     const check = lanesComplete(draft, side)
     if (check !== "ok") return { ok: false, code: check }
+  }
+
+  const champions = await openChampionSelect(supabase, session.id, session.updated_at)
+  if (champions) {
+    if (!champions.ok) return champions
+    return reload(supabase, session.id, { changed: champions.value.opened, dequeued: 0, championSelect: champions.value })
   }
 
   const { data: players, error: playersError } = await supabase

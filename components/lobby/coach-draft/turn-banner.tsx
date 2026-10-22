@@ -15,6 +15,7 @@ interface TurnBannerProps {
   coachName: (side: Side) => string
   lanesDone: Record<Side, number>
   mySide: Side | null
+  championPicks?: boolean
 }
 
 function upcoming(pickCount: number): string {
@@ -24,7 +25,7 @@ function upcoming(pickCount: number): string {
   return `Then ${next.map((s) => SIDE_NAME[s]).join(", then ")}.`
 }
 
-export function TurnBanner({ pickCount, turnSide, isMyTurn, coachName, lanesDone, mySide }: TurnBannerProps) {
+export function TurnBanner({ pickCount, turnSide, isMyTurn, coachName, lanesDone, mySide, championPicks = false }: TurnBannerProps) {
   const lanes = pickCount >= 10
   const key = lanes ? "lanes" : `${pickCount}:${isMyTurn}`
   const tone = lanes ? "gold" : turnSide
@@ -35,7 +36,9 @@ export function TurnBanner({ pickCount, turnSide, isMyTurn, coachName, lanesDone
     const ready = lanesDone.blue === 5 && lanesDone.red === 5
     title = ready ? "Both teams are set" : mySide && lanesDone[mySide] < 5 ? "Set your lanes" : "Coaches are setting lanes"
     line = ready
-      ? "Lock the teams and fate deals the champions."
+      ? championPicks
+        ? "Lock the teams, then the coaches pick every champion."
+        : "Lock the teams and fate deals the champions."
       : `Blue ${lanesDone.blue}/5 · Red ${lanesDone.red}/5. Tap a lane to assign it; tap a taken lane to swap.`
   } else if (isMyTurn && turnSide) {
     title = "Your pick"

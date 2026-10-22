@@ -2,6 +2,7 @@ import { z } from "zod"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
 import { emitLive, getActor } from "@/lib/live/server"
+import { announceTeamsLocked } from "@/lib/lobby/server/coach-champions"
 import { confirmDraft } from "@/lib/lobby/server/coach-confirm"
 import {
   assignLane,
@@ -132,7 +133,9 @@ export async function POST(request: Request, { params }: Params) {
     case "confirm": {
       const outcome = await confirmDraft(supabase, viewer, draft)
       if (!outcome.ok) return rejected(outcome)
-      if (outcome.value.changed) {
+      if (outcome.value.championSelect) {
+        announceTeamsLocked(id, actor, outcome.value.championSelect)
+      } else if (outcome.value.changed) {
         emitLive("session.status", { sessionId: id, actor, data: { from: "coach_draft", to: "draft", winner: null } })
         if (outcome.value.dequeued > 0) {
           emitLive("queue.changed", { actor, data: { action: "advanced", count: outcome.value.dequeued }, persist: false })

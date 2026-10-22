@@ -13,7 +13,7 @@ export interface LiveActor {
 // The optional *UserId fields let clients recognise events aimed at them (personal alerts survive quiet mode).
 export interface LiveEventPayloads {
   "session.created": { mode: string }
-  "session.status": { from: SessionStatus; to: SessionStatus; winner?: Side | null }
+  "session.status": { from: SessionStatus; to: SessionStatus; winner?: Side | null; coachPicked?: boolean }
   "session.rerolled": { lockedCount: number }
   "session.lock": { playerName: string; locked: boolean }
   "coachdraft.pick": {
@@ -149,6 +149,32 @@ export interface LiveEventPayloads {
   "vote.closed": { mvpName: string | null; interName: string | null }
   "coachdraft.undo": { coachName: string; playerName: string; side: Side; pickNumber: number; targetUserId?: string | null }
   "coachdraft.lanes": { coachName: string; side: Side; lanes: { playerName: string; lane: Role }[] }
+  "coachdraft.teams_locked": { coachName: string; firstSide: Side; targetUserId?: string | null }
+  "coachdraft.champion": {
+    coachName: string | null
+    playerName: string
+    champion: string
+    championInternal?: string
+    side: Side
+    lane?: Role | null
+    pickNumber: number
+    nextSide?: Side | null
+    auto?: boolean
+    requested?: boolean
+    completed?: boolean
+    targetUserId?: string | null
+    nextCoachUserId?: string | null
+  }
+  "coachdraft.champion_undo": {
+    coachName: string
+    playerName: string
+    champion: string
+    side: Side
+    pickNumber: number
+    targetUserId?: string | null
+    otherCoachUserId?: string | null
+  }
+  "coachdraft.request": { playerName: string; side: Side; pinned: boolean; targetUserId?: string | null }
   "roster.changed": {
     action: "added" | "renamed" | "benched" | "activated" | "removed"
     playerName: string
@@ -181,7 +207,7 @@ export const ACTIVITY_ROOT = "activity"
 export const PROFILE_ROOT = "profile"
 
 // Roots that barely change; the healthy background poll skips them (resyncs still refresh them).
-export const STABLE_ROOTS: readonly string[] = [PROFILE_ROOT, "acts"]
+export const STABLE_ROOTS: readonly string[] = [PROFILE_ROOT, "acts", "champions"]
 
 const RESOLUTION_KEYS = [
   "session",
@@ -240,6 +266,7 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   bets: ["bets", "points"],
   chaos_actions: ["chaos", "session", "points"],
   coach_draft_picks: ["session", "coachdraft"],
+  coach_champion_requests: ["coachdraft"],
   player_queue: ["queue"],
   vainqueur_state: ["vainqueur", "queue"],
   point_balances: ["points", "leaderboard"],

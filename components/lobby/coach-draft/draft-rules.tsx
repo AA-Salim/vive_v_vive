@@ -3,11 +3,12 @@
 import { CircleHelpIcon } from "lucide-react"
 import { HelpRows } from "@/components/ui/info-tip"
 import { Popover, PopoverContent, PopoverDescription, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
+import { CHAMPION_PICK_SECONDS } from "@/lib/lobby/champion-pick"
 import { LOBBY_SIZE, TEAM_SIZE } from "@/lib/lobby/constants"
 import { COACH_HELP } from "@/lib/lobby/help"
 
 // The draft board's info bubble: what the coaches do, the full rules, and what it costs (nothing).
-export function DraftRules({ host, undoSupported }: { host: string; undoSupported: boolean }) {
+export function DraftRules({ host, undoSupported, championPicks = false }: { host: string; undoSupported: boolean; championPicks?: boolean }) {
   return (
     <Popover>
       <PopoverTrigger
@@ -33,7 +34,9 @@ export function DraftRules({ host, undoSupported }: { host: string; undoSupporte
             With {LOBBY_SIZE} drafted, each coach sets lanes for their own {TEAM_SIZE}. Tapping a taken lane swaps the two.
           </li>
           <li>
-            Either coach locks the teams once both have {TEAM_SIZE} lanes. Champions are then dealt at random, fearless bans included.
+            {championPicks
+              ? `Either coach locks the teams once both have ${TEAM_SIZE} lanes. Then champion select: the coaches pick every champion in draft order (Blue 1, Red 2, Blue 2, Red 2, Blue 2, Red 1), ${CHAMPION_PICK_SECONDS} seconds per pick, fearless bans included.`
+              : `Either coach locks the teams once both have ${TEAM_SIZE} lanes. Champions are then dealt at random, fearless bans included.`}
           </li>
           <li>{host} or an admin can scrap the draft from the header.</li>
         </ul>

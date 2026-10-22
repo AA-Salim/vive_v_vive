@@ -95,7 +95,7 @@ export function useCoachDraftActions(sessionId: string) {
     mutationFn: () => sendJson<RoomSession>(url, { action: "confirm" }),
     onSuccess: async (session) => {
       await writeSession(queryClient, session)
-      toast("Teams locked. Fate deals the champions.")
+      toast(session.status === "coach_draft" ? "Teams locked. Champion select is open." : "Teams locked. Fate deals the champions.")
     },
     onError: (error) => toast.error(errorMessage(error)),
     onSettled: () => {

@@ -88,7 +88,7 @@ export class LiveAnnouncer {
   announce(event: LiveEvent, ctx: AnnounceContext): void {
     const decision = toastDecision(event, { phase: ctx.phase, viewer: ctx.viewer, quiet: ctx.prefs.quiet })
     if (!decision.show) return
-    const line = safeNarrate(event)
+    const line = safeNarrate(event, decision.personal ? ctx.viewer : undefined)
     if (!line) return
 
     // A hidden tab would stack stale toasts for later: keep a digest instead (personal alerts still wait in place).

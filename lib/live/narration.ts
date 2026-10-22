@@ -1,4 +1,5 @@
 import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
+import type { Viewer } from "@/lib/live/policy"
 import { narrateBountyEvent } from "@/lib/bounties/narration"
 import { narrateDuelEvent } from "@/lib/duels/narration"
 import { narrateLobbyEvent } from "@/lib/lobby/narration"
@@ -39,8 +40,9 @@ function wellFormedTitle(event: LiveEvent): boolean {
 }
 
 // One line per event for toasts and the Herald feed. Variants are seeded by event.id so every client
-// tells the same story. Null means the event is too granular or private to announce.
-export function narrate(event: LiveEvent): Narration | null {
+// tells the same story. Null means the event is too granular or private to announce. A viewer is passed for
+// personal alerts only, so lines aimed at them can say "you".
+export function narrate(event: LiveEvent, viewer?: Viewer): Narration | null {
   switch (event.type) {
     case "session.created":
       return narrateCreated(event)
@@ -55,6 +57,11 @@ export function narrate(event: LiveEvent): Narration | null {
     case "coachdraft.undo":
     case "roster.changed":
       return narrateLobbyEvent(event)
+    case "coachdraft.teams_locked":
+    case "coachdraft.champion":
+    case "coachdraft.champion_undo":
+    case "coachdraft.request":
+      return narrateLobbyEvent(event, viewer)
     case "bet.placed":
       return narrateBetPlaced(event)
     case "bet.insured":

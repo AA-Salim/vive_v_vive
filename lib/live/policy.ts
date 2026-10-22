@@ -100,9 +100,19 @@ export function isPersonal(event: LiveEvent, viewer: Viewer): boolean {
       const d = event.data as LiveEventPayloads["coachdraft.pick"] & { targetUserId?: string | null; playerUserId?: string | null }
       return (!!d.targetUserId && d.targetUserId === viewer.userId) || (!!d.playerUserId && d.playerUserId === viewer.userId)
     }
-    case "coachdraft.undo": {
-      const d = event.data as LiveEventPayloads["coachdraft.undo"]
+    case "coachdraft.undo":
+    case "coachdraft.teams_locked":
+    case "coachdraft.request": {
+      const d = event.data as { targetUserId?: string | null }
       return !!d.targetUserId && d.targetUserId === viewer.userId
+    }
+    case "coachdraft.champion": {
+      const d = event.data as LiveEventPayloads["coachdraft.champion"]
+      return (!!d.targetUserId && d.targetUserId === viewer.userId) || (!!d.nextCoachUserId && d.nextCoachUserId === viewer.userId)
+    }
+    case "coachdraft.champion_undo": {
+      const d = event.data as LiveEventPayloads["coachdraft.champion_undo"]
+      return (!!d.targetUserId && d.targetUserId === viewer.userId) || (!!d.otherCoachUserId && d.otherCoachUserId === viewer.userId)
     }
     case "queue.changed":
     case "vainqueur.changed": {

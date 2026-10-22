@@ -38,6 +38,10 @@ const STATUS: Record<string, LineTemplate[]> = {
     { title: "Teams locked, fate takes over", description: "The coaches have spoken. The randomizer speaks next." },
     { title: "The draft is on the table", description: "Lock what you love, re-roll what you fear." },
   ],
+  coach_picked: [
+    { title: "All ten champions are locked", description: "Every pick came from a coach. Blame them, not the randomizer." },
+    { title: "Champion select is over", description: "The coaches have spoken, champion by champion. Decrees are next." },
+  ],
   chaos: [
     { title: "Royal Decrees are open", description: "Spend points to bend the draft. Every decree is signed, every grudge remembered." },
     { title: "The decree window is open", description: "Reroll a rival, exile a champion, march someone to the wrong lane. Legally." },
@@ -103,6 +107,7 @@ export function narrateStatus(event: LiveEvent): Narration | null {
       return line
     }
     case "draft":
+      if (d.coachPicked) return say(event, "draft-coached", STATUS.coach_picked, { who }, "hype")
       return say(event, "draft", d.from === "coach_draft" ? STATUS.draft.slice(0, 2) : STATUS.draft.slice(2), { who }, "info")
     case "chaos":
       return say(event, "chaos", STATUS.chaos, { who }, "royal")

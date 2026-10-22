@@ -1,5 +1,6 @@
 import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
 import { narrate, type Narration } from "@/lib/live/narration"
+import type { Viewer } from "@/lib/live/policy"
 
 const fmt = new Intl.NumberFormat("en-US")
 
@@ -67,9 +68,9 @@ function fallbackLine(event: LiveEvent): Narration | null {
 }
 
 // Events come off the network: a malformed payload must never break the feed or the toasts.
-export function safeNarrate(event: LiveEvent): Narration | null {
+export function safeNarrate(event: LiveEvent, viewer?: Viewer): Narration | null {
   try {
-    const line = narrate(event) ?? fallbackLine(event)
+    const line = narrate(event, viewer) ?? fallbackLine(event)
     return line && typeof line.title === "string" && line.title ? line : null
   } catch {
     return null

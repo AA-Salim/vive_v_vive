@@ -156,4 +156,10 @@ export const COACH_HELP = {
     cost: FREE,
     limits: `Either coach or an admin, once all ${LOBBY_SIZE} have a lane.`,
   },
+  lockPick: {
+    title: "Lock the teams",
+    does: "Locks both teams and opens champion select: the coaches pick every champion for their own players in draft order, fearless bans included. Drafted players leave the queue.",
+    cost: FREE,
+    limits: `Either coach or an admin, once all ${LOBBY_SIZE} have a lane. Each pick has a timer; a coach who stalls gets a random champion from that lane.`,
+  },
 } satisfies Record<string, HelpEntry>

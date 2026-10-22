@@ -4,7 +4,7 @@ import type { ReactNode } from "react"
 import { ActivityFeed } from "@/components/live/activity-feed"
 import { BettingPanel } from "@/components/betting-panel"
 import { ChaosPanel } from "@/components/chaos-panel"
-import { CoachDraftPanel } from "@/components/coach-draft-panel"
+import { CoachDraftStage } from "@/components/lobby/champion-pick/coach-draft-stage"
 import { DuelsPanel } from "@/components/duels-panel"
 import { PostGameVote } from "@/components/post-game-vote"
 import { ProphecyPanel } from "@/components/prophecy-panel"
@@ -39,7 +39,7 @@ interface GameRoomProps {
 function primaryPanel(phase: GameRoomProps["phase"], session: RoomSession, userId: string | null): ReactNode {
   switch (phase) {
     case "coach_draft":
-      return <CoachDraftPanel session={session} userId={userId} />
+      return <CoachDraftStage session={session} userId={userId} />
     case "chaos":
       return <ChaosPanel session={session} isOpen />
     case "betting":

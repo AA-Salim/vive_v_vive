@@ -4,6 +4,7 @@ import { assignChampions } from "@/lib/randomizer"
 import type { Assignment, Player, Role, SessionStatus, Side } from "@/lib/types"
 import { BETTING_DURATION_MS, CHAOS_DURATION_MS } from "@/lib/session/constants"
 import { fail, loadSession, transitionSession, type ActionOutcome, type SessionRow } from "@/lib/session/server"
+import { coachPickedPlayerIds } from "@/lib/lobby/server/coach-champions"
 
 const PHASE_ORDER: SessionStatus[] = ["coach_draft", "draft", "chaos", "betting", "in_game", "blue_win", "red_win", "canceled", "expired"]
 
@@ -65,9 +66,17 @@ export async function todaysFearless(supabase: SupabaseClient): Promise<Set<stri
   return new Set((data ?? []).map((r: { champion_name: string }) => r.champion_name))
 }
 
+// Seats holding the champion their coach picked count as locked, whatever their lock flag says.
+async function coachHeld(supabase: SupabaseClient, session: SessionRow): Promise<(a: SessionRow["session_assignments"][number]) => boolean> {
+  if (session.game_mode !== "coach_draft") return () => false
+  const picks = await coachPickedPlayerIds(supabase, session.id)
+  return (a) => picks.get(a.player_id) === a.champion
+}
+
 // Rewrites unlocked rows in place: assignment ids stay stable and the board never has missing slots.
 export async function rerollDraft(supabase: SupabaseClient, session: SessionRow): Promise<ActionOutcome> {
   if (session.status !== "draft") return fail(409, "Re-rolls only happen during the draft.", "wrong_phase")
+  const held = await coachHeld(supabase, session)
 
   const { data: claimed, error: claimError } = await supabase
     .from("game_sessions")
@@ -84,7 +93,7 @@ export async function rerollDraft(supabase: SupabaseClient, session: SessionRow)
   const rows = session.session_assignments
   const locked = new Map<string, Assignment>()
   for (const a of rows) {
-    if (!a.locked) continue
+    if (!a.locked && !held(a)) continue
     locked.set(a.player_id, {
       player: toPlayer(a),
       side: a.side,
@@ -102,7 +111,7 @@ export async function rerollDraft(supabase: SupabaseClient, session: SessionRow)
 
   const results = await Promise.all(
     rows
-      .filter((a) => !a.locked)
+      .filter((a) => !a.locked && !held(a))
       .map((a) => {
         const pick = byPlayer.get(a.player_id)
         if (!pick) return Promise.resolve({ error: null })
@@ -124,6 +133,9 @@ export async function toggleLock(supabase: SupabaseClient, session: SessionRow, 
   if (session.status !== "draft") return fail(409, "Locks only change during the draft.", "wrong_phase")
   const target = session.session_assignments.find((a) => a.id === assignmentId)
   if (!target) return fail(404, "That player is not in this game.")
+  if (target.locked && (await coachHeld(supabase, session))(target)) {
+    return fail(409, "Your coach picked this champion. It stays locked.", "coach_pick_locked")
+  }
 
   const { data, error } = await supabase
     .from("session_assignments")

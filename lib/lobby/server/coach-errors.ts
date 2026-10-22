@@ -15,6 +15,20 @@ export type CoachDraftErrorCode =
   | "lane_clash"
   | "stale"
   | "undo_unavailable"
+  | "champions_closed"
+  | "champions_unavailable"
+  | "champions_locked"
+  | "teams_locked"
+  | "not_your_player"
+  | "player_has_champion"
+  | "unknown_champion"
+  | "fearless_banned"
+  | "champion_taken"
+  | "turn_expired"
+  | "auto_pick_final"
+  | "not_in_draft"
+  | "no_champions"
+  | "coach_pick_locked"
 
 export const COACH_DRAFT_ERRORS: Record<CoachDraftErrorCode, { status: number; message: string }> = {
   not_authenticated: { status: 401, message: "Sign in with Discord first." },
@@ -33,6 +47,20 @@ export const COACH_DRAFT_ERRORS: Record<CoachDraftErrorCode, { status: number; m
   lane_clash: { status: 409, message: "Two players share a lane. Each team needs top, jungle, mid, ADC and support." },
   stale: { status: 409, message: "The draft just changed. Check the board and try again." },
   undo_unavailable: { status: 503, message: "Taking back picks arrives with the next database update." },
+  champions_closed: { status: 409, message: "Champion select opens once both teams are locked." },
+  champions_unavailable: { status: 503, message: "Coach champion picks arrive with the next database update." },
+  champions_locked: { status: 403, message: "Champion select runs on the server clock. Pick through the board." },
+  teams_locked: { status: 409, message: "The teams are locked. Champion select is under way." },
+  not_your_player: { status: 403, message: "Pick for one of your own players." },
+  player_has_champion: { status: 409, message: "That player already has a champion." },
+  unknown_champion: { status: 404, message: "No champion by that name on the Rift." },
+  fearless_banned: { status: 409, message: "Fearless: that champion was already played today." },
+  champion_taken: { status: 409, message: "Already picked in this game. One of each, like real draft." },
+  turn_expired: { status: 409, message: "Time ran out. The server locked a champion for that pick." },
+  auto_pick_final: { status: 409, message: "The clock picked that one. Auto-picks are final." },
+  not_in_draft: { status: 403, message: "Only players drafted into this game can pin a request." },
+  no_champions: { status: 409, message: "No champion is left to pick." },
+  coach_pick_locked: { status: 409, message: "Your coach picked this champion. It stays." },
 }
 
 const PATTERN = /coachdraft:([a-z_]+)/

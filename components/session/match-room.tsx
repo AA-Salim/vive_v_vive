@@ -95,7 +95,7 @@ export function MatchRoom() {
     <MotionConfig reducedMotion="user">
       <div className="flex flex-col gap-5">
         <RewardClaimBanner />
-        <TribunalCallout hideForSessionId={phase === "result" ? (session?.id ?? null) : null} />
+        <TribunalCallout hideForSessionId={phase === "result" && dismissedId !== session?.id ? (session?.id ?? null) : null} />
         {content}
         <CoachSelectDialog
           open={coachDialogOpen}

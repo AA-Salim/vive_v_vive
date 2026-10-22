@@ -1,14 +1,17 @@
 "use client"
 
 import { useState } from "react"
+import { usePathname } from "next/navigation"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { ResultReveal } from "@/components/betting/result-reveal"
 import { useMarket } from "@/components/betting/use-market"
 import { useLive, useLiveSignal } from "@/components/live/live-provider"
 
-// Pops the personal payout reveal for everyone who had a bet, wherever they are on the page.
+// Pops the personal payout reveal for everyone who had a bet, on any page except the match room,
+// whose result screen already shows the same reveal inline.
 export function BetResultReveal() {
   const { userId } = useLive()
+  const pathname = usePathname()
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
 
@@ -20,7 +23,7 @@ export function BetResultReveal() {
   const market = useMarket(sessionId, !!userId)
   const bet = market.data?.user_bet ?? null
   const result = market.data?.result ?? null
-  const open = !!sessionId && sessionId !== dismissed && !!result && !!bet && bet.status !== "pending"
+  const open = pathname !== "/" && !!sessionId && sessionId !== dismissed && !!result && !!bet && bet.status !== "pending"
 
   return (
     <Dialog

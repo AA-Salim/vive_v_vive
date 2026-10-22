@@ -5,7 +5,6 @@ import { MotionConfig } from "motion/react"
 import { LockedView, OpenView, ResultView, groupDuels, type ActionState } from "@/components/duels/board-views"
 import { ChallengeSheet } from "@/components/duels/challenge-sheet"
 import { DuelComingSoon, DuelError, DuelSkeleton } from "@/components/duels/duel-shell"
-import { useDuelFallbackAlerts } from "@/components/duels/use-duel-alerts"
 import { useDeadlinePassed, useDuelHighlights } from "@/components/duels/use-duel-live"
 import { useDuelAction, usePendingDuelActions } from "@/components/duels/use-duel-mutations"
 import { useDuelBoard, usePrefetchDuelRoster } from "@/components/duels/use-duels"
@@ -51,7 +50,6 @@ function DuelsBoard({ session, baseMode }: { session: SessionWithAssignments; ba
   const points = usePoints(userId)
   const query = useDuelBoard(session.id, session.status)
   const highlights = useDuelHighlights(session.id)
-  useDuelFallbackAlerts(userId)
   const action = useDuelAction(session.id, session.status, userId ?? "anonymous")
   const pending = usePendingDuelActions(session.id)
   // Bound to the game it was opened for: the panel stays mounted into the next game's draft.

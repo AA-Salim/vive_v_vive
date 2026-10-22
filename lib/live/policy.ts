@@ -24,7 +24,7 @@ export interface Viewer {
   names: string[]
 }
 
-const LOBBY_DOMAINS: ReadonlySet<string> = new Set(["session", "coachdraft", "queue", "vainqueur", "fearless"])
+const LOBBY_DOMAINS: ReadonlySet<string> = new Set(["session", "coachdraft", "queue", "vainqueur", "fearless", "duel", "roster"])
 
 const AFTERMATH_TYPES: ReadonlySet<string> = new Set([
   "bet.resolved",

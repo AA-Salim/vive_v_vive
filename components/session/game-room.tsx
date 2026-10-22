@@ -56,8 +56,12 @@ function primaryPanel(phase: GameRoomProps["phase"], session: RoomSession, userI
 function secondaryPanels(phase: GameRoomProps["phase"], session: RoomSession): ReactNode[] {
   switch (phase) {
     case "draft":
-    case "chaos":
       return [<DuelsPanel key="duels" session={session} />]
+    case "chaos":
+      return [
+        <ProphecyPanel key="prophecy" session={session} isBettingOpen={false} />,
+        <DuelsPanel key="duels" session={session} />,
+      ]
     case "betting":
       return [
         <ProphecyPanel key="prophecy" session={session} isBettingOpen />,

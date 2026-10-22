@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { emitLive, getActor } from "@/lib/live/server"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -324,10 +325,13 @@ export async function POST(request: Request) {
   }
 
   if (activeAct.status !== "archived") {
-    await supabase
+    const { error: archiveError } = await supabase
       .from("acts")
       .update({ status: "archived", ended_at: actEnded })
       .eq("id", activeAct.id)
+    if (!archiveError) {
+      emitLive("act.changed", { actor: await getActor(supabase, user.id), data: { actNumber: activeAct.act_number, status: "archived" } })
+    }
   }
 
   return NextResponse.json({

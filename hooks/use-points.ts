@@ -10,23 +10,11 @@ interface PointsSnapshot {
   transactions: PointTransaction[]
 }
 
-interface KissSnapshot {
-  kissToday: number
-  kissRemaining: number
-  totalKisses: number
-}
-
-const DAILY_KISSES = 3
 const NO_TRANSACTIONS: PointTransaction[] = []
-const DEFAULT_KISS: KissSnapshot = { kissToday: 0, kissRemaining: DAILY_KISSES, totalKisses: 0 }
 
 // Balance queries are ["points", userId, ...]: live events refresh only the affected user's balance.
 export function pointsKey(userId: string | null | undefined) {
   return ["points", userId ?? "anonymous"] as const
-}
-
-export function kissKey(userId: string | null | undefined) {
-  return ["praise", "kiss", userId ?? "anonymous"] as const
 }
 
 const asNumber = (value: unknown, fallback: number) =>
@@ -40,17 +28,6 @@ async function fetchPoints(signal: AbortSignal): Promise<PointsSnapshot> {
     balance: asNumber(data.balance, 0),
     lastDailyClaim: data.last_daily_claim ?? null,
     transactions: Array.isArray(data.transactions) ? data.transactions : NO_TRANSACTIONS,
-  }
-}
-
-async function fetchKiss(signal: AbortSignal): Promise<KissSnapshot> {
-  const res = await fetch("/api/points/kiss", { signal, cache: "no-store" })
-  if (!res.ok) return DEFAULT_KISS
-  const data = (await res.json()) as { used_today?: number; remaining_today?: number; total_kisses?: number }
-  return {
-    kissToday: asNumber(data.used_today, 0),
-    kissRemaining: asNumber(data.remaining_today, DAILY_KISSES),
-    totalKisses: asNumber(data.total_kisses, 0),
   }
 }
 
@@ -74,13 +51,6 @@ export function usePoints(userId: string | null) {
     staleTime: 15_000,
   })
 
-  const kiss = useQuery({
-    queryKey: kissKey(userId),
-    queryFn: ({ signal }) => fetchKiss(signal),
-    enabled,
-    staleTime: 60_000,
-  })
-
   const setBalance = useCallback(
     (balance: unknown) => {
       if (typeof balance !== "number" || !userId) return
@@ -91,10 +61,7 @@ export function usePoints(userId: string | null) {
 
   const refresh = useCallback(async () => {
     if (!userId) return
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: pointsKey(userId) }),
-      queryClient.invalidateQueries({ queryKey: kissKey(userId) }),
-    ])
+    await queryClient.invalidateQueries({ queryKey: pointsKey(userId) })
   }, [queryClient, userId])
 
   const initialize = useCallback(async () => {
@@ -110,43 +77,13 @@ export function usePoints(userId: string | null) {
     return data
   }, [refresh, setBalance])
 
-  // The optional body is forwarded as JSON (e.g. a written praise).
-  const kissTheHand = useCallback(
-    async (body?: Record<string, unknown>) => {
-      const data = await postJson("/api/points/kiss", body)
-      if (data && typeof data === "object") {
-        setBalance(data.balance)
-        if (typeof data.remaining_today === "number" && userId) {
-          queryClient.setQueryData<KissSnapshot>(kissKey(userId), (old) => {
-            const base = old ?? DEFAULT_KISS
-            const used = data.kissed ? base.kissToday + 1 : base.kissToday
-            return {
-              kissToday: used,
-              kissRemaining: data.remaining_today,
-              totalKisses: data.kissed ? base.totalKisses + 1 : base.totalKisses,
-            }
-          })
-        }
-      }
-      await refresh()
-      return data
-    },
-    [queryClient, refresh, setBalance, userId]
-  )
-
-  const kissData = kiss.data ?? DEFAULT_KISS
-
   return {
     balance: points.data?.balance ?? 0,
     lastDailyClaim: points.data?.lastDailyClaim ?? null,
     transactions: points.data?.transactions ?? NO_TRANSACTIONS,
-    kissToday: kissData.kissToday,
-    kissRemaining: kissData.kissRemaining,
-    totalKisses: kissData.totalKisses,
     isLoading: enabled && points.isPending,
     refetch: refresh,
     initialize,
     claimDaily,
-    kissTheHand,
   }
 }

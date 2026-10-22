@@ -27,7 +27,8 @@ const CELEBRATED_PREFIX = "vvv-bet-celebrated-"
 export function claimCelebration(sessionId: string): boolean {
   try {
     const key = CELEBRATED_PREFIX + sessionId
-    if (window.sessionStorage.getItem(key)) return false
+    // The match room's result screen already threw confetti for this game in this tab.
+    if (window.sessionStorage.getItem(key) || window.sessionStorage.getItem(`vvv:celebrated:${sessionId}`)) return false
     window.sessionStorage.setItem(key, "1")
     return true
   } catch {

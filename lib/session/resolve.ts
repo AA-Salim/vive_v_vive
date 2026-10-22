@@ -300,7 +300,17 @@ export async function declareWinner(
   const winnerIds = assignments.filter((a) => a.side === winnerSide).map((a) => a.player_id)
   const loserIds = assignments.filter((a) => a.side !== winnerSide).map((a) => a.player_id)
 
-  await runGameResolvedHooks({ supabase, sessionId: session.id, gameId, winnerSide, assignments, winnerIds, loserIds })
+  const failures = await runGameResolvedHooks({ supabase, sessionId: session.id, gameId, winnerSide, assignments, winnerIds, loserIds })
+  if (failures.length > 0) {
+    // The game stays in_game with its record linked: the next declaration repairs it and re-runs the
+    // idempotent hooks, which only settle while the session is still in_game.
+    await releaseClaim(supabase, session.id, userId)
+    return fail(
+      503,
+      `The game is recorded, but settling ${failures.join(", ")} failed. Nothing was lost: declare ${SIDE_LABEL[winnerSide]} again to finish.`,
+      "settlement_incomplete"
+    )
+  }
 
   const { data: finished, error } = await supabase
     .from("game_sessions")
@@ -321,7 +331,11 @@ export async function declareWinner(
 export async function cancelSession(supabase: SupabaseClient, session: SessionRow, viewer: Viewer): Promise<ActionOutcome> {
   const userId = viewer.user?.id
   if (!userId) return fail(401, "Sign in to cancel the game", "auth_required")
-  if (session.status === "canceled") return { ok: true, session, changed: false }
+  if (session.status === "canceled") {
+    // Refund hooks only touch rows still pending, so canceling again finishes a refund that failed earlier.
+    const failures = await runGameCanceledHooks({ supabase, sessionId: session.id })
+    return failures.length > 0 ? refundsIncomplete(failures) : { ok: true, session, changed: false }
+  }
   if (!isActiveStatus(session.status)) return fail(409, "This game is already over.", "already_resolved")
 
   const cancel = () =>
@@ -356,6 +370,15 @@ export async function cancelSession(supabase: SupabaseClient, session: SessionRo
     return fail(409, "A winner is being declared right now.", "resolving")
   }
 
-  await runGameCanceledHooks({ supabase, sessionId: session.id })
+  const failures = await runGameCanceledHooks({ supabase, sessionId: session.id })
+  if (failures.length > 0) return refundsIncomplete(failures)
   return { ok: true, session: canceled, changed: true }
+}
+
+function refundsIncomplete(failures: string[]): ActionOutcome {
+  return fail(
+    503,
+    `The game is canceled, but refunding ${failures.join(", ")} failed. Nothing was lost: cancel again to finish the refunds.`,
+    "refunds_incomplete"
+  )
 }

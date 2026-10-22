@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { LiveProvider } from "@/components/live/live-provider"
 import { BetResultReveal } from "@/components/betting/bet-result-reveal"
 import { BountyCelebration } from "@/components/bounties/bounty-celebration"
+import { PraisePrompt } from "@/components/praise/praise-prompt"
 import { TitlePerkAnnouncer } from "@/components/titles/perk-announcer"
 import { useAuthSync } from "@/hooks/use-auth"
 
@@ -37,6 +38,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <BetResultReveal />
         <TitlePerkAnnouncer />
         <BountyCelebration />
+        <PraisePrompt />
       </LiveProvider>
     </QueryClientProvider>
   )

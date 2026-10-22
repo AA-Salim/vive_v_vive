@@ -2,7 +2,7 @@
 
 import { ArrowRightIcon } from "lucide-react"
 import { ROLE_LABELS } from "@/lib/champions"
-import { WAGER_DEFIANCE_STEP, type DecreeType } from "@/lib/chaos/catalog"
+import { WAGER_DEFIANCE_STEP, WAGER_MAX_MULTIPLIER, type DecreeType } from "@/lib/chaos/catalog"
 import { seatLabel } from "@/lib/chaos/format"
 import { pardonedPlayerIds, ruleFor, sideName, viewerSeat, type DecreeContext } from "@/lib/chaos/rules"
 import type { BoardAssignment } from "@/lib/chaos/types"
@@ -48,7 +48,7 @@ export function buildPreview(type: DecreeType, selection: DecreeSelection, ctx: 
       return {
         summary:
           ctx.schema === "v2"
-            ? `If ${sideName(selection.side)} wins you collect ${base}. Defiance pays: each hostile decree someone lands on ${sideName(selection.side)} after this adds +${WAGER_DEFIANCE_STEP}x, up to ${max}.`
+            ? `If ${sideName(selection.side)} wins you collect ${base}. Defiance pays: a hostile decree someone lands on ${sideName(selection.side)} after this adds +${WAGER_DEFIANCE_STEP}x, up to ${max} (${WAGER_MAX_MULTIPLIER}x).`
             : `If ${sideName(selection.side)} wins you collect ${base}. If they lose, the treasury keeps your ${cost}.`,
         lines: [],
       }

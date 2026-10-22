@@ -1,4 +1,6 @@
-import { CURSE_GAMES, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP } from "@/lib/titles/rules"
+import { pts, type HelpEntry } from "@/lib/help"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
+import type { PerkInfo } from "@/lib/titles/types"
 
 export const HALL_COPY = {
   title: "The Hall of Titles",
@@ -16,7 +18,7 @@ export const EXPLAINER = [
   },
   {
     title: "Small, capped, honest",
-    body: `No title moves more than ${PERK_CAP} points in a single game. Payouts land in your history as title perks.`,
+    body: `Every title has its own cap per game, and none moves more than ${PERK_CAP}. The treasury enforces it, whoever declares the winner. Payouts land in your history as title perks.`,
   },
   {
     title: "Rebels and loyalists",
@@ -42,6 +44,30 @@ const ROASTS: Record<string, string> = {
   "Royal Carpet": "shall be rolled out before the throne. Every loss, the court walks all over them.",
   "Salaxe's Emotional Support": "shall carry the fallen King's feelings. Every win, the wages go to someone else.",
   "The Crawling One": "shall crawl through every lost bet, paying a little extra for the privilege.",
+}
+
+const TAKES_PART = `you played, had a settled bet of ${MIN_STAKE}+, cast a decree or cashed a bounty`
+
+const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`)
+
+// Caps are enforced by apply_title_perk() in supabase/phase10_titles.sql from the same numbers.
+export function perkHelp(perk: PerkInfo): HelpEntry {
+  if (perk.kind === "curse") {
+    return {
+      title: "Brand",
+      does: `${sentence(perk.summary)} Charged after every game the branded takes part in (${TAKES_PART}).`,
+      cost: `Up to ${pts(perk.cap)} a game for the branded, never past the debt floor.`,
+      reward: "The tribute goes to whoever burned the brand in.",
+      limits: `Burns for ${CURSE_GAMES} games. ${MAX_ACTIVE_CURSES} brands per subject at most. Buy it off early for ${DIGNITY_MULTIPLIER}x its price.`,
+    }
+  }
+  return {
+    title: "Title perk",
+    does: `${sentence(perk.summary)} Paid on its own after every game you take part in (${TAKES_PART}), while this title is your banner.`,
+    cost: `Free to equip. A perk that backfires costs you ${pts(PERK_PENALTY_CAP)} at most.`,
+    reward: `Up to ${pts(perk.cap)} a game.`,
+    limits: "One banner at a time. Sealed while a game is live.",
+  }
 }
 
 export function proclamation(bestower: string, target: string, title: string): string {

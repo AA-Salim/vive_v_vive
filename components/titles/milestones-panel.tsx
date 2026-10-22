@@ -8,8 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
 import { cn } from "@/lib/utils"
-import { MILESTONE_GROUPS } from "@/lib/milestones"
 import { MILESTONES_HELP, titleHelp } from "@/lib/titles/help"
+import { MILESTONE_GROUP_HELP, MILESTONE_GROUPS } from "@/lib/milestones"
 import type { MilestoneView } from "@/lib/titles/types"
 
 interface MilestonesPanelProps {
@@ -74,13 +74,15 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
       {MILESTONE_GROUPS.map((group) => {
         const items = milestones.filter((m) => m.group === group.key)
         if (items.length === 0) return null
+        const help = MILESTONE_GROUP_HELP[group.key]
         return (
           <section key={group.key} aria-labelledby={`milestones-${group.key}`} className="space-y-2">
             <div className="flex items-baseline justify-between gap-2">
-              <h3 id={`milestones-${group.key}`} className="font-display text-sm text-[var(--color-gold-light)]">
+              <h3 id={`milestones-${group.key}`} className="flex shrink-0 items-center gap-1 font-display text-sm text-[var(--color-gold-light)]">
                 {group.label}
+                {help && <InfoTip help={help} />}
               </h3>
-              <span className="text-[11px] text-muted-foreground">{group.blurb}</span>
+              <span className="text-right text-[11px] text-muted-foreground">{group.blurb}</span>
             </div>
             <ul className="space-y-2">
               {items.map((m, index) => {

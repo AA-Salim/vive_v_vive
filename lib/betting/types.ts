@@ -85,6 +85,8 @@ export interface MarketSnapshot {
   session: MarketSession | null
   result: MarketResult | null
   server_time: string
+  // The team the viewer plays for in this game: they may only bet on it. Null for spectators.
+  viewer_side: Side | null
 }
 
 export interface PlaceBetInput {

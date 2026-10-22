@@ -141,6 +141,28 @@ export function winnerOf(status: SessionStatus | null | undefined): Side | null 
   return null
 }
 
+// Mirrors bet_v2_player_side() in supabase/phase10_betting.sql: both account links count, Blue wins a tie.
+export async function seatedSide(supabase: SupabaseClient, sessionId: string, userId: string | null): Promise<Side | null> {
+  if (!userId) return null
+  const [{ data: profile }, { data: linked }] = await Promise.all([
+    supabase.from("user_profiles").select("player_id").eq("id", userId).maybeSingle(),
+    supabase.from("players").select("id").eq("auth_user_id", userId),
+  ])
+  const playerIds = [profile?.player_id as string | null | undefined, ...((linked ?? []) as { id: string }[]).map((p) => p.id)].filter(
+    (id): id is string => !!id
+  )
+  if (playerIds.length === 0) return null
+  const { data: seats } = await supabase
+    .from("session_assignments")
+    .select("side")
+    .eq("session_id", sessionId)
+    .in("player_id", playerIds)
+  const sides = ((seats ?? []) as { side?: unknown }[]).map((row) => row.side)
+  if (sides.includes("blue")) return "blue"
+  if (sides.includes("red")) return "red"
+  return null
+}
+
 export async function viewerId(supabase: SupabaseClient): Promise<string | null> {
   try {
     const { data } = await supabase.auth.getClaims()

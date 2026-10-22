@@ -1,5 +1,7 @@
 import { Skull, Sparkles } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { cn } from "@/lib/utils"
+import { perkHelp } from "@/lib/titles/copy"
 import type { PerkInfo } from "@/lib/titles/types"
 import { TRIGGER_ICON } from "@/components/titles/title-visuals"
 
@@ -24,10 +26,11 @@ export function PerkLine({ perk, className, emptyLabel = "Cosmetic only. No perk
       )}
     >
       <Icon aria-hidden className={cn("mt-px size-3.5 shrink-0", cursed ? "text-rose-400" : "text-[var(--color-gold)]")} />
-      <span>
+      <span className="min-w-0 flex-1">
         <span className="sr-only">{cursed ? "Curse: " : "Perk: "}</span>
         {perk.summary}
       </span>
+      <InfoTip help={perkHelp(perk)} className="-my-0.5" />
     </p>
   )
 }

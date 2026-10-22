@@ -23,6 +23,7 @@ export type BetErrorCode =
   | "stale_position"
   | "purse_changed"
   | "premium_changed"
+  | "treason"
 
 export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string }> = {
   not_authenticated: { status: 401, message: "Log in with Discord to bet." },
@@ -50,6 +51,7 @@ export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string 
     status: 409,
     message: "The odds moved and the Guardian Angel raised her price. Check the new premium and confirm again.",
   },
+  treason: { status: 403, message: "Treason. You play in this game, so you can only bet on your own team." },
 }
 
 const CODE_PATTERN = /bet:([a-z_]+)/

@@ -6,6 +6,7 @@ import {
   loadBettors,
   loadMarketSession,
   loadSessionBets,
+  seatedSide,
   winnerOf,
   type MarketSessionRow,
 } from "@/lib/betting/server/rows"
@@ -90,10 +91,11 @@ export async function buildMarketSnapshot(
   sessionId: string,
   viewerPromise: Promise<string | null>
 ): Promise<MarketSnapshot> {
-  const [{ rows, version }, sessionRow, viewer] = await Promise.all([
+  const [{ rows, version }, sessionRow, viewer, viewerSide] = await Promise.all([
     loadSessionBets(supabase, sessionId),
     loadMarketSession(supabase, sessionId),
     viewerPromise,
+    viewerPromise.then((id) => seatedSide(supabase, sessionId, id)),
   ])
   const bettors = await loadBettors(
     supabase,
@@ -127,5 +129,6 @@ export async function buildMarketSnapshot(
     session,
     result: summarizeResult(session, all),
     server_time: new Date().toISOString(),
+    viewer_side: viewerSide,
   }
 }

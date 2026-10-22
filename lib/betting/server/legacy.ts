@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { isMissingSchema } from "@/lib/db-errors"
 import { BET_RULES } from "@/lib/betting/rules"
 import { betError, betErrorFromDb } from "@/lib/betting/server/respond"
+import { seatedSide } from "@/lib/betting/server/rows"
 import type { InsureBetResult, PlaceBetResult } from "@/lib/betting/types"
 import type { Side } from "@/lib/types"
 
@@ -47,6 +48,9 @@ export async function legacyPlaceBet(
 ): Promise<{ response: NextResponse; placed: PlaceBetResult | null }> {
   const closed = await openWindowError(supabase, sessionId)
   if (closed) return { response: closed, placed: null }
+
+  const seat = await seatedSide(supabase, sessionId, userId)
+  if (seat && seat !== side) return { response: betError("treason"), placed: null }
 
   const stake = await adjust(supabase, userId, -amount, "bet_placed", sessionId)
   if (stake.error) return { response: betErrorFromDb(stake.error), placed: null }

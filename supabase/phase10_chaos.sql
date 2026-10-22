@@ -145,13 +145,14 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   );
 $$;
 
--- Double or nothing pays 2x. Wagers placed through chaos_issue_decree (rules_version 2) gain +0.5x for each
--- hostile decree another user lands on the backed side after the wager, capped at 3x: defiance pays.
+-- Double or nothing pays 2x. Wagers placed through chaos_issue_decree (rules_version 2) gain +0.5x once a
+-- hostile decree another user lands on the backed side after the wager, capped at 2.5x: defiance pays, but
+-- 3x printed points. Mirrored in lib/chaos/catalog.ts (WAGER_* constants).
 CREATE OR REPLACE FUNCTION chaos_wager_multiplier(p_wager chaos_actions) RETURNS NUMERIC
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT CASE
     WHEN p_wager.rules_version < 2 THEN 2.0
-    ELSE 2.0 + 0.5 * LEAST(2, (
+    ELSE 2.0 + 0.5 * LEAST(1, (
       SELECT count(*)
       FROM chaos_actions h
       WHERE h.session_id = p_wager.session_id

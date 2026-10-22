@@ -3,7 +3,8 @@
 -- Requires phase10_foundation.sql (free-form point_transactions reasons).
 -- Rules mirrored in lib/titles/rules.ts: a curse brands its wearer for 8 resolved games, a wearer
 -- carries at most 2 curses, dignity costs 1.5x the title price, one perk moves at most 60 points per game
--- and a perk can cost its own wearer at most 10.
+-- and a perk can cost its own wearer at most 10. Each title also has its own cap (title_perk_caps, seeded
+-- from lib/titles/perks.ts), and a perk only pays someone who took part in the game.
 -- New point reasons: title_perk, title_curse (paid by a branded wearer), title_tribute (received by the
 -- bestower), title_dignity (brand bought back).
 
@@ -30,6 +31,202 @@ CREATE INDEX IF NOT EXISTS idx_title_perk_applications_user
 ALTER TABLE title_perk_applications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "title_perk_applications_read" ON title_perk_applications;
 CREATE POLICY "title_perk_applications_read" ON title_perk_applications FOR SELECT USING (true);
+
+-- ============================================================
+-- PERK CAPS: the most one title can move in one game. Mirrors perkFor() in lib/titles/perks.ts (each
+-- definition's cap, never above the 60 point ceiling): change both together. Lookup order is the same as
+-- perkFor(): the exact title name (shop, milestone and consolation titles), then the act award kind parsed
+-- from "Act <n> <Award>", then the title's category. Re-running this file resets the table to these values.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS title_perk_caps (
+  scope TEXT NOT NULL CHECK (scope IN ('title', 'act_award', 'category')),
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('perk', 'curse')),
+  cap INTEGER NOT NULL CHECK (cap BETWEEN 1 AND 60),
+  PRIMARY KEY (scope, key)
+);
+
+ALTER TABLE title_perk_caps ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "title_perk_caps_read" ON title_perk_caps;
+CREATE POLICY "title_perk_caps_read" ON title_perk_caps FOR SELECT USING (true);
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON title_perk_caps FROM anon, authenticated;
+
+WITH seed (scope, key, kind, cap) AS (
+  VALUES
+    ('title', 'Kingslayer', 'perk', 60),
+    ('title', 'The Usurper', 'perk', 8),
+    ('title', 'Crown Thief', 'perk', 8),
+    ('title', 'The Disrespector', 'perk', 40),
+    ('title', 'The One Who Stopped Kneeling', 'perk', 16),
+    ('title', 'Still Kneeling', 'perk', 8),
+    ('title', 'Throne Polisher', 'perk', 12),
+    ('title', 'The Holdout', 'perk', 40),
+    ('title', 'Last Loyalist', 'perk', 60),
+    ('title', 'Copium Dealer', 'perk', 24),
+    ('title', 'Baron Caller (Derogatory)', 'perk', 10),
+    ('title', 'The 0/8 Powerspike', 'perk', 30),
+    ('title', 'Delayed Victory Specialist', 'perk', 8),
+    ('title', 'Main Character (Self-Diagnosed)', 'perk', 60),
+    ('title', 'El Goblino Pequeno', 'perk', 15),
+    ('title', 'Court Jester', 'curse', 50),
+    ('title', 'Boot Licker', 'curse', 6),
+    ('title', 'Royal Carpet', 'curse', 10),
+    ('title', 'Salaxe''s Emotional Support', 'curse', 10),
+    ('title', 'The Crawling One', 'curse', 40),
+    ('title', 'Summoned', 'perk', 1),
+    ('title', 'Committed to the Rift', 'perk', 1),
+    ('title', 'The Regular', 'perk', 2),
+    ('title', 'Can''t Stop Won''t Stop', 'perk', 2),
+    ('title', 'Half-Century Club', 'perk', 2),
+    ('title', 'Grass Is a Myth', 'perk', 3),
+    ('title', 'Vive v Vive Addict', 'perk', 3),
+    ('title', 'This Game Is My Personality', 'perk', 3),
+    ('title', 'First Taste of Victory', 'perk', 2),
+    ('title', 'Winner By Habit', 'perk', 3),
+    ('title', 'The Carry', 'perk', 4),
+    ('title', 'Unkillable Legacy', 'perk', 5),
+    ('title', 'At Least You Tried', 'perk', 3),
+    ('title', 'Coinflip Merchant', 'perk', 6),
+    ('title', 'Random Champs, Calculated Wins', 'perk', 6),
+    ('title', 'Baby Gambler', 'perk', 10),
+    ('title', 'Degenerate In Training', 'perk', 15),
+    ('title', 'Can''t Help Myself', 'perk', 20),
+    ('title', 'The House Should Be Worried', 'perk', 25),
+    ('title', 'Lucky Guess', 'perk', 10),
+    ('title', 'Fortune''s Favorite', 'perk', 20),
+    ('title', 'The Oracle', 'perk', 30),
+    ('title', 'Pocket Change', 'perk', 1),
+    ('title', 'Stacking Paper', 'perk', 2),
+    ('title', 'Economy Enjoyer', 'perk', 3),
+    ('title', 'Walking Treasury', 'perk', 4),
+    ('title', 'Salaxe Appreciator', 'perk', 3),
+    ('title', 'Devoted Servant', 'perk', 5),
+    ('title', 'Down Horrendous For Salaxe', 'perk', 8),
+    ('title', 'First Blood (Emotional)', 'perk', 3),
+    ('title', 'Community Punching Bag', 'perk', 5),
+    ('title', 'Shame Sponge', 'perk', 8),
+    ('title', 'Mischief Maker', 'perk', 6),
+    ('title', 'Chaos Enjoyer', 'perk', 10),
+    ('title', 'Chaos Incarnate', 'perk', 15),
+    ('title', 'Bounty Poster', 'perk', 20),
+    ('title', 'Most Wanted Printer', 'perk', 40),
+    ('title', 'Salaxe''s Background Character', 'perk', 2),
+    ('title', 'Court Jester (Unpaid)', 'perk', 2),
+    ('title', 'Throne Room Tourist', 'perk', 2),
+    ('title', 'The One Who Was There', 'perk', 2),
+    ('title', 'Salaxe''s Tax Write-Off', 'perk', 2),
+    ('title', 'Professional Bystander', 'perk', 2),
+    ('title', 'Royal Seat Warmer', 'perk', 2),
+    ('title', 'The Forgettable', 'perk', 2),
+    ('title', 'Act I Survivor (Barely)', 'perk', 2),
+    ('title', 'Salaxe''s Emotional Baggage', 'perk', 2),
+    ('title', 'Crown Witness (Did Not Touch It)', 'perk', 2),
+    ('title', 'The NPC', 'perk', 2),
+    ('title', 'Vive v Vive Benchwarmer', 'perk', 2),
+    ('title', 'Salaxe''s Least Favorite', 'perk', 2),
+    ('title', 'The One Who Showed Up', 'perk', 2),
+    ('title', 'Royal Court Filler', 'perk', 2),
+    ('title', 'Act I: Participated', 'perk', 2),
+    ('title', 'Charamil''s Most Average', 'perk', 2),
+    ('title', 'Almost Relevant', 'perk', 2),
+    ('title', 'Salaxe''s Forgotten Minion', 'perk', 2),
+    ('act_award', 'grand champion', 'perk', 5),
+    ('act_award', 'warrior', 'perk', 5),
+    ('act_award', 'iron man', 'perk', 3),
+    ('act_award', 'degenerate', 'perk', 30),
+    ('act_award', 'devotee', 'perk', 8),
+    ('act_award', 'punching bag', 'perk', 6),
+    ('category', 'rebellion', 'perk', 4),
+    ('category', 'loyalty', 'perk', 4),
+    ('category', 'absurd', 'perk', 6),
+    ('category', 'mockery', 'curse', 4),
+    ('category', 'award', 'perk', 1)
+), upserted AS (
+  INSERT INTO title_perk_caps (scope, key, kind, cap)
+  SELECT scope, key, kind, cap FROM seed
+  ON CONFLICT (scope, key) DO UPDATE SET kind = EXCLUDED.kind, cap = EXCLUDED.cap
+  RETURNING 1
+)
+DELETE FROM title_perk_caps c
+WHERE NOT EXISTS (SELECT 1 FROM seed s WHERE s.scope = c.scope AND s.key = c.key);
+
+-- Same pattern as ACT_AWARD_PATTERN in lib/titles/perks.ts.
+CREATE OR REPLACE FUNCTION vvv_title_perk_cap(p_title_name TEXT, p_category TEXT)
+RETURNS TABLE (kind TEXT, cap INTEGER)
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT c.kind, c.cap
+  FROM title_perk_caps c
+  WHERE (c.scope = 'title' AND c.key = p_title_name)
+     OR (c.scope = 'act_award' AND c.key = lower(substring(
+          btrim(p_title_name)
+          FROM '(?i)^Act\s+(?:[IVXLC]+|\d+):?\s+(Grand Champion|Warrior|Iron Man|Degenerate|Devotee|Punching Bag)$'
+        )))
+     OR (c.scope = 'category' AND c.key = p_category)
+  ORDER BY CASE c.scope WHEN 'title' THEN 0 WHEN 'act_award' THEN 1 ELSE 2 END
+  LIMIT 1
+$$;
+
+-- Took part in the game: a seat (through either account link), a settled bet of at least MIN_STAKE (25,
+-- lib/titles/rules.ts), a decree that was not refunded, a bounty collected on it, a duel fought on it or a
+-- prophecy sealed on it. The tables of later phase10 files are only read once they exist.
+CREATE OR REPLACE FUNCTION vvv_title_perk_involved(p_session_id UUID, p_user_id UUID) RETURNS BOOLEAN
+LANGUAGE plpgsql STABLE
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF p_session_id IS NULL OR p_user_id IS NULL THEN RETURN false; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM session_assignments sa
+    WHERE sa.session_id = p_session_id
+      AND (
+        sa.player_id IN (SELECT p.id FROM players p WHERE p.auth_user_id = p_user_id)
+        OR sa.player_id IN (SELECT up.player_id FROM user_profiles up WHERE up.id = p_user_id AND up.player_id IS NOT NULL)
+      )
+  ) THEN
+    RETURN true;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM bets
+    WHERE session_id = p_session_id AND user_id = p_user_id AND status IN ('won', 'lost') AND amount >= 25
+  ) OR EXISTS (
+    SELECT 1 FROM chaos_actions
+    WHERE session_id = p_session_id AND user_id = p_user_id AND status <> 'refunded'
+  ) OR EXISTS (
+    SELECT 1 FROM point_transactions
+    WHERE reference_id = p_session_id AND user_id = p_user_id AND reason = 'bounty_claimed' AND amount > 0
+  ) THEN
+    RETURN true;
+  END IF;
+
+  -- Separate statements: plpgsql plans a whole expression at once, missing tables included.
+  IF to_regclass('public.duels') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM duels
+      WHERE session_id = p_session_id
+        AND status IN ('accepted', 'won', 'lost')
+        AND (challenger_id = p_user_id OR opponent_id = p_user_id)
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  IF to_regclass('public.prophecy_wagers') IS NOT NULL THEN
+    IF EXISTS (
+      SELECT 1 FROM prophecy_wagers
+      WHERE session_id = p_session_id AND user_id = p_user_id AND status <> 'refunded'
+    ) THEN
+      RETURN true;
+    END IF;
+  END IF;
+
+  RETURN false;
+END;
+$$;
 
 -- ============================================================
 -- DUPLICATE ACT AWARDS: keep the "Act I ..." names, move owners, drop the "Act 1 ..." copies.
@@ -263,9 +460,12 @@ $$;
 
 -- ============================================================
 -- APPLY ONE PERK OR CURSE after a game. Amounts are computed by the app (lib/titles/engine.ts);
--- this function makes the payout one-shot, bounded, and callable only by whoever may declare the winner,
--- and only while that game is being settled: the hooks run before the result is saved, so a game that is
--- already resolved, or stuck in game past the 3 hour live window, can never pay out again.
+-- this function makes the payout one-shot and bounded, and only lets the user holding the declaration
+-- (game_sessions.resolved_by, set by the declare flow) pay it, when that user runs the game (its creator or an
+-- admin). It only runs while that game is being settled: the hooks run after the game row is linked and before
+-- the result is saved, so a game that is already resolved, or stuck in game past the 3 hour live window, can
+-- never pay out again. Only someone who took part in the game can be paid, and never more than the title's
+-- own cap (title_perk_caps): an amount above it is clamped.
 -- Returns the points moved, 0 when nothing could move, NULL when it was already applied.
 -- ============================================================
 
@@ -285,31 +485,33 @@ DECLARE
   v_caller UUID := auth.uid();
   v_session RECORD;
   v_row RECORD;
+  v_cap RECORD;
   v_balance INTEGER;
-  v_amount INTEGER := p_amount;
+  v_amount INTEGER;
   v_application UUID;
 BEGIN
-  SELECT id, status, created_by, created_at, updated_at INTO v_session FROM game_sessions WHERE id = p_session_id;
+  SELECT id, status, created_by, resolved_by, game_id, created_at, updated_at INTO v_session
+  FROM game_sessions WHERE id = p_session_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'session_not_found'; END IF;
-  IF v_session.status <> 'in_game' OR v_session.updated_at < now() - interval '3 hours' THEN
+  IF v_session.status <> 'in_game' OR v_session.game_id IS NULL OR v_session.updated_at < now() - interval '3 hours' THEN
     RAISE EXCEPTION 'session_not_settling';
   END IF;
 
   -- A session without a creator can only be settled by an admin.
-  IF v_caller IS NULL OR NOT (
-    COALESCE(v_session.created_by = v_caller, false)
-    OR EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_caller AND is_admin)
-  ) THEN
+  IF v_caller IS NULL
+     OR v_session.resolved_by IS DISTINCT FROM v_caller
+     OR NOT (
+       COALESCE(v_session.created_by = v_caller, false)
+       OR EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_caller AND is_admin)
+     ) THEN
     RAISE EXCEPTION 'not_allowed';
   END IF;
 
-  IF p_kind IS NULL OR p_kind NOT IN ('perk', 'curse')
-     OR p_amount IS NULL OR p_amount = 0 OR abs(p_amount) > 60
-     OR (p_kind = 'perk' AND p_amount < -10) THEN
+  IF p_kind IS NULL OR p_kind NOT IN ('perk', 'curse') OR p_amount IS NULL OR p_amount = 0 THEN
     RAISE EXCEPTION 'invalid_amount';
   END IF;
 
-  SELECT ut.created_at, ut.assigned_by, ut.is_active, t.for_self INTO v_row
+  SELECT ut.created_at, ut.assigned_by, ut.is_active, t.for_self, t.category INTO v_row
   FROM user_titles ut
   JOIN titles t ON t.id = ut.title_id
   WHERE ut.user_id = p_user_id AND t.name = p_title_name;
@@ -325,6 +527,17 @@ BEGIN
      OR vvv_curse_games_served(v_row.created_at, p_session_id) >= 8 THEN
     RAISE EXCEPTION 'curse_not_active';
   END IF;
+
+  SELECT * INTO v_cap FROM vvv_title_perk_cap(p_title_name, v_row.category);
+  IF NOT FOUND OR v_cap.kind <> p_kind THEN RAISE EXCEPTION 'no_perk'; END IF;
+
+  -- A perk can cost its own wearer at most 10 (PERK_PENALTY_CAP); a curse only ever charges.
+  v_amount := CASE
+    WHEN p_kind = 'perk' THEN GREATEST(-LEAST(v_cap.cap, 10), LEAST(v_cap.cap, p_amount))
+    ELSE GREATEST(-v_cap.cap, p_amount)
+  END;
+
+  IF NOT vvv_title_perk_involved(p_session_id, p_user_id) THEN RAISE EXCEPTION 'not_involved'; END IF;
 
   SELECT balance INTO v_balance FROM point_balances WHERE user_id = p_user_id FOR UPDATE;
   IF NOT FOUND THEN RETURN 0; END IF;
@@ -355,6 +568,8 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION vvv_curse_games_served(TIMESTAMPTZ, UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION vvv_titles_locked() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION vvv_title_perk_cap(TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION vvv_title_perk_involved(UUID, UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION buy_title(UUID, UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION equip_title(UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION lift_title_curse(UUID) FROM PUBLIC, anon;

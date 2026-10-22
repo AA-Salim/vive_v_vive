@@ -1,9 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { ledgerIncome, loadMarketProfits, type LedgerAmount } from "@/lib/income"
 import type { MilestoneStat } from "@/lib/milestones"
+import { fetchAllRows } from "@/lib/pages/fetch-all"
 
 export type MilestoneStats = Record<MilestoneStat, number>
 
 export const WIN_RATE_MIN_GAMES = 10
+
+// Real income only (lib/income.ts): a refunded or withdrawn stake coming home earns nothing. An unreadable
+// ledger counts as nothing earned yet, like the other stats.
+async function totalEarned(supabase: SupabaseClient, userId: string): Promise<number> {
+  const [credits, profits] = await Promise.all([
+    fetchAllRows<LedgerAmount>((from, to) =>
+      supabase
+        .from("point_transactions")
+        .select("user_id, amount, reason")
+        .eq("user_id", userId)
+        .gt("amount", 0)
+        .order("id")
+        .range(from, to)
+    ),
+    loadMarketProfits(supabase, { userId }),
+  ]).catch(() => [[], new Map<string, number>()] as const)
+  return ledgerIncome(credits) + (profits.get(userId) ?? 0)
+}
 
 export async function computeMilestoneStats(supabase: SupabaseClient, userId: string): Promise<MilestoneStats> {
   const { data: profile } = await supabase.from("user_profiles").select("player_id").eq("id", userId).maybeSingle()
@@ -20,12 +40,7 @@ export async function computeMilestoneStats(supabase: SupabaseClient, userId: st
       : Promise.resolve(0),
     count(supabase.from("bets").select("id", { count: "exact", head: true }).eq("user_id", userId)),
     count(supabase.from("bets").select("id", { count: "exact", head: true }).eq("user_id", userId).eq("status", "won")),
-    supabase
-      .from("point_transactions")
-      .select("amount")
-      .eq("user_id", userId)
-      .gt("amount", 0)
-      .then((r) => (r.data ?? []).reduce((sum, t) => sum + (t.amount as number), 0)),
+    totalEarned(supabase, userId),
     count(
       supabase
         .from("point_transactions")

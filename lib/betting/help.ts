@@ -378,3 +378,13 @@ export const RECENT_HELP: HelpEntry = {
   cost: READS_ONLY,
   limits: "Shield: insured. Flame: all-in. Bolt: early conviction. The number is the net result.",
 }
+
+export function ownSideHelp(side: Side): HelpEntry {
+  return {
+    title: MARKET_COPY.ownSideTitle,
+    does: MARKET_COPY.ownSideDoes,
+    cost: "Nothing extra: your stake and the Guardian Angel premium work exactly as for any bet.",
+    reward: `If ${sideLabel(side)} wins: your share of the ${sideLabel(otherSide(side))} pool, plus +${R.earlyBonusPct}% of the profit for an early bet and +${R.allInBonusPct}% for an all-in.`,
+    limits: `You can only back ${sideLabel(side)}. One side per game, raises included. Debt floor ${pts(R.debtFloor)}.`,
+  }
+}

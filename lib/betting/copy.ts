@@ -15,6 +15,9 @@ export const MARKET_COPY = {
   insuranceTitle: "Guardian Angel",
   allInTitle: "All-in",
   allInHint: `Stake your whole purse (${BET_RULES.allInMin}+). Win: +${BET_RULES.allInBonusPct}% on profit. Lose: the court hears about it.`,
+  ownSideTitle: "Loyal to your banner",
+  ownSideDoes:
+    "You play in this game, so the notebook only takes your bet on your own team. Spectators may back either side. A bet against yourself, all-in bonus included, would pay you to throw.",
 } as const
 
 const ALL_IN_ROASTS = [

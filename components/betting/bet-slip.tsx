@@ -32,7 +32,6 @@ interface BetSlipProps {
   mode: "new" | "raise"
   onDone?: () => void
   // Sides the viewer may not back, with the reason shown on the slip. Wire it when the server enforces a side rule.
-  blockedSides?: Partial<Record<Side, string>>
 }
 
 function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" | "raise", coverage: number) {
@@ -53,7 +52,7 @@ function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" |
   })
 }
 
-export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, onDone, blockedSides }: BetSlipProps) {
+export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, onDone }: BetSlipProps) {
   const ids = useId()
   const rules = market.rules_version
   const current = mode === "raise" ? market.user_bet : null
@@ -64,7 +63,8 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
   const [pledge, setPledge] = useState<{ input: PlaceBetInput; cost: number } | null>(null)
   const place = usePlaceBet(sessionId, userId)
 
-  const side = current?.side ?? pickedSide
+  const ownSide = market.viewer_side ?? null
+  const side = current?.side ?? ownSide ?? pickedSide
   const purse = balance ?? 0
   const allInStake = Math.max(purse, 0)
   const amount = allIn ? allInStake : Number.parseInt(amountText, 10) || 0
@@ -100,15 +100,14 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
       : null
   const quoteStake = stakeAfter > 0 ? stakeAfter : 0
 
-  const sideBlock = side ? blockedSides?.[side] : undefined
   const reason = clock.isExpired
     ? "Betting has closed."
     : balanceLoading
       ? "Reading your purse..."
       : !side
         ? "Pick a side first."
-        : sideBlock
-          ? sideBlock
+        : ownSide && side !== ownSide
+          ? `You play for ${sideLabel(ownSide)}. A bet on ${sideLabel(side)} would be treason.`
           : amount < 1
             ? allIn
               ? "Your purse is empty. Nothing to shove."
@@ -174,9 +173,9 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           value={side}
           onChange={setPickedSide}
           lockedSide={current?.side ?? null}
+          ownSide={ownSide}
           multipliers={{ blue: market.blue_multiplier, red: market.red_multiplier }}
           disabled={place.isPending}
-          blocked={blockedSides}
         />
 
         <StakePicker

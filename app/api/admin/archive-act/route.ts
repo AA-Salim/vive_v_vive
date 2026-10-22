@@ -1,7 +1,9 @@
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
 import { NextResponse } from "next/server"
+import { loadMarketProfits, summarizeEarnings, type LedgerAmount } from "@/lib/income"
 import { emitLive, getActor } from "@/lib/live/server"
+import { fetchAllRows } from "@/lib/pages/fetch-all"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -99,15 +101,13 @@ export async function POST(request: Request) {
     .filter((p) => p.auth_user_id)
     .sort((a, b) => b.games_played - a.games_played)[0]
 
-  // Degenerate: most bets placed (within act timeframe)
-  const { data: allBets } = await supabase
-    .from("bets")
-    .select("user_id, created_at")
-    .gte("created_at", actStarted)
-    .lte("created_at", actEnded)
+  // Degenerate: most bets placed (within act timeframe). PostgREST pages at 1000 rows: read them all.
+  const allBets = await fetchAllRows<{ user_id: string }>((from, to) =>
+    supabase.from("bets").select("user_id").gte("created_at", actStarted).lte("created_at", actEnded).order("id").range(from, to)
+  )
 
   const betCountMap = new Map<string, number>()
-  for (const bet of allBets ?? []) {
+  for (const bet of allBets) {
     betCountMap.set(bet.user_id, (betCountMap.get(bet.user_id) ?? 0) + 1)
   }
   const degenerateEntry = [...betCountMap.entries()].sort(
@@ -115,15 +115,19 @@ export async function POST(request: Request) {
   )[0]
 
   // Devotee: most kisses and sung praises
-  const { data: kissTxns } = await supabase
-    .from("point_transactions")
-    .select("user_id")
-    .in("reason", ["kiss_the_hand", "sing_his_praises"])
-    .gte("created_at", actStarted)
-    .lte("created_at", actEnded)
+  const kissTxns = await fetchAllRows<{ user_id: string }>((from, to) =>
+    supabase
+      .from("point_transactions")
+      .select("user_id")
+      .in("reason", ["kiss_the_hand", "sing_his_praises"])
+      .gte("created_at", actStarted)
+      .lte("created_at", actEnded)
+      .order("id")
+      .range(from, to)
+  )
 
   const kissCountMap = new Map<string, number>()
-  for (const tx of kissTxns ?? []) {
+  for (const tx of kissTxns) {
     kissCountMap.set(tx.user_id, (kissCountMap.get(tx.user_id) ?? 0) + 1)
   }
   const devoteeEntry = [...kissCountMap.entries()].sort(
@@ -254,6 +258,22 @@ export async function POST(request: Request) {
     }
   }
 
+  // Snapshot stats are read before anything is written, so a failed read never leaves a half-archived act.
+  // Earned is real income (lib/income.ts): refunds and stakes coming home are not earnings.
+  const [allTxns, marketProfits] = await Promise.all([
+    fetchAllRows<LedgerAmount>((from, to) =>
+      supabase
+        .from("point_transactions")
+        .select("user_id, amount, reason")
+        .gte("created_at", actStarted)
+        .lte("created_at", actEnded)
+        .order("id")
+        .range(from, to)
+    ),
+    loadMarketProfits(supabase, { since: actStarted, until: actEnded }),
+  ])
+  const txnStats = summarizeEarnings(allTxns, marketProfits)
+
   // Filter duplicate categories (treasury and grand_champion share user)
   const seenCategories = new Set<string>()
   const uniqueAwards = awards.filter((a) => {
@@ -281,23 +301,6 @@ export async function POST(request: Request) {
   }
 
   // ---- Snapshot all users ----
-  const { data: allTxns } = await supabase
-    .from("point_transactions")
-    .select("user_id, amount, reason")
-    .gte("created_at", actStarted)
-    .lte("created_at", actEnded)
-
-  const txnStats = new Map<
-    string,
-    { earned: number; spent: number }
-  >()
-  for (const tx of allTxns ?? []) {
-    const stats = txnStats.get(tx.user_id) ?? { earned: 0, spent: 0 }
-    if (tx.amount > 0) stats.earned += tx.amount
-    else stats.spent += Math.abs(tx.amount)
-    txnStats.set(tx.user_id, stats)
-  }
-
   const sortedBalances = [...(balances ?? [])].sort(
     (a, b) => b.balance - a.balance
   )

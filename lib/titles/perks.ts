@@ -26,6 +26,8 @@ import type { TitleCategory } from "@/lib/titles/types"
 
 export type { PerkDefinition, PerkGame, PerkHit, PerkSubject } from "@/lib/titles/perk-kit"
 
+// Every cap below is seeded into title_perk_caps (supabase/phase10_titles.sql), and apply_title_perk() clamps each
+// payout to it: change a cap, a title name or an award kind in both places.
 const BARON_WIN = 10
 const BARON_LOSS = 4
 const PLOT_TWIST = 5

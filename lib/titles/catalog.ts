@@ -1,5 +1,6 @@
 import { MILESTONES } from "@/lib/milestones"
 import { actAwardKind, isConsolationTitle, perkFor } from "@/lib/titles/perks"
+import { PERK_CAP } from "@/lib/titles/rules"
 import type { PerkInfo, TitleCategory, TitleRarity } from "@/lib/titles/types"
 
 export const CATEGORY_META: Record<TitleCategory, { label: string; tagline: string }> = {
@@ -70,7 +71,7 @@ export function rarityOf(name: string, category: string, price?: number): TitleR
 export function perkInfo(name: string, category: string, to = "whoever branded you"): PerkInfo | null {
   const def = perkFor(name, category)
   if (!def) return null
-  const info: PerkInfo = { kind: def.kind, trigger: def.trigger, summary: def.describe(to), cap: def.cap }
+  const info: PerkInfo = { kind: def.kind, trigger: def.trigger, summary: def.describe(to), cap: Math.min(def.cap, PERK_CAP) }
   if (def.downside) info.downside = def.downside
   return info
 }

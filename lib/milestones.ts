@@ -1,3 +1,5 @@
+import { FREE, pts, type HelpEntry } from "@/lib/help"
+
 export type MilestoneStat =
   | "games_played"
   | "wins"
@@ -37,7 +39,7 @@ export const MILESTONE_GROUPS: { key: MilestoneGroupKey; label: string; blurb: s
   { key: "winrate", label: "Win Rate", blurb: "Minimum 10 games. No tourists." },
   { key: "bets", label: "Bets Placed", blurb: "The house remembers every one." },
   { key: "bet_wins", label: "Bets Won", blurb: "Prophets of the pari-mutuel." },
-  { key: "earned", label: "Points Earned", blurb: "Lifetime income, before the decrees ate it." },
+  { key: "earned", label: "Points Earned", blurb: "Real income only. Refunds are not a paycheck." },
   { key: "devotion", label: "Devotion", blurb: "Hands kissed, praises sung." },
   { key: "shames", label: "Shames Received", blurb: "Character building, allegedly." },
   { key: "chaos", label: "Royal Decrees", blurb: "Chaos sown, drafts ruined." },
@@ -92,3 +94,17 @@ export const MILESTONES: MilestoneDefinition[] = [
   { id: "bounties-3", title: "Bounty Poster", description: "Post 3 bounties", group: "bounties", threshold: 3, stat: "bounties_placed" },
   { id: "bounties-10", title: "Most Wanted Printer", description: "Post 10 bounties", group: "bounties", threshold: 10, stat: "bounties_placed" },
 ]
+
+// Mirrors isIncomeReason() and loadMarketProfits() in lib/income.ts, which compute total_earned.
+export const MILESTONE_GROUP_HELP: Partial<Record<MilestoneGroupKey, HelpEntry>> = {
+  earned: {
+    title: "Points Earned",
+    does: "Counts what the court truly paid you: game wages, the daily stipend, praises, Royal Favor, MVP bonuses, title perks and tributes, bounties, plus the profit of every bet, duel, prophecy and King's Wager you won.",
+    cost: FREE,
+    reward: MILESTONES.filter((m) => m.stat === "total_earned")
+      .map((m) => `${m.title} at ${pts(m.threshold)}`)
+      .join(", "),
+    limits:
+      "A stake coming home earns nothing: refunds, withdrawn duels and Guardian Angel cover do not count, and neither do starting purses or act honors.",
+  },
+}

@@ -29,9 +29,11 @@ export interface DecreeDef {
   reason: PointsReason
 }
 
+// Mirrored in chaos_wager_multiplier() (supabase/phase10_chaos.sql): 2x, +0.5x for one hostile decree, 2.5x at most.
 export const WAGER_BASE_MULTIPLIER = 2
 export const WAGER_DEFIANCE_STEP = 0.5
-export const WAGER_MAX_DEFIANCE = 2
+export const WAGER_MAX_DEFIANCE = 1
+export const WAGER_MAX_MULTIPLIER = WAGER_BASE_MULTIPLIER + WAGER_DEFIANCE_STEP * WAGER_MAX_DEFIANCE
 export const DEBT_FLOOR = -300
 export const WINDOW_GRACE_MS = 3000
 
@@ -58,10 +60,8 @@ const DECREES: DecreeDef[] = [
     dbTier: "medium",
     name: "The King's Wager",
     short: "Back a side. Win and the treasury pays double.",
-    effect:
-      "Stake on Blue or Red. If they win you collect 2x. Every hostile decree someone else lands on your side after you wager adds +0.5x, up to 3x. Players can only back their own team, and all your wagers in a game ride on one side.",
-    legacyEffect:
-      "Stake on Blue or Red. If they win you collect 2x. Players can only back their own team, and all your wagers in a game ride on one side.",
+    effect: `Stake on Blue or Red. If they win you collect ${WAGER_BASE_MULTIPLIER}x. A hostile decree someone else lands on your side after you wager adds +${WAGER_DEFIANCE_STEP}x, up to ${WAGER_MAX_MULTIPLIER}x. Players can only back their own team, and all your wagers in a game ride on one side.`,
+    legacyEffect: `Stake on Blue or Red. If they win you collect ${WAGER_BASE_MULTIPLIER}x. Players can only back their own team, and all your wagers in a game ride on one side.`,
     flavor: "Salaxe once bet the whole crown on a solo Baron. Learn from him. Or do not.",
     cost: 49,
     maxUses: 3,

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { loadMarketProfits, summarizeEarnings } from "@/lib/income"
 import { fetchAllRows } from "@/lib/pages/fetch-all"
 import { loadMatchData } from "@/lib/pages/matches"
 import { winRate } from "@/lib/pages/compute-players"
@@ -119,7 +120,7 @@ async function liveStandings(
   startMs: number,
   endMs: number
 ): Promise<ArchiveStanding[]> {
-  const [balances, profiles, matchData] = await Promise.all([
+  const [balances, profiles, matchData, profits] = await Promise.all([
     fetchAllRows<{ user_id: string; balance: number }>((from, to) =>
       supabase.from("point_balances").select("user_id, balance").order("user_id").range(from, to)
     ),
@@ -127,6 +128,7 @@ async function liveStandings(
       (from, to) => supabase.from("user_profiles").select("id, discord_username, discord_avatar_url, player_id").order("id").range(from, to)
     ),
     loadMatchData(supabase),
+    loadMarketProfits(supabase, { since: new Date(startMs).toISOString(), until: new Date(endMs).toISOString() }),
   ])
   const profileById = new Map(profiles.map((p) => [p.id, p]))
   const record = new Map<string, { games: number; wins: number }>()
@@ -141,13 +143,11 @@ async function liveStandings(
     }
   }
 
-  const sums = new Map<string, { earned: number; spent: number; devotion: number }>()
+  // Same earned / spent as the snapshot written when the act is archived (app/api/admin/archive-act).
+  const earnings = summarizeEarnings(txs, profits)
+  const devotion = new Map<string, number>()
   for (const tx of txs) {
-    const entry = sums.get(tx.user_id) ?? { earned: 0, spent: 0, devotion: 0 }
-    if (tx.amount > 0) entry.earned += tx.amount
-    else entry.spent -= tx.amount
-    if (isDevotion(tx.reason)) entry.devotion++
-    sums.set(tx.user_id, entry)
+    if (isDevotion(tx.reason)) devotion.set(tx.user_id, (devotion.get(tx.user_id) ?? 0) + 1)
   }
   const betCount = new Map<string, number>()
   for (const bet of bets) betCount.set(bet.user_id, (betCount.get(bet.user_id) ?? 0) + 1)
@@ -157,7 +157,7 @@ async function liveStandings(
     const profile = profileById.get(b.user_id)
     const player = profile?.player_id ? matchData.players.get(profile.player_id) : undefined
     const games = player ? record.get(player.id) : undefined
-    const sum = sums.get(b.user_id)
+    const sum = earnings.get(b.user_id)
     return {
       userId: b.user_id,
       rank: index + 1,
@@ -168,7 +168,7 @@ async function liveStandings(
       earned: sum?.earned ?? 0,
       spent: sum?.spent ?? 0,
       bets: betCount.get(b.user_id) ?? 0,
-      devotion: sum?.devotion ?? 0,
+      devotion: devotion.get(b.user_id) ?? 0,
       games: games?.games ?? 0,
       wins: games?.wins ?? 0,
       winRate: games && games.games > 0 ? winRate(games.wins, games.games) : null,

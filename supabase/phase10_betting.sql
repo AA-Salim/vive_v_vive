@@ -13,6 +13,8 @@
 --                 Raising an insured bet prices only the added stake.
 --   legacy bets   rows placed before this migration keep their terms (flat 17 premium refunded on a win,
 --                 50% of the stake back on a loss)
+--   own side      a player seated in the game may only back their own team (spectators bet freely), like duels
+--                 and the King's Wager: a bet against your own side, all-in bonus included, paid you to throw
 
 BEGIN;
 
@@ -108,6 +110,24 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   )
 $$;
 
+-- The side a user plays on in this game (through either account link), or NULL for spectators. Same rule as
+-- duel_player_side() in phase10_duels.sql: Blue wins the impossible tie.
+CREATE OR REPLACE FUNCTION bet_v2_player_side(p_session_id UUID, p_user_id UUID) RETURNS TEXT
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT sa.side
+  FROM session_assignments sa
+  WHERE sa.session_id = p_session_id
+    AND p_user_id IS NOT NULL
+    AND (
+      sa.player_id IN (SELECT p.id FROM players p WHERE p.auth_user_id = p_user_id)
+      OR sa.player_id IN (
+        SELECT up.player_id FROM user_profiles up WHERE up.id = p_user_id AND up.player_id IS NOT NULL
+      )
+    )
+  ORDER BY sa.side
+  LIMIT 1
+$$;
+
 -- Guardian Angel premium in percent of the insured stake, priced from the pending pools at purchase time
 -- (p_side_pool already includes the stake being insured). The other side's share of the pool is the implied
 -- chance of losing: a flat price would make insuring long shots free money.
@@ -170,6 +190,7 @@ DECLARE
   v_cost INTEGER;
   v_opened TIMESTAMPTZ;
   v_early BOOLEAN := false;
+  v_seat TEXT;
 BEGIN
   IF v_user IS NULL THEN RAISE EXCEPTION 'bet:not_authenticated'; END IF;
   IF p_side IS NULL OR p_side NOT IN ('blue', 'red') THEN RAISE EXCEPTION 'bet:invalid_side'; END IF;
@@ -181,6 +202,10 @@ BEGIN
      OR (v_session.betting_ends_at IS NOT NULL AND v_session.betting_ends_at <= v_now) THEN
     RAISE EXCEPTION 'bet:betting_closed';
   END IF;
+
+  -- Seats are frozen once the draft ends, so the side a player fights for cannot change under the bet.
+  v_seat := bet_v2_player_side(p_session_id, v_user);
+  IF v_seat IS NOT NULL AND v_seat <> p_side THEN RAISE EXCEPTION 'bet:treason'; END IF;
 
   -- Locking the balance first serializes concurrent requests from the same user.
   SELECT balance INTO v_balance FROM point_balances WHERE user_id = v_user FOR UPDATE;
@@ -519,6 +544,8 @@ $$;
 -- ============================================================
 -- PRIVILEGES
 -- ============================================================
+
+REVOKE EXECUTE ON FUNCTION bet_v2_player_side(UUID, UUID) FROM PUBLIC, anon, authenticated;
 
 REVOKE EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN, INTEGER, INTEGER) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION place_bet_v2(UUID, TEXT, INTEGER, BOOLEAN, BOOLEAN, INTEGER, INTEGER) TO authenticated;

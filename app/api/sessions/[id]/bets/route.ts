@@ -9,7 +9,11 @@ import { betError, betErrorFromDb } from "@/lib/betting/server/respond"
 import { viewerId } from "@/lib/betting/server/rows"
 import { buildMarketSnapshot } from "@/lib/betting/server/snapshot"
 import type { BetRow, InsureBetResult, PlaceBetResult } from "@/lib/betting/types"
+import { betCap, insuranceBlocked, isHerald, noteText, parseNotes, type CombinedEffects, type EffectNote } from "@/lib/titles/effects"
+import { loadUserEffects } from "@/lib/titles/server"
 import type { Side } from "@/lib/types"
+
+type Supabase = Awaited<ReturnType<typeof createClient>>
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -39,6 +43,7 @@ interface PlaceRpcResult {
   raised: boolean
   all_in: boolean
   balance: number
+  title_effects?: unknown
 }
 
 interface InsureRpcResult {
@@ -46,6 +51,20 @@ interface InsureRpcResult {
   premium: number
   premium_pct: number
   balance: number
+  title_effects?: unknown
+}
+
+// Before phase10_title-effects.sql the database ignores titles: the curses that refuse a bet still apply here.
+async function legacyTitleBlock(supabase: Supabase, userId: string, total: number, newInsurance: boolean) {
+  const fx = await loadUserEffects(supabase, userId)
+  const cap = betCap(fx)
+  if (cap !== null && total > cap) return betError("title_bet_cap")
+  if (newInsurance && insuranceBlocked(fx)) return betError("title_no_insurance")
+  return null
+}
+
+function flair(notes: EffectNote[], fx: CombinedEffects) {
+  return { titleEffects: notes.length ? notes.map(noteText) : undefined, herald: isHerald(fx) || undefined }
 }
 
 async function readJson(request: Request): Promise<unknown> {
@@ -111,7 +130,7 @@ export async function POST(request: Request, { params }: Params) {
 
   if (v2 && !v2.error) {
     const result = v2.data as PlaceRpcResult
-    placed = { ...result, rules: 2 }
+    placed = { ...result, title_effects: parseNotes(result.title_effects), rules: 2 }
     response = NextResponse.json(placed, { status: result.raised ? 200 : 201 })
   } else if (v2?.error && !isMissingSchema(v2.error)) {
     if (allIn && /bet:invalid_amount/.test(v2.error.message ?? "")) {
@@ -119,6 +138,8 @@ export async function POST(request: Request, { params }: Params) {
     }
     return betErrorFromDb(v2.error)
   } else {
+    const blocked = await legacyTitleBlock(supabase, user.id, body.amount, insure)
+    if (blocked) return blocked
     const legacy = await legacyPlaceBet(supabase, user.id, sessionId, body.side, body.amount, insure)
     placed = legacy.placed
     response = legacy.response
@@ -126,9 +147,10 @@ export async function POST(request: Request, { params }: Params) {
 
   if (placed) {
     const total = typeof placed.bet?.amount === "number" ? placed.bet.amount : placed.staked
+    const [actor, fx] = await Promise.all([getActor(supabase, user.id), loadUserEffects(supabase, user.id)])
     emitLive("bet.placed", {
       sessionId,
-      actor: await getActor(supabase, user.id),
+      actor,
       data: {
         side: body.side,
         amount: placed.staked,
@@ -138,6 +160,7 @@ export async function POST(request: Request, { params }: Params) {
         allIn: placed.all_in,
         early: placed.early,
         whale: total >= BET_RULES.whaleAmount,
+        ...flair(placed.title_effects ?? [], fx),
       },
     })
   }
@@ -172,27 +195,32 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (v2 && !v2.error) {
     const result = v2.data as InsureRpcResult
-    insured = { ...result, rules: 2, side: result.bet.side, amount: result.bet.amount }
+    const notes = parseNotes(result.title_effects)
+    insured = { ...result, title_effects: notes, rules: 2, side: result.bet.side, amount: result.bet.amount }
     response = NextResponse.json({
       bet: result.bet,
       premium: result.premium,
       premium_pct: result.premium_pct,
       balance: result.balance,
       rules: 2,
+      title_effects: notes,
     })
   } else if (v2?.error && !isMissingSchema(v2.error)) {
     return betErrorFromDb(v2.error)
   } else {
+    const blocked = await legacyTitleBlock(supabase, user.id, 0, true)
+    if (blocked) return blocked
     const legacy = await legacyInsureBet(supabase, user.id, sessionId)
     insured = legacy.insured
     response = legacy.response
   }
 
   if (insured) {
+    const [actor, fx] = await Promise.all([getActor(supabase, user.id), loadUserEffects(supabase, user.id)])
     emitLive("bet.insured", {
       sessionId,
-      actor: await getActor(supabase, user.id),
-      data: { side: insured.side, amount: insured.amount, premium: insured.premium },
+      actor,
+      data: { side: insured.side, amount: insured.amount, premium: insured.premium, ...flair(insured.title_effects ?? [], fx) },
     })
   }
   return response

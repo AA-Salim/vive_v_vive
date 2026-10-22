@@ -7,13 +7,14 @@ import { PointBadge } from "@/components/point-badge"
 import { SalaxeDailyDialog } from "@/components/salaxe-daily-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
-import { usePoints } from "@/hooks/use-points"
+import { usePoints, type DailyClaim } from "@/hooks/use-points"
 
 // Mounted once in the header: it also runs the first-visit initialisation and the daily grant.
 export function AuthNavSection() {
   const { user, profile } = useAuth()
   const { balance, lastDailyClaim, isLoading, initialize, claimDaily } = usePoints(user?.id ?? null)
-  const [showSalaxe, setShowSalaxe] = useState(false)
+  const [claim, setClaim] = useState<DailyClaim | null>(null)
+  const showSalaxe = claim !== null
   const initRef = useRef(false)
 
   useEffect(() => {
@@ -25,7 +26,7 @@ export function AuthNavSection() {
       const today = new Date().toISOString().split("T")[0]
       if (lastDailyClaim !== today) {
         const result = await claimDaily()
-        if (result?.claimed) setShowSalaxe(true)
+        if (result?.claimed) setClaim(result)
       }
     }
 
@@ -40,7 +41,8 @@ export function AuthNavSection() {
       {showSalaxe && (
         <SalaxeDailyDialog
           open={showSalaxe}
-          onDismiss={() => setShowSalaxe(false)}
+          claim={claim}
+          onDismiss={() => setClaim(null)}
           username={profile?.discord_username ?? "Summoner"}
         />
       )}

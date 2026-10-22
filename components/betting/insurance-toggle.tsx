@@ -3,10 +3,12 @@
 import { ShieldCheckIcon, ShieldIcon } from "lucide-react"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Switch } from "@/components/ui/switch"
+import { TitleChipRow, type TitleChipModel } from "@/components/chaos/title-chips"
 import { MARKET_COPY } from "@/lib/betting/copy"
 import { guardianHelp } from "@/lib/betting/help"
-import { sideLabel } from "@/lib/betting/math"
+import { otherSide as flip, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
+import { BASE_BET_TERMS, type BetTitleTerms } from "@/lib/betting/title-terms"
 import type { RulesVersion } from "@/lib/betting/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -23,6 +25,8 @@ interface InsuranceToggleProps {
   coverage: number
   stake: number
   otherSide: Side | null
+  terms?: BetTitleTerms
+  titleChips?: TitleChipModel[]
 }
 
 export function InsuranceToggle({
@@ -37,14 +41,17 @@ export function InsuranceToggle({
   coverage,
   stake,
   otherSide,
+  terms = BASE_BET_TERMS,
+  titleChips = [],
 }: InsuranceToggleProps) {
   const on = checked || locked
   const loser = otherSide ? sideLabel(otherSide) : "the other side"
   const rate = premiumPct > 0 ? ` (${premiumPct}%)` : ""
+  const floorPct = otherSide ? terms.premiumPct(BET_RULES.premiumPct, flip(otherSide)) : BET_RULES.premiumPct
   const quote =
     stake <= 0
       ? rules === 2
-        ? `From ${BET_RULES.premiumPct}% of your stake, more for a long shot. Returns ${BET_RULES.coveragePct}% if your side loses.`
+        ? `From ${floorPct}% of your stake, more for a long shot. Returns ${terms.coveragePct}% if your side loses.`
         : `Costs ${BET_RULES.legacyPremium}. Returns half your stake if you lose, refunded if you win.`
       : locked
         ? premiumNow > 0
@@ -73,13 +80,24 @@ export function InsuranceToggle({
               {rules === 2 ? MARKET_COPY.insuranceTitle : "Insurance"}
             </label>
             <InfoTip
-              help={guardianHelp({ rules, stake, premium: premiumNow, pct: premiumPct, coverage, loser: otherSide, raising: locked })}
+              help={guardianHelp({
+                rules,
+                stake,
+                premium: premiumNow,
+                pct: premiumPct,
+                coverage,
+                loser: otherSide,
+                raising: locked,
+                coveragePct: terms.coveragePct,
+                titleLines: titleChips.map((chip) => chip.detail ?? chip.label),
+              })}
               align="start"
             />
           </div>
           <p id={`${id}-quote`} className="text-xs leading-snug text-muted-foreground">
             {disabledReason ?? quote}
           </p>
+          {rules === 2 && <TitleChipRow chips={titleChips} size="xs" className="mt-1" label="Guardian Angel titles" />}
         </div>
         <Switch
           id={id}

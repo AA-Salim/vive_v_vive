@@ -6,6 +6,8 @@ import { NO_STORE, duelError, duelErrorFromDb, readJson } from "@/lib/duels/serv
 import { actorOf, loadDuelists, normalizeDuel, toDuelView, type DuelRow } from "@/lib/duels/server/rows"
 import type { LiveActor } from "@/lib/live/events"
 import type { DuelAction, DuelView } from "@/lib/duels/types"
+import { NO_EFFECTS, isHerald } from "@/lib/titles/effects"
+import { loadUserEffects } from "@/lib/titles/server"
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -18,7 +20,7 @@ const RPC: Record<DuelAction, string> = {
   withdraw: "withdraw_duel",
 }
 
-function announce(action: DuelAction, row: DuelRow, view: DuelView, actor: LiveActor | null) {
+function announce(action: DuelAction, row: DuelRow, view: DuelView, actor: LiveActor | null, herald: boolean) {
   const base = { sessionId: row.session_id, actor }
   if (action === "accept") {
     emitLive("duel.accepted", {
@@ -31,6 +33,7 @@ function announce(action: DuelAction, row: DuelRow, view: DuelView, actor: LiveA
         duelId: row.id,
         side: row.challenger_side,
         opponentUserId: row.opponent_id,
+        herald: herald || undefined,
       },
     })
   } else if (action === "decline") {
@@ -80,9 +83,13 @@ export async function POST(request: Request, { params }: Params) {
   const row = normalizeDuel(result.duel)
   if (!row) return NextResponse.json({ error: "The challenge slipped through the cracks. Refresh." }, { status: 500 })
 
-  const view = toDuelView(row, await loadDuelists(supabase, [row.challenger_id, row.opponent_id]))
+  const [duelists, fx] = await Promise.all([
+    loadDuelists(supabase, [row.challenger_id, row.opponent_id]),
+    action === "accept" ? loadUserEffects(supabase, user.id) : Promise.resolve(NO_EFFECTS),
+  ])
+  const view = toDuelView(row, duelists)
   const me = view.challenger.userId === user.id ? view.challenger : view.opponent
-  announce(action, row, view, me ? actorOf(me) : null)
+  announce(action, row, view, me ? actorOf(me) : null, isHerald(fx))
 
   return NextResponse.json(
     { duel: view, balance: typeof result.balance === "number" ? result.balance : null },

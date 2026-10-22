@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Flag, HandCoins, Lock, LogIn, Skull, Sparkles } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -9,22 +10,26 @@ import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
 import { AnimatedNumber } from "@/components/titles/animated-number"
 import { CurseCard } from "@/components/titles/curse-card"
-import { BannerRaise } from "@/components/titles/equip-moment"
+import { EffectLines } from "@/components/titles/effect-lines"
+import { LoadoutDialog } from "@/components/titles/loadout-dialog"
+import { LoadoutEditor } from "@/components/titles/loadout-editor"
+import type { LoadoutModel } from "@/components/titles/loadout-model"
 import { PerkLine } from "@/components/titles/perk-line"
 import { PlayerName } from "@/components/titles/player-name"
 import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 import { HALL_COPY, signed } from "@/lib/titles/copy"
 import { involvement } from "@/lib/titles/help"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, PERK_CAP } from "@/lib/titles/rules"
+import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, PERK_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
 import type { EquippedTitle, LedgerItem, OwnedTitleView, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
 const BANNER_HELP: HelpEntry = {
-  title: "Your banner",
-  does: "The one title you wear. Your name takes its colors and its epithet everywhere, and its perk pays out on its own after each game.",
-  cost: `${FREE} to raise, change or lower. Titles themselves are bought in the Armory or earned from milestones`,
-  reward: `Up to ${pts(PERK_CAP)} per game, depending on the title`,
-  limits: `One banner at a time. Pays after games where ${involvement("you")}. Sealed while a game is live.`,
+  title: "Your loadout",
+  does: "The titles you wear. Their immediate effects stack (each capped) the moment you act, your name takes your primary title's colors and epithet everywhere, and every perk pays out on its own after each game.",
+  cost: `${FREE} to equip, change or take off. Titles themselves are bought in the Armory or earned from milestones`,
+  reward: `Up to ${pts(PERK_CAP)} per title and ${pts(USER_PERK_CAP)} for all of them, per game`,
+  limits: `${MAX_EQUIPPED} titles at most: ${LOADOUT_SLOTS.map((slot) => `${SLOT_COUNT[slot]} ${SLOT_LABEL[slot]}`).join(", ")}. Pays after games where ${involvement("you")}. Sealed while a game is live.`,
 }
 
 const BRANDS_HELP: HelpEntry = {
@@ -43,13 +48,18 @@ const LEDGER_HELP: HelpEntry = {
 
 interface BannerPanelProps {
   catalog: TitlesCatalogResponse | undefined
+  loadout: LoadoutModel
   isLoading: boolean
   signedIn: boolean
   onSignIn: () => void
-  onUnequip: () => void
-  unequipping: boolean
+  onRemove: (title: TitleView) => void
+  onClear: () => void
+  pending: boolean
   onBrowse: (tab: "collection" | "armory") => void
   onDignity: (title: TitleView, owned: OwnedTitleView) => void
+  // The signed-in user, for the "as others see it" preview.
+  userId?: string | null
+  name?: string | null
   wearer?: string | null
   // The banner just raised from this page: it gets the title moment.
   raisedId?: string | null
@@ -95,18 +105,20 @@ function selfEntry(banner: TitleView | undefined, owned: OwnedTitleView | undefi
 
 export function BannerPanel({
   catalog,
+  loadout,
   isLoading,
   signedIn,
   onSignIn,
-  onUnequip,
-  unequipping,
+  onRemove,
+  onClear,
+  pending,
   onBrowse,
   onDignity,
-  wearer,
-  raisedId,
+  userId = null,
+  name = null,
+  wearer = null,
 }: BannerPanelProps) {
-  const reduce = useReducedMotion()
-
+  const [preview, setPreview] = useState(false)
   if (!signedIn) {
     return (
       <div className="rounded-xl border border-[var(--color-gold)]/25 bg-gradient-to-b from-[var(--color-gold)]/10 to-transparent p-5 text-center">
@@ -133,8 +145,9 @@ export function BannerPanel({
   }
 
   const titleById = new Map(catalog.titles.map((t) => [t.id, t]))
-  const equipped = catalog.collection.find((c) => c.is_active)
-  const equippedTitle = equipped ? titleById.get(equipped.title_id) : undefined
+  const single = loadout.worn[0]
+  const equipped = single?.owned
+  const equippedTitle = single?.title
   const brands = catalog.collection.filter((c) => c.curse?.active)
   const brandViews = brands.flatMap((owned) => {
     const title = titleById.get(owned.title_id)
@@ -151,61 +164,34 @@ export function BannerPanel({
         </Alert>
       )}
 
-      <Section label="Your banner" help={BANNER_HELP}>
-        <AnimatePresence mode="wait" initial={false}>
-          {equipped && equippedTitle ? (
-            <motion.div
-              key={equippedTitle.id}
-              initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={reduce ? undefined : { opacity: 0, y: -6 }}
-              className="relative -m-2 space-y-2.5 rounded-lg p-2"
-            >
-              {raisedId === equippedTitle.id && <BannerRaise key={raisedId} />}
-              <TitleBadge
-                name={equippedTitle.name}
-                category={equippedTitle.category}
-                rarity={equippedTitle.rarity}
-                perk={equipped.perk}
-                description={equippedTitle.description}
-                size="lg"
-                interactive
-              />
-              <PerkLine perk={equipped.perk} className="text-sm" />
-              <p className="text-xs text-muted-foreground italic">&ldquo;{equippedTitle.description}&rdquo;</p>
-              <div className="flex gap-2 pt-1">
-                <Button variant="outline" className="h-10 flex-1" disabled={catalog.locked} onClick={() => onBrowse("collection")}>
-                  Change
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="h-10 flex-1 text-muted-foreground"
-                  disabled={catalog.locked || unequipping}
-                  onClick={onUnequip}
-                >
-                  Lower banner
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div key="none" initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
-              <p className="text-sm text-muted-foreground">{HALL_COPY.noBanner}</p>
-              <Button
-                className="h-10 w-full"
-                onClick={() => onBrowse(catalog.collection.some((c) => !c.curse) ? "collection" : "armory")}
-              >
-                {catalog.collection.some((c) => !c.curse) ? "Raise a banner from your collection" : "Visit the armory"}
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {wearer && me && (
-          <div className="mt-3 min-w-0 rounded-lg border border-border/70 bg-[var(--color-navy)]/60 px-2.5 py-2">
-            <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">How the court sees you</p>
-            <PlayerName name={wearer} title={me} epithet className="mt-0.5 text-sm font-semibold" />
-          </div>
-        )}
-      </Section>
+      {catalog.loadouts ? (
+        <Section label="Your loadout" help={BANNER_HELP}>
+          <LoadoutEditor
+            loadout={loadout}
+            pending={pending}
+            onRemove={onRemove}
+            onClear={onClear}
+            onBrowse={onBrowse}
+            onPreview={() => setPreview(true)}
+          />
+          <LoadoutDialog open={preview} onOpenChange={setPreview} userId={userId} mode="view" name={name} />
+        </Section>
+      ) : (
+        <SingleBanner
+          catalog={catalog}
+          equipped={equipped}
+          equippedTitle={equippedTitle}
+          pending={pending}
+          onClear={onClear}
+          onBrowse={onBrowse}
+        />
+      )}
+      {wearer && me && (
+        <div className="min-w-0 rounded-lg border border-border/70 bg-[var(--color-navy)]/60 px-2.5 py-2">
+          <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">How the court sees you</p>
+          <PlayerName name={wearer} title={me} epithet className="mt-0.5 text-sm font-semibold" />
+        </div>
+      )}
 
       {brands.length > 0 && (
         <Section label={`Brands on you (${brands.length})`} help={BRANDS_HELP}>
@@ -229,6 +215,74 @@ export function BannerPanel({
 
       {catalog.ledger && <Ledger perks={catalog.ledger.perks} tributes={catalog.ledger.tributes} recent={catalog.ledger.recent} />}
     </div>
+  )
+}
+
+interface SingleBannerProps {
+  catalog: TitlesCatalogResponse
+  equipped: OwnedTitleView | undefined
+  equippedTitle: TitleView | undefined
+  pending: boolean
+  onClear: () => void
+  onBrowse: (tab: "collection" | "armory") => void
+}
+
+// Before the loadout migration: one banner at a time.
+function SingleBanner({ catalog, equipped, equippedTitle, pending, onClear, onBrowse }: SingleBannerProps) {
+  const reduce = useReducedMotion()
+  return (
+    <Section label="Your banner">
+      <p className="text-[11px] text-muted-foreground">{HALL_COPY.loadoutsPending}</p>
+      <AnimatePresence mode="wait" initial={false}>
+        {equipped && equippedTitle ? (
+          <motion.div
+            key={equippedTitle.id}
+            initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={reduce ? undefined : { opacity: 0, y: -6 }}
+            className="space-y-2.5"
+          >
+            <TitleBadge
+              name={equippedTitle.name}
+              category={equippedTitle.category}
+              rarity={equippedTitle.rarity}
+              perk={equipped.perk}
+              description={equippedTitle.description}
+              price={equippedTitle.price}
+              tier={equippedTitle.tier}
+              size="lg"
+              interactive
+            />
+            <EffectLines effects={equippedTitle.effects} className="text-sm" emptyLabel={null} />
+            <PerkLine perk={equipped.perk} className="text-sm" />
+            <p className="text-xs text-muted-foreground italic">&ldquo;{equippedTitle.description}&rdquo;</p>
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="h-10 flex-1" disabled={catalog.locked} onClick={() => onBrowse("collection")}>
+                Change
+              </Button>
+              <Button
+                variant="ghost"
+                className="h-10 flex-1 text-muted-foreground"
+                disabled={catalog.locked || pending}
+                onClick={onClear}
+              >
+                Lower banner
+              </Button>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div key="none" initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
+            <p className="text-sm text-muted-foreground">{HALL_COPY.noBanner}</p>
+            <Button
+              className="h-10 w-full"
+              onClick={() => onBrowse(catalog.collection.some((c) => !c.curse) ? "collection" : "armory")}
+            >
+              {catalog.collection.some((c) => !c.curse) ? "Raise a banner from your collection" : "Visit the armory"}
+            </Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Section>
   )
 }
 

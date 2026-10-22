@@ -231,6 +231,8 @@ interface JudgeInput {
   id: string
   verdict: PraiseVerdict
   note?: string | null
+  // The favor the author's titles make a crown pay, for the optimistic update.
+  favor?: number
 }
 
 export function useJudgePraise(userId: string | null) {
@@ -242,7 +244,7 @@ export function useJudgePraise(userId: string | null) {
       const code = (result.code ?? "unknown") as JudgeErrorCode
       throw new PraiseRequestError(result.error ?? judgeErrorMessage(code), code, result.status)
     },
-    onMutate: async ({ id, verdict, note }) => {
+    onMutate: async ({ id, verdict, note, favor }) => {
       await queryClient.cancelQueries({ queryKey: praiseKeys.all })
       const snapshots = queryClient.getQueriesData({ queryKey: praiseKeys.all })
       const judgedAt = new Date().toISOString()
@@ -253,7 +255,7 @@ export function useJudgePraise(userId: string | null) {
               verdict,
               verdictNote: note?.trim() || null,
               judgedAt,
-              favor: verdict === "crowned" ? ROYAL_FAVOR : 0,
+              favor: verdict === "crowned" ? (favor ?? ROYAL_FAVOR) : 0,
             }
           : praise
       queryClient.setQueriesData<HallPage>({ queryKey: ["praise", "hall"] }, (page) =>

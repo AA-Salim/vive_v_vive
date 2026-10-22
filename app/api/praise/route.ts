@@ -16,6 +16,7 @@ import {
   type SubmitRpcResult,
 } from "@/lib/praise/server"
 import { HALL_VIEWS, type HallPage, type SubmitResult } from "@/lib/praise/types"
+import { noteText, parseNotes } from "@/lib/titles/effects"
 
 const HallQuery = z.object({
   view: z.enum(HALL_VIEWS).default("latest"),
@@ -98,10 +99,16 @@ export async function POST(request: Request) {
 
   const authors = await loadAuthors(supabase, [user.id])
   const praise = toPraiseView(result.praise, authors)
+  const titleEffects = parseNotes(result.title_effects)
 
   emitLive("praise.sung", {
     actor: { userId: user.id, name: praise.author.name, avatarUrl: praise.author.avatarUrl },
-    data: { excerpt: praiseExcerpt(praise.body), reward: praise.reward, praiseId: praise.id },
+    data: {
+      excerpt: praiseExcerpt(praise.body),
+      reward: praise.reward,
+      praiseId: praise.id,
+      titleEffects: titleEffects.length ? titleEffects.map(noteText) : undefined,
+    },
   })
 
   return NextResponse.json({
@@ -109,5 +116,6 @@ export async function POST(request: Request) {
     balance: result.balance,
     riddleBonus: result.riddle_bonus ?? 0,
     resetsAt: result.resets_at,
+    titleEffects,
   } satisfies SubmitResult)
 }

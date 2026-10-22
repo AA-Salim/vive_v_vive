@@ -246,7 +246,7 @@ const ACT_AWARD_PERKS: Record<string, PerkDefinition> = {
 
 const ACT_AWARD_PATTERN = /^Act\s+(?:[IVXLC]+|\d+):?\s+(Grand Champion|Warrior|Iron Man|Degenerate|Devotee|Punching Bag)$/i
 
-const CONSOLATION_TITLES = new Set([
+export const CONSOLATION_TITLES: ReadonlySet<string> = new Set([
   "Salaxe's Background Character",
   "Court Jester (Unpaid)",
   "Throne Room Tourist",

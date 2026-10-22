@@ -1,4 +1,11 @@
 import type { MilestoneDefinition } from "@/lib/milestones"
+import type { EffectDomain, TitleEffectLine } from "@/lib/titles/effects"
+import type { LoadoutSlot } from "@/lib/titles/loadout"
+import type { PriceTier } from "@/lib/titles/pricing"
+
+export type { EffectDomain, TitleEffectLine } from "@/lib/titles/effects"
+export type { LoadoutSlot } from "@/lib/titles/loadout"
+export type { PriceTier } from "@/lib/titles/pricing"
 
 export type TitleCategory = "rebellion" | "mockery" | "loyalty" | "absurd" | "award"
 
@@ -49,6 +56,14 @@ export interface TitleView {
   perk: PerkInfo | null
   holders: number
   wearing: number
+  // Price and slot tier (curses have one too: it sets their price). Free honors keep price 0.
+  tier: PriceTier
+  slot: LoadoutSlot
+  // Immediate effects while equipped (curses: while the brand burns). Empty for cosmetic titles.
+  effects: TitleEffectLine[]
+  domain: EffectDomain | null
+  // Curses only: what burning the brand off costs the branded.
+  dignity_cost: number | null
 }
 
 export interface CourtMemberRef {
@@ -59,6 +74,7 @@ export interface CourtMemberRef {
 export interface OwnedTitleView {
   title_id: string
   is_active: boolean
+  equipped_at?: string | null
   acquired_at: string
   bestowed_by: CourtMemberRef | null
   curse: CurseState | null
@@ -83,7 +99,12 @@ export interface PerkLedger {
 export interface TitlesCatalogResponse {
   titles: TitleView[]
   owned: string[]
+  // The primary title of the loadout (highest tier, then most recently equipped).
   active_title_id: string | null
+  // Every equipped title.
+  active_title_ids: string[]
+  // False until supabase/phase10_title-effects.sql has run: only one title can be worn.
+  loadouts: boolean
   collection: OwnedTitleView[]
   balance: number | null
   locked: boolean
@@ -96,7 +117,9 @@ export interface CourtMember {
   name: string
   username: string
   avatar_url: string | null
+  // Primary title; loadout lists every equipped title.
   equipped: string | null
+  loadout?: string[]
   curses: { title: string; left: number }[]
   owned_title_ids: string[]
 }
@@ -110,12 +133,28 @@ export interface CurseBadge {
   perk: string
   bestowedBy: string | null
   gamesLeft: number
+  // The curse's immediate effect, one sentence.
+  effect?: string | null
+  tier?: PriceTier
   cap?: number
   price?: number
   dignityCost?: number
 }
 
-// Extends the original { userId, playerId, title, category, perk } contract with optional fields only.
+export interface LoadoutEntry {
+  title: string
+  category: string
+  rarity: TitleRarity
+  tier: PriceTier
+  slot: LoadoutSlot
+  // Immediate effect, one sentence, or null for a cosmetic title.
+  effect: string | null
+  perk: string | null
+  primary: boolean
+}
+
+// Extends the original { userId, playerId, title, category, perk } contract with optional fields only. The top-level
+// fields describe the primary title (highest tier equipped); loadout lists every equipped title, primary first.
 export interface EquippedTitle {
   userId: string
   playerId: string | null
@@ -126,6 +165,9 @@ export interface EquippedTitle {
   rarity?: TitleRarity
   price?: number
   curses?: CurseBadge[]
+  tier?: PriceTier
+  effect?: string | null
+  loadout?: LoadoutEntry[]
 }
 
 export interface MilestoneView extends MilestoneDefinition {

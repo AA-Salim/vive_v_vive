@@ -1,36 +1,49 @@
 import { pts, type HelpEntry } from "@/lib/help"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
+import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { DECREE_COST_RANGE } from "@/lib/titles/effects"
+import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
+import { PRICE_TIERS, TIER_LABEL, TIER_MULTIPLIER, formatPrice, tierPrice } from "@/lib/titles/pricing"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
 import type { PerkInfo } from "@/lib/titles/types"
+
+const slotList = LOADOUT_SLOTS.map((s) => `${SLOT_COUNT[s]} ${SLOT_LABEL[s]}`).join(", ")
+const priceList = PRICE_TIERS.map((t) => `${TIER_LABEL[t]} x${TIER_MULTIPLIER[t]} (${formatPrice(tierPrice(t))})`).join(", ")
 
 export const HALL_COPY = {
   title: "The Hall of Titles",
-  tagline: "Every banner pays out after the game. Every brand bleeds its wearer. Choose wisely, or at least loudly.",
+  tagline:
+    "Every title bends the rules the moment you act: cheaper decrees, better insurance, fatter praise. Then its perk pays after the game. Every brand bleeds its wearer. Choose wisely, or at least loudly.",
   lockNotice: "The game is live. Titles are sealed until a winner is declared.",
-  noBanner: "No banner raised. You are, legally speaking, nobody. Equip a title to start collecting perks.",
-  signedOut: "Sign in with Discord to buy titles, raise a banner and curse your friends.",
+  noBanner: "No banner raised. You are, legally speaking, nobody. Equip a title to bend the rules and collect perks.",
+  loadoutsPending: "Loadouts open once the royal scribes finish their migration: one title at a time until then.",
+  signedOut: "Sign in with Discord to buy titles, build a loadout and curse your friends.",
   emptyCollection: "Your collection is empty. The shop is open, the milestones are waiting, and Salaxe is judging.",
 }
 
 export const EXPLAINER = [
   {
-    title: "One banner at a time",
-    body: `Equip one title. After every game you take part in (you played, bet ${MIN_STAKE}+, cast a decree or cashed a bounty), its perk pays out on its own.`,
+    title: "A loadout, not a banner",
+    body: `Wear up to ${MAX_EQUIPPED} titles at once: ${slotList}. Rebels and loyalists never share the super rare slots, and a few broken pairs never mix.`,
   },
   {
-    title: "Small, capped, honest",
-    body: `Every title has its own cap per game, and none moves more than ${PERK_CAP}. The treasury enforces it, whoever declares the winner. Payouts land in your history as title perks.`,
+    title: "Effects bite the moment you act",
+    body: `Decree prices, bet terms, praise rewards, stipends and duel tithes change right away, shown on every price you see. Effects stack, each with a hard cap (decree discounts stop at ${Math.abs(DECREE_COST_RANGE.min)}% off).`,
   },
   {
-    title: "Rebels and loyalists",
-    body: "Rebellion titles cash in when Salaxe's side falls, Loyalty titles when it wins. The King can neither slay nor worship himself.",
+    title: "Perks pay after the game",
+    body: `After every game you take part in (you played, bet ${MIN_STAKE}+, cast a decree or cashed a bounty), each perk pays on its own: at most ${PERK_CAP} per perk, ${USER_PERK_CAP} for all your titles together. The treasury enforces it, whoever declares the winner.`,
+  },
+  {
+    title: "Priced in hand kisses",
+    body: `One hand kiss (a written praise) pays ${PRAISE_REWARD}. Titles cost ${priceList}. Honors are earned, never bought.`,
   },
   {
     title: "Curses",
-    body: `Mockery titles are bought for someone else. The brand burns for ${CURSE_GAMES} games, shows on their player card and pays you tribute. ${MAX_ACTIVE_CURSES} brands per subject, maximum.`,
+    body: `Mockery titles are bought for someone else. The brand burns for ${CURSE_GAMES} games, works against its wearer the moment it lands and pays you tribute. ${MAX_ACTIVE_CURSES} brands per subject, maximum.`,
   },
   {
     title: "Buy back your dignity",
-    body: "The branded can burn a brand off early for 1.5x its price. The Crown keeps the money. The bestower keeps the memories.",
+    body: `The branded can burn a brand off early for ${DIGNITY_MULTIPLIER === 1 ? "exactly its price" : `${DIGNITY_MULTIPLIER}x its price`}. The Crown keeps the money. The bestower keeps the memories.`,
   },
   {
     title: "Sealed when live",
@@ -39,11 +52,11 @@ export const EXPLAINER = [
 ]
 
 const ROASTS: Record<string, string> = {
-  "Court Jester": "shall juggle for the court. Funny hat mandatory, tips confiscated.",
-  "Boot Licker": "shall kneel at the royal boot every single game. Tongue: still brown.",
-  "Royal Carpet": "shall be rolled out before the throne. Every loss, the court walks all over them.",
-  "Salaxe's Emotional Support": "shall carry the fallen King's feelings. Every win, the wages go to someone else.",
-  "The Crawling One": "shall crawl through every lost bet, paying a little extra for the privilege.",
+  "Court Jester": "shall juggle for the court. Funny hat mandatory, bets capped, tips confiscated.",
+  "Boot Licker": "shall kneel at the royal boot every single game, and pay extra for every decree. Tongue: still brown.",
+  "Royal Carpet": "shall be rolled out before the throne. Every decree aimed at them comes cheaper, every loss pays.",
+  "Salaxe's Emotional Support": "shall carry the fallen King's feelings. The daily stipend goes to him now.",
+  "The Crawling One": "shall crawl through every bet without a Guardian Angel, paying extra for every loss.",
 }
 
 const TAKES_PART = `you played, had a settled bet of ${MIN_STAKE}+, cast a decree or cashed a bounty`
@@ -63,10 +76,10 @@ export function perkHelp(perk: PerkInfo): HelpEntry {
   }
   return {
     title: "Title perk",
-    does: `${sentence(perk.summary)} Paid on its own after every game you take part in (${TAKES_PART}), while this title is your banner.`,
+    does: `${sentence(perk.summary)} Paid on its own after every game you take part in (${TAKES_PART}), while this title is equipped.`,
     cost: `Free to equip. A perk that backfires costs you ${pts(PERK_PENALTY_CAP)} at most.`,
     reward: `Up to ${pts(perk.cap)} a game.`,
-    limits: "One banner at a time. Sealed while a game is live.",
+    limits: `All your perks together pay at most ${pts(USER_PERK_CAP)} a game. Sealed while a game is live.`,
   }
 }
 

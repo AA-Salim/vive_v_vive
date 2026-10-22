@@ -242,6 +242,8 @@ BEGIN
   END IF;
 
   v_total := v_stake + CASE WHEN v_has_bet THEN v_bet.amount ELSE 0 END;
+  -- Title effects (phase10_title-effects.sql): Court Jester caps the stake, The Crawling One refuses insurance.
+  PERFORM vvv_title_bet_guard(v_user, v_total, COALESCE(p_insure, false) AND NOT v_was_insured);
 
   IF v_all_in AND v_total < (v_rules->>'all_in_min')::INT THEN
     RAISE EXCEPTION 'bet:all_in_too_small';
@@ -255,6 +257,7 @@ BEGIN
     INTO v_side_pool, v_other_pool
     FROM bets WHERE session_id = p_session_id AND status = 'pending';
     v_premium_pct := bet_v2_premium_pct(v_side_pool, v_other_pool);
+    v_premium_pct := vvv_title_premium_pct(v_user, p_session_id, p_side, v_premium_pct); -- title effects: The Holdout
     -- An insured bet only pays for the points it adds; insuring now covers the whole stake.
     v_premium := CEIL(
       (CASE WHEN v_was_insured THEN v_stake ELSE v_total END)::NUMERIC * v_premium_pct / 100
@@ -269,8 +272,8 @@ BEGIN
     v_session.betting_opened_at,
     v_session.betting_ends_at - make_interval(secs => (v_rules->>'window_seconds')::INT)
   );
-  v_early := v_opened IS NOT NULL
-    AND v_now < v_opened + make_interval(secs => (v_rules->>'early_seconds')::INT);
+  -- Title effects (phase10_title-effects.sql): Crown Thief stretches the early window.
+  v_early := vvv_title_is_early(v_user, v_opened, v_now, (v_rules->>'early_seconds')::INT);
 
   IF v_has_bet THEN
     UPDATE bets SET
@@ -278,7 +281,7 @@ BEGIN
       insured = v_insured,
       premium = premium + v_premium,
       coverage_pct = CASE
-        WHEN v_insured AND coverage_pct = 0 THEN (v_rules->>'coverage_pct')::INT
+        WHEN v_insured AND coverage_pct = 0 THEN vvv_title_coverage_pct(v_user, (v_rules->>'coverage_pct')::INT)
         ELSE coverage_pct
       END,
       early_amount = early_amount + CASE WHEN v_early THEN v_stake ELSE 0 END,
@@ -292,7 +295,7 @@ BEGIN
     INSERT INTO bets (session_id, user_id, side, amount, insured, scheme, premium, coverage_pct, early_amount, all_in)
     VALUES (
       p_session_id, v_user, p_side, v_total, v_insured, 'v2', v_premium,
-      CASE WHEN v_insured THEN (v_rules->>'coverage_pct')::INT ELSE 0 END,
+      CASE WHEN v_insured THEN vvv_title_coverage_pct(v_user, (v_rules->>'coverage_pct')::INT) ELSE 0 END,
       CASE WHEN v_early THEN v_stake ELSE 0 END,
       v_all_in
     )
@@ -312,7 +315,8 @@ BEGIN
     'early', v_early,
     'raised', v_has_bet,
     'all_in', v_all_in,
-    'balance', v_balance - v_cost
+    'balance', v_balance - v_cost,
+    'title_effects', vvv_title_fx_take()
   );
 END;
 $$;
@@ -352,6 +356,7 @@ BEGIN
   IF v_bet.insured THEN RAISE EXCEPTION 'bet:already_insured'; END IF;
   IF v_bet.all_in THEN RAISE EXCEPTION 'bet:all_in_uninsurable'; END IF;
   IF v_bet.amount < (v_rules->>'insurance_min')::INT THEN RAISE EXCEPTION 'bet:insurance_too_small'; END IF;
+  PERFORM vvv_title_bet_guard(v_user, 0, true); -- title effects: The Crawling One
 
   SELECT
     COALESCE(SUM(amount) FILTER (WHERE side = v_bet.side), 0),
@@ -359,6 +364,7 @@ BEGIN
   INTO v_side_pool, v_other_pool
   FROM bets WHERE session_id = p_session_id AND status = 'pending';
   v_premium_pct := bet_v2_premium_pct(v_side_pool, v_other_pool);
+  v_premium_pct := vvv_title_premium_pct(v_user, p_session_id, v_bet.side, v_premium_pct); -- title effects: The Holdout
   v_premium := CEIL(v_bet.amount::NUMERIC * v_premium_pct / 100)::INT;
   IF p_max_premium IS NOT NULL AND v_premium > p_max_premium THEN RAISE EXCEPTION 'bet:premium_changed'; END IF;
   IF v_balance - v_premium < (v_rules->>'debt_floor')::INT THEN RAISE EXCEPTION 'bet:debt_limit'; END IF;
@@ -366,7 +372,7 @@ BEGIN
   UPDATE bets SET
     insured = true,
     premium = premium + v_premium,
-    coverage_pct = (v_rules->>'coverage_pct')::INT,
+    coverage_pct = vvv_title_coverage_pct(v_user, (v_rules->>'coverage_pct')::INT),
     scheme = 'v2'
   WHERE id = v_bet.id
   RETURNING * INTO v_bet;
@@ -377,7 +383,8 @@ BEGIN
     'bet', to_jsonb(v_bet),
     'premium', v_premium,
     'premium_pct', v_premium_pct,
-    'balance', v_balance - v_premium
+    'balance', v_balance - v_premium,
+    'title_effects', vvv_title_fx_take()
   );
 END;
 $$;
@@ -473,7 +480,10 @@ BEGIN
           )::INT;
         END IF;
         IF r.all_in THEN
-          v_all_in_bonus := FLOOR(v_profit::NUMERIC * (v_rules->>'all_in_bonus_pct')::INT / 100)::INT;
+          -- Title effects (phase10_title-effects.sql): The 0/8 Powerspike raises the all-in bonus.
+          v_all_in_bonus := FLOOR(
+            v_profit::NUMERIC * ((v_rules->>'all_in_bonus_pct')::INT + COALESCE(vvv_title_effect(r.user_id, 'all_in_bonus_pct'), 0)) / 100
+          )::INT;
         END IF;
       END IF;
 

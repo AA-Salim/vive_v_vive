@@ -429,7 +429,8 @@ DECLARE
   v_uid UUID := auth.uid();
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'points:not_authenticated'; END IF;
-  RETURN claim_daily_bonus(v_uid);
+  -- Title effects (phase10_title-effects.sql): Still Kneeling doubles it, Salaxe's Emotional Support redirects it.
+  RETURN (vvv_title_claim_stipend(v_uid)->>'balance')::INTEGER;
 END;
 $$;
 

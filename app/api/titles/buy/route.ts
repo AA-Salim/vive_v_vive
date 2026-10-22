@@ -3,10 +3,11 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
 import { emitLive, getActor } from "@/lib/live/server"
-import { perkInfo } from "@/lib/titles/catalog"
+import { perkInfo, tierOf } from "@/lib/titles/catalog"
+import { NO_EFFECTS, bestowPrice, effectNotes, effectSummary, noteText, parseNotes, type EffectNote } from "@/lib/titles/effects"
 import { titleError, titleErrorKey } from "@/lib/titles/errors"
 import { MAX_ACTIVE_CURSES } from "@/lib/titles/rules"
-import { brandState, earliest, loadIdentities, loadResolvedGames, type TitleRow } from "@/lib/titles/server"
+import { brandState, earliest, loadIdentities, loadResolvedGames, loadUserEffects, type TitleRow } from "@/lib/titles/server"
 
 const Body = z.object({
   title_id: z.guid(),
@@ -19,6 +20,9 @@ interface Purchase {
   recipient: string
   rebranded: boolean
   balance: number | null
+  // What the buyer actually paid (The Disrespector curses for less).
+  price: number
+  notes: EffectNote[]
 }
 
 export async function POST(request: Request) {
@@ -51,13 +55,23 @@ export async function POST(request: Request) {
     if ("error" in legacy) return titleError(legacy.error)
     purchase = legacy
   } else {
-    const result = data as { recipient: string; rebranded: boolean; balance: number }
-    purchase = { recipient: result.recipient, rebranded: result.rebranded, balance: result.balance }
+    const result = data as { recipient: string; rebranded: boolean; balance: number; price?: number; title_effects?: unknown }
+    purchase = {
+      recipient: result.recipient,
+      rebranded: result.rebranded,
+      balance: result.balance,
+      price: result.price ?? title.price,
+      notes: parseNotes(result.title_effects),
+    }
   }
 
   const actor = await getActor(supabase, user.id)
+  const effect = effectSummary(title.name)
   if (title.for_self) {
-    emitLive("title.bought", { actor, data: { title: title.name, price: title.price } })
+    emitLive("title.bought", {
+      actor,
+      data: { title: title.name, price: purchase.price, tier: tierOf(title.name, title.category, title.price), effect },
+    })
   } else {
     const target = (await loadIdentities(supabase, [purchase.recipient])).get(purchase.recipient)
     emitLive("title.bestowed", {
@@ -67,6 +81,9 @@ export async function POST(request: Request) {
         targetName: target?.name ?? "someone",
         targetUserId: purchase.recipient,
         curse: perkInfo(title.name, title.category, actor?.name ?? "the brander")?.summary ?? null,
+        effect,
+        price: purchase.price,
+        titleEffects: purchase.notes.length ? purchase.notes.map(noteText) : undefined,
       },
     })
   }
@@ -77,6 +94,9 @@ export async function POST(request: Request) {
     recipient: purchase.recipient,
     rebranded: purchase.rebranded,
     balance: purchase.balance,
+    price: purchase.price,
+    list_price: title.price,
+    title_effects: purchase.notes,
   })
 }
 
@@ -116,9 +136,13 @@ async function legacyPurchase(
     if (active >= MAX_ACTIVE_CURSES) return { error: "curse_limit" }
   }
 
+  const fx = title.for_self ? NO_EFFECTS : await loadUserEffects(supabase, userId)
+  const price = title.for_self ? title.price : bestowPrice(title.price, fx)
+  const notes = price === title.price ? [] : effectNotes(fx, "bestow_cost_pct")
+
   const { data: balance, error: chargeError } = await supabase.rpc("adjust_balance", {
     p_user_id: userId,
-    p_amount: -title.price,
+    p_amount: -price,
     p_reason: "title_bought",
     p_reference_id: title.id,
   })
@@ -133,12 +157,12 @@ async function legacyPurchase(
   if (insertError) {
     await supabase.rpc("adjust_balance", {
       p_user_id: userId,
-      p_amount: title.price,
+      p_amount: price,
       p_reason: "title_bought",
       p_reference_id: title.id,
     })
     return { error: insertError.code === "23505" ? (title.for_self ? "already_owned" : "already_branded") : "unknown" }
   }
 
-  return { recipient, rebranded: false, balance: typeof balance === "number" ? balance : null }
+  return { recipient, rebranded: false, balance: typeof balance === "number" ? balance : null, price, notes }
 }

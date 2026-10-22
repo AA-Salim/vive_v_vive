@@ -110,7 +110,7 @@ export function decreeToast(entry: ChaosDecreeEntry): { title: string; descripti
         title: "Wager sealed",
         description:
           entry.rules_version >= 2
-            ? `${entry.cost} on ${sideLabel(entry.side)}. Pays ${entry.cost * 2}, more if they survive the chaos.`
+            ? `${entry.cost} on ${sideLabel(entry.side)}. Pays ${entry.potential_payout ?? entry.cost * 2}, more if they survive the chaos.`
             : `${entry.cost} on ${sideLabel(entry.side)}. Pays ${entry.cost * 2} if they win.`,
       }
     case "royal_pardon":

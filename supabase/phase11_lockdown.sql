@@ -3,9 +3,9 @@
 -- Run order:
 --   1. Deploy the app version that ships this file (it calls the guarded functions and only falls back to the
 --      old direct writes while those functions are missing).
---   2. Run every phase10 file, in this order: foundation, live-sync, titles, prophecy-vote, chaos, betting,
---      praise, duels, bounties-shame, lobby, storytelling, hardening. phase10_all.sql holds the first eleven in
---      that order, so phase10_all.sql then phase10_hardening.sql is the same thing.
+--   2. Run every phase10 file, in this order: foundation, live-sync, push, titles, prophecy-vote, chaos, betting,
+--      praise, riddles, duels, bounties-shame, lobby, coach-champions, storytelling, dedupe-games, hardening,
+--      title-effects. phase10_all.sql holds every one of them in that order, so running it is the same thing.
 --   3. Check the site works (declare a game, place a bet, claim the daily stipend, add a roster player...).
 --   4. Run this file between games (no game in progress). Idempotent: running it again changes nothing.
 --
@@ -64,7 +64,9 @@ BEGIN
     'pillory_post(uuid, text, text, text, jsonb, jsonb)',
     'buy_title(uuid, uuid)',
     'equip_title(uuid)',
-    'apply_title_perk(uuid, uuid, text, text, integer, text, uuid)'
+    'apply_title_perk(uuid, uuid, text, text, integer, text, uuid)',
+    'equip_loadout(uuid[])',
+    'claim_my_daily_stipend()'
   ] LOOP
     IF to_regprocedure(v_fn) IS NULL THEN
       v_missing := v_missing || v_fn;

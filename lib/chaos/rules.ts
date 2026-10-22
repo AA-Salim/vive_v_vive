@@ -10,6 +10,9 @@ import {
 } from "@/lib/chaos/catalog"
 import type { ChaosErrorCode } from "@/lib/chaos/errors"
 import type { DecreeRequest } from "@/lib/chaos/schema"
+import { decreeAimedSeats, decreePrice, seatExileImmune, type DecreeAim, type DecreePrice, type DecreeTitles } from "@/lib/chaos/title-terms"
+import { isSalaxe } from "@/lib/lore/salaxe"
+import { NO_EFFECTS, WAGER_MAX_MULTIPLIER, decreeMaxUses } from "@/lib/titles/effects"
 import type {
   BoardAssignment,
   ChaosDecreeEntry,
@@ -55,6 +58,8 @@ export interface DecreeContext {
   assignments: BoardAssignment[]
   viewer: ChaosViewer | null
   windowOpen: boolean
+  // Title effects of the caster and of every seat; absent means no title changes anything.
+  titles?: DecreeTitles
 }
 
 export type BlockCode = "retired" | "window" | "auth" | "migration" | "disabled" | "players_only" | "limit" | "no_target" | "funds"
@@ -110,14 +115,25 @@ export function ruleFor(type: DecreeType, rules: DecreeRuleBook): DecreeRule {
   return rules[type] ?? DEFAULT_RULES[type]
 }
 
-export function decreeUsage(type: DecreeType, ctx: DecreeContext): { used: number; max: number } {
+// max includes The Usurper's extra use; base is the rule book's own limit.
+export function decreeUsage(type: DecreeType, ctx: DecreeContext): { used: number; max: number; base: number } {
   const rule = ruleFor(type, ctx.rules)
+  const max = decreeMaxUses(rule.maxUses, ctx.titles?.actor ?? NO_EFFECTS)
   const userId = ctx.viewer?.userId
-  if (!userId) return { used: 0, max: rule.maxUses }
+  if (!userId) return { used: 0, max, base: rule.maxUses }
   const used = liveActions(ctx.actions).filter(
     (a) => a.user_id === userId && ruleFor(a.action_type, ctx.rules).limitGroup === rule.limitGroup
   ).length
-  return { used, max: rule.maxUses }
+  return { used, max, base: rule.maxUses }
+}
+
+// What the decree costs this caster once titles have spoken. Without an aim only the caster's own modifiers count
+// (the card price); with one, Kingslayer and Royal Carpet join in (the dialog price).
+export function decreeCostFor(type: DecreeType, ctx: DecreeContext, aim: DecreeAim | null = null): DecreePrice {
+  const base = ruleFor(type, ctx.rules).cost
+  if (!ctx.titles) return { cost: base, pct: 0, notes: [] }
+  const aimed = aim ? decreeAimedSeats(type, aim, ctx.assignments, ctx.viewer?.playerId ?? null) : []
+  return decreePrice(type, base, ctx.titles, aimed, isSalaxe(viewerSeat(ctx)?.name))
 }
 
 function movable(side: Side, ctx: DecreeContext): BoardAssignment[] {
@@ -154,6 +170,7 @@ export function playerBlock(
       return pardoned.has(target.player_id) ? "Already pardoned" : null
     case "champion_ban":
       if (isViewer) return "That is you"
+      if (seatExileImmune(target, ctx.titles)) return "Cannot be exiled"
       return pardoned.has(target.player_id) ? "Pardoned" : null
     case "swap_teammate": {
       const seat = viewerSeat(ctx)
@@ -191,10 +208,10 @@ function hasValidTarget(type: DecreeType, ctx: DecreeContext): boolean {
   }
 }
 
-export function shortfall(type: DecreeType, ctx: DecreeContext): number {
+export function shortfall(type: DecreeType, ctx: DecreeContext, cost = decreeCostFor(type, ctx).cost): number {
   const balance = ctx.viewer?.balance
   if (balance == null) return 0
-  return Math.max(0, DEBT_FLOOR - (balance - ruleFor(type, ctx.rules).cost))
+  return Math.max(0, DEBT_FLOOR - (balance - cost))
 }
 
 export function decreeBlock(type: DecreeType, ctx: DecreeContext): DecreeBlock | null {
@@ -213,13 +230,15 @@ export function decreeBlock(type: DecreeType, ctx: DecreeContext): DecreeBlock |
   return null
 }
 
-export function goesIntoDebt(type: DecreeType, ctx: DecreeContext): boolean {
+export function goesIntoDebt(type: DecreeType, ctx: DecreeContext, cost = decreeCostFor(type, ctx).cost): boolean {
   const balance = ctx.viewer?.balance
-  return balance != null && balance - ruleFor(type, ctx.rules).cost < 0
+  return balance != null && balance - cost < 0
 }
 
+// Baron Caller's starting multiplier is stored on the wager when it is placed (chaos_wager_multiplier in SQL).
 export function wagerMultiplier(wager: ChaosDecreeEntry, actions: ChaosDecreeEntry[]): number {
   if (wager.rules_version < 2) return WAGER_BASE_MULTIPLIER
+  const base = Number(wager.details?.base_multiplier) || WAGER_BASE_MULTIPLIER
   const placedAt = Date.parse(wager.created_at)
   const hits = actions.filter(
     (h) =>
@@ -229,7 +248,7 @@ export function wagerMultiplier(wager: ChaosDecreeEntry, actions: ChaosDecreeEnt
       HOSTILE_TYPES.has(h.action_type) &&
       Date.parse(h.created_at) > placedAt
   ).length
-  return WAGER_BASE_MULTIPLIER + WAGER_DEFIANCE_STEP * Math.min(WAGER_MAX_DEFIANCE, hits)
+  return Math.min(WAGER_MAX_MULTIPLIER, base + WAGER_DEFIANCE_STEP * Math.min(WAGER_MAX_DEFIANCE, hits))
 }
 
 export function validateDecree(request: DecreeRequest, ctx: DecreeContext): ChaosErrorCode | null {
@@ -275,7 +294,8 @@ export function validateDecree(request: DecreeRequest, ctx: DecreeContext): Chao
       const target = find(request.target_player_id)
       if (!target) return "target_not_in_game"
       if (seat && target.id === seat.id) return "self_target"
-      return pardoned.has(target.player_id) ? "target_pardoned" : null
+      if (pardoned.has(target.player_id)) return "target_pardoned"
+      return seatExileImmune(target, ctx.titles) ? "exile_immune" : null
     }
     case "lane_force": {
       const first = find(request.target_player_id)

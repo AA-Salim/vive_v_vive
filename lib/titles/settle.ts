@@ -41,11 +41,10 @@ export async function settleTitlePerks(ctx: GameResolvedContext): Promise<void> 
   const brands = ownership.filter((row) => isBrand(row, row.title) && Date.parse(row.created_at) < sessionStart)
   const resolved = await loadResolvedGames(supabase, earliest(brands.map((b) => b.created_at)))
 
+  // Every title of a loadout pays its own perk; the engine caps a wearer's total per game.
   const wearers: PerkWearer[] = []
-  const equippedUsers = new Set<string>()
   for (const row of [...ownership].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))) {
-    if (!row.is_active || !row.title.for_self || equippedUsers.has(row.user_id)) continue
-    equippedUsers.add(row.user_id)
+    if (!row.is_active || !row.title.for_self) continue
     wearers.push({ userId: row.user_id, title: row.title.name, category: row.title.category, kind: "perk", bestowedBy: null })
   }
   for (const brand of brands) {

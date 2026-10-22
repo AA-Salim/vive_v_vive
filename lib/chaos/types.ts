@@ -1,5 +1,6 @@
 import type { Role, Side } from "@/lib/types"
 import type { DecreeType } from "@/lib/chaos/catalog"
+import type { EffectNote } from "@/lib/titles/effects"
 
 export type ChaosSchema = "v2" | "legacy"
 
@@ -25,6 +26,10 @@ export interface DecreeDetails {
   target?: DecreeChange
   side?: Side
   banned_champion?: string
+  // Written by the title effects (phase10_title-effects.sql): Baron Caller's starting multiplier and the notes of
+  // every title that changed this decree. Parse the notes with parseNotes() from lib/titles/effects.ts.
+  base_multiplier?: number
+  title_effects?: unknown
 }
 
 export interface ChaosDecreeEntry {
@@ -87,6 +92,8 @@ export interface DecreeResponse {
   headline: string
   changedAssignmentIds: string[]
   changedPlayerIds: string[]
+  // The titles that changed this decree (also stored in decree.details.title_effects).
+  titleEffects?: EffectNote[]
 }
 
 export interface BoardAssignment {

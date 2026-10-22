@@ -1,11 +1,11 @@
 "use client"
 
-import { Banknote, Crown, Flame, Lock, ScrollText, Skull, Swords } from "lucide-react"
+import { Banknote, Coins, Crown, Flame, Lock, ScrollText, Skull, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { EXPLAINER } from "@/lib/titles/copy"
 
-const ICONS = [Crown, Banknote, Swords, Skull, Flame, Lock]
+const ICONS = [Crown, Zap, Banknote, Coins, Skull, Flame, Lock]
 
 export function PerksExplainer() {
   return (

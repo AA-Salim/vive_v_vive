@@ -14,10 +14,20 @@ interface JudgeControlsProps {
   authorName: string
   crownsLeft: number
   pending: boolean
+  // What a crown pays this author once their titles are counted (Throne Polisher).
+  favor?: number
+  favorNote?: string | null
   onJudge: (verdict: PraiseVerdict, note: string) => void
 }
 
-export function JudgeControls({ authorName, crownsLeft, pending, onJudge }: JudgeControlsProps) {
+export function JudgeControls({
+  authorName,
+  crownsLeft,
+  pending,
+  favor = ROYAL_FAVOR,
+  favorNote = null,
+  onJudge,
+}: JudgeControlsProps) {
   const [mode, setMode] = useState<PraiseVerdict | null>(null)
   const [note, setNote] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
@@ -34,7 +44,7 @@ export function JudgeControls({ authorName, crownsLeft, pending, onJudge }: Judg
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
             <Button className="h-10" disabled={pending || crownsLeft <= 0} onClick={() => setMode("crowned")}>
               <CrownIcon aria-hidden />
-              Crown +{ROYAL_FAVOR}
+              Crown +{favor}
             </Button>
             <Button variant="destructive" className="h-10" disabled={pending} onClick={() => setMode("scorned")}>
               <FlameIcon aria-hidden />
@@ -43,6 +53,7 @@ export function JudgeControls({ authorName, crownsLeft, pending, onJudge }: Judg
           </div>
           <InfoTip help={VERDICT_HELP} side="top" align="end" />
         </div>
+        {favorNote && <p className="text-[11px] text-[var(--color-gold-light)]/80">{favorNote}</p>}
         {crownsLeft <= 0 && (
           <p className="text-[11px] text-muted-foreground">No crowns left today. Scorn remains free.</p>
         )}
@@ -80,7 +91,7 @@ export function JudgeControls({ authorName, crownsLeft, pending, onJudge }: Judg
         </Button>
         <Button type="submit" variant={crowning ? "default" : "destructive"} className="h-10" disabled={pending}>
           {crowning ? <CrownIcon aria-hidden /> : <FlameIcon aria-hidden />}
-          {crowning ? `Crown it (+${ROYAL_FAVOR})` : "Scorn it"}
+          {crowning ? `Crown it (+${favor})` : "Scorn it"}
         </Button>
       </div>
     </form>

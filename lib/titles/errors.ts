@@ -19,6 +19,19 @@ const TITLE_ERRORS: Record<string, TitleError> = {
   not_owned: { status: 403, message: "That title is not yours to wear." },
   not_cursed: { status: 404, message: "No such brand on you. Your dignity is intact, for now." },
   debt_limit: { status: 400, message: "The treasury refuses: that would sink you past the -300 debt limit." },
+  slot_full_super_rare: { status: 409, message: "Your Super rare slots are full. Take a Legendary or Epic title off first." },
+  slot_full_rare: { status: 409, message: "Your Rare slots are full. Take a Rare title off first." },
+  slot_full_common: { status: 409, message: "Your Common slots are full. Take a Common title off first." },
+  loadout_full: { status: 409, message: "That is more titles than any loadout can hold." },
+  title_conflict: { status: 409, message: "Those two titles cannot be worn together. The court has seen that trick before." },
+  faction_conflict: {
+    status: 409,
+    message: "Rebels and loyalists never share the super rare slots: you cannot slay the King and polish his throne.",
+  },
+  loadouts_pending: {
+    status: 503,
+    message: "Loadouts open once the royal scribes finish the migration. Wear one title for now.",
+  },
   insufficient: { status: 400, message: "Not enough points for that." },
 }
 

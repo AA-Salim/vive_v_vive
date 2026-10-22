@@ -11,11 +11,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { COMPOSE_HELP } from "@/components/praise/help"
 import { PraiseComposer } from "@/components/praise/praise-composer"
 import { PraiseSuccess } from "@/components/praise/praise-success"
+import { usePraiseTerms } from "@/components/praise/title-bonus"
 import { RiddleLocked, RiddleSolved } from "@/components/praise/riddle/riddle-outcome"
 import { RiddleStep } from "@/components/praise/riddle/riddle-step"
 import { RitualSteps } from "@/components/praise/riddle/ritual-steps"
 import { praiseKeys, useRiddle, useSubmitPraise } from "@/hooks/use-praise"
-import { normalizePraise, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { normalizePraise } from "@/lib/praise/rules"
 import type { HallPage, RiddleView, SubmitResult } from "@/lib/praise/types"
 import { COMPOSER_INTROS, COPY, RIDDLE_COPY, seededPick } from "@/lib/praise/voice"
 
@@ -39,6 +40,7 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
   const [error, setError] = useState<string | null>(null)
   const [justSolved, setJustSolved] = useState<RiddleView | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const terms = usePraiseTerms()
   const stageRef = useRef<HTMLDivElement>(null)
   const intro = seededPick(COMPOSER_INTROS, String(seed))
 
@@ -148,14 +150,14 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
             <InfoTip help={COMPOSE_HELP} side="bottom" align="start" />
           </div>
           <DialogDescription className="text-xs leading-relaxed">
-            {intro} One a day, {PRAISE_REWARD} points
+            {intro} One a day, {terms.reward} points
             {sharpMind > 0 && (
               <span className="font-semibold text-[var(--color-gold)]">
                 {" "}
                 + {sharpMind} {RIDDLE_COPY.sharpMind}
               </span>
             )}
-            . He may crown the best one (+{ROYAL_FAVOR}).
+            . He may crown the best one (+{terms.favor}).
           </DialogDescription>
         </DialogHeader>
         <PraiseComposer

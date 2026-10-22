@@ -7,6 +7,8 @@ import { buildDuelBoard } from "@/lib/duels/server/board"
 import { NO_STORE, duelError, duelErrorFromDb, readJson } from "@/lib/duels/server/respond"
 import { actorOf, loadDuelists, normalizeDuel, toDuelView } from "@/lib/duels/server/rows"
 import { announceSweep } from "@/lib/duels/server/settlement"
+import { isHerald } from "@/lib/titles/effects"
+import { loadUserEffects } from "@/lib/titles/server"
 
 const querySchema = z.object({ sessionId: z.guid() })
 
@@ -69,7 +71,11 @@ export async function POST(request: Request) {
   const row = normalizeDuel(result.duel)
   if (!row) return NextResponse.json({ error: "The gauntlet vanished mid-air. Refresh." }, { status: 500 })
 
-  const view = toDuelView(row, await loadDuelists(supabase, [row.challenger_id, row.opponent_id]))
+  const [duelists, fx] = await Promise.all([
+    loadDuelists(supabase, [row.challenger_id, row.opponent_id]),
+    loadUserEffects(supabase, user.id),
+  ])
+  const view = toDuelView(row, duelists)
   emitLive("duel.challenged", {
     sessionId,
     actor: actorOf(view.challenger),
@@ -80,6 +86,7 @@ export async function POST(request: Request) {
       side: row.challenger_side,
       opponentUserId: row.opponent_id,
       duelId: row.id,
+      herald: isHerald(fx) || undefined,
     },
   })
 

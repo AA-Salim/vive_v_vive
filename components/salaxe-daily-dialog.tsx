@@ -2,7 +2,7 @@
 
 import { Fragment, useRef, useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
-import { CoinsIcon, NewspaperIcon, ScrollTextIcon } from "lucide-react"
+import { CoinsIcon, NewspaperIcon, ScrollTextIcon, SkullIcon, SparklesIcon } from "lucide-react"
 import { useActIntroPending } from "@/components/act-intro-modal"
 import { LoreText } from "@/components/lore/lore-text"
 import { useVisibleViewport } from "@/components/lore/use-visible-viewport"
@@ -15,8 +15,12 @@ import { useSession } from "@/hooks/use-session"
 import { getActContent } from "@/lib/act-content"
 import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { TIMED_STATUSES } from "@/lib/live/events"
+import type { DailyClaim } from "@/hooks/use-points"
+import { useMyTitleEffects } from "@/hooks/use-title-effects"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
 import { pick } from "@/lib/lore/seed"
+import { noteChip, stipendTerms, type CombinedEffects } from "@/lib/titles/effects"
+import { cn } from "@/lib/utils"
 
 const STIPEND_HELP: HelpEntry = {
   title: "The daily stipend",
@@ -28,13 +32,34 @@ const STIPEND_HELP: HelpEntry = {
 
 interface SalaxeDailyDialogProps {
   open: boolean
+  claim?: DailyClaim | null
   onDismiss: () => void
   username: string
 }
 
 const NAME_TOKEN = "\u0000"
 
-export function SalaxeDailyDialog({ open, onDismiss, username }: SalaxeDailyDialogProps) {
+interface StipendView {
+  amount: number
+  toSalaxe: boolean
+  chips: string[]
+}
+
+// What today's stipend paid, from the claim when the server reports it, else from the viewer's titles.
+function stipendView(claim: DailyClaim | null | undefined, fx: CombinedEffects): StipendView {
+  const local = stipendTerms(fx)
+  const serverLines = Array.isArray(claim?.title_effects)
+    ? claim.title_effects.filter((line): line is string => typeof line === "string" && line.length > 0).slice(0, 3)
+    : []
+  const amount = typeof claim?.amount === "number" ? claim.amount : fx.size > 0 ? local.amount : DAILY_STIPEND
+  const toSalaxe = typeof claim?.paid_to_salaxe === "boolean" ? claim.paid_to_salaxe : local.toSalaxe
+  const chips = serverLines.length > 0 ? serverLines : local.notes.map(noteChip)
+  return { amount, toSalaxe, chips }
+}
+
+export function SalaxeDailyDialog({ open, claim, onDismiss, username }: SalaxeDailyDialogProps) {
+  const { fx } = useMyTitleEffects()
+  const stipend = stipendView(claim, fx)
   const { act, isLoading: actLoading } = useAct()
   const { session, isLoading: sessionLoading } = useSession()
   const introPending = useActIntroPending()
@@ -99,14 +124,49 @@ export function SalaxeDailyDialog({ open, onDismiss, username }: SalaxeDailyDial
               initial={reduceMotion ? false : { y: 10, opacity: 0, scale: 0.9 }}
               animate={{ y: 0, opacity: 1, scale: 1 }}
               transition={{ delay: reduceMotion ? 0 : 0.3, type: "spring", stiffness: 300, damping: 20 }}
-              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)]/35 bg-[var(--color-gold)]/10 px-4 py-1.5"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border px-4 py-1.5",
+                stipend.toSalaxe ? "border-rose-400/40 bg-rose-500/10" : "border-[var(--color-gold)]/35 bg-[var(--color-gold)]/10"
+              )}
             >
-              <CoinsIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
-              <span className="font-display text-lg font-semibold text-[var(--color-gold)] tabular-nums">+{DAILY_STIPEND}</span>
-              <span className="text-xs text-[var(--color-gold-light)]/70">points to your purse</span>
+              {stipend.toSalaxe ? (
+                <SkullIcon className="size-4 text-rose-300" aria-hidden />
+              ) : (
+                <CoinsIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+              )}
+              <span
+                className={cn(
+                  "font-display text-lg font-semibold tabular-nums",
+                  stipend.toSalaxe ? "text-rose-200 line-through decoration-rose-300/70" : "text-[var(--color-gold)]"
+                )}
+              >
+                +{stipend.amount}
+              </span>
+              <span className={cn("text-xs", stipend.toSalaxe ? "text-rose-100/80" : "text-[var(--color-gold-light)]/70")}>
+                {stipend.toSalaxe ? "paid to Salaxe instead (cursed)" : "points to your purse"}
+              </span>
             </motion.div>
             <InfoTip help={STIPEND_HELP} side="top" />
           </div>
+
+          {stipend.chips.length > 0 && (
+            <div className="relative mt-2 flex flex-wrap justify-center gap-1.5">
+              {stipend.chips.map((chip) => (
+                <span
+                  key={chip}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+                    stipend.toSalaxe
+                      ? "border-rose-400/40 bg-rose-500/10 text-rose-100"
+                      : "border-[var(--color-gold)]/40 bg-[var(--color-gold)]/10 text-[var(--color-gold-light)]"
+                  )}
+                >
+                  <SparklesIcon className="size-3" aria-hidden />
+                  {chip}
+                </span>
+              ))}
+            </div>
+          )}
 
           {intel && (
             <div className="relative mt-5 rounded-lg border border-border bg-[var(--color-navy-light)]/70 px-3 py-2.5 text-left">

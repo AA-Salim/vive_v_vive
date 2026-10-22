@@ -1,4 +1,5 @@
 import { MILESTONES } from "@/lib/milestones"
+import { shopTier, tierForPrice, tierPrice, type PriceTier } from "@/lib/titles/pricing"
 import { actAwardKind, isConsolationTitle, perkFor } from "@/lib/titles/perks"
 import { PERK_CAP } from "@/lib/titles/rules"
 import type { PerkInfo, TitleCategory, TitleRarity } from "@/lib/titles/types"
@@ -19,53 +20,45 @@ export const RARITY_LABEL: Record<TitleRarity, string> = {
   cursed: "Cursed",
 }
 
+// Honors are free but still take a loadout slot: the last title of a milestone group is Rare, the rest Common.
+// Mirrored in supabase/phase10_title-effects.sql (title_tiers).
 const MILESTONE_TIER = (() => {
   const byGroup = new Map<string, string[]>()
   for (const m of MILESTONES) byGroup.set(m.group, [...(byGroup.get(m.group) ?? []), m.title])
-  const tiers = new Map<string, TitleRarity>()
+  const tiers = new Map<string, PriceTier>()
   for (const titles of byGroup.values()) {
-    titles.forEach((title, index) => {
-      tiers.set(title, index === titles.length - 1 ? "epic" : index === 0 ? "common" : "rare")
-    })
+    titles.forEach((title, index) => tiers.set(title, index === titles.length - 1 ? "rare" : "common"))
   }
   return tiers
 })()
+
+export const MILESTONE_TIERS: ReadonlyMap<string, PriceTier> = MILESTONE_TIER
 
 export function isCurseCategory(category: string): boolean {
   return category === "mockery"
 }
 
-// Seeded shop prices, so a badge rendered from just a name and category still gets the right frame.
-const SHOP_PRICES: Record<string, number> = {
-  "Crown Thief": 60,
-  "The Disrespector": 70,
-  "The Usurper": 80,
-  "The One Who Stopped Kneeling": 90,
-  Kingslayer: 100,
-  "Throne Polisher": 50,
-  "Still Kneeling": 60,
-  "The Holdout": 65,
-  "Last Loyalist": 70,
-  "Copium Dealer": 75,
-  "Main Character (Self-Diagnosed)": 80,
-  "Baron Caller (Derogatory)": 85,
-  "The 0/8 Powerspike": 90,
-  "Delayed Victory Specialist": 95,
-  "El Goblino Pequeno": 100,
+function awardTier(name: string): PriceTier {
+  if (actAwardKind(name)) return "legendary"
+  if (isConsolationTitle(name)) return "common"
+  return MILESTONE_TIER.get(name) ?? "common"
 }
 
+// The price and slot tier. Curses have one too: it sets their price, they never take a slot.
+export function tierOf(name: string, category: string, price?: number): PriceTier {
+  if (category === "award") return awardTier(name)
+  return shopTier(name) ?? tierForPrice(price ?? 0)
+}
+
+// The seeded armory price of a title, or null for honors and titles the seed does not know.
 export function seededPrice(name: string): number | null {
-  return Object.prototype.hasOwnProperty.call(SHOP_PRICES, name) ? SHOP_PRICES[name] : null
+  const tier = shopTier(name)
+  return tier ? tierPrice(tier) : null
 }
 
+// The visual frame: a curse always looks cursed, everything else wears its tier.
 export function rarityOf(name: string, category: string, price?: number): TitleRarity {
-  if (isCurseCategory(category)) return "cursed"
-  if (category === "award") {
-    if (actAwardKind(name)) return "legendary"
-    if (isConsolationTitle(name)) return "common"
-    return MILESTONE_TIER.get(name) ?? "rare"
-  }
-  return (price ?? SHOP_PRICES[name] ?? 0) >= 90 ? "epic" : "rare"
+  return isCurseCategory(category) ? "cursed" : tierOf(name, category, price)
 }
 
 export function perkInfo(name: string, category: string, to = "whoever branded you"): PerkInfo | null {

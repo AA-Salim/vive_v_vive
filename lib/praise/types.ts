@@ -1,4 +1,5 @@
 import type { PraiseViolation } from "@/lib/praise/rules"
+import type { EffectNote } from "@/lib/titles/effects"
 
 export type PraiseVerdict = "crowned" | "scorned"
 
@@ -94,6 +95,8 @@ export interface SubmitResult {
   balance: number
   riddleBonus: number
   resetsAt: string
+  // The titles that raised this praise's reward.
+  titleEffects?: EffectNote[]
 }
 
 export interface JudgeResult {

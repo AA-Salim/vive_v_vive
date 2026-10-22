@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { CrownIcon, XIcon } from "lucide-react"
 import { useActIntroPending } from "@/components/act-intro-modal"
 import { ComposerDialog } from "@/components/praise/composer-dialog"
+import { TitleBonusChips, usePraiseTerms } from "@/components/praise/title-bonus"
 import { Button } from "@/components/ui/button"
 import { useAuthUser } from "@/hooks/use-auth"
 import { usePraiseState } from "@/hooks/use-praise"
@@ -48,7 +49,8 @@ export function PraisePrompt() {
   const state = praise.data?.state
   const ready = !!state?.available && !!state.me?.canSing
   const today = state?.available ? state.today : null
-  const reward = state?.available ? state.reward : PRAISE_REWARD
+  const terms = usePraiseTerms()
+  const reward = state?.available && state.reward !== PRAISE_REWARD ? state.reward : terms.reward
   const gameBusy = !!session && TIMED_STATUSES.includes(session.status)
 
   useEffect(() => {
@@ -108,6 +110,7 @@ export function PraisePrompt() {
                   Solve his riddle, then write one praise a day: +{reward}, +{RIDDLE_FIRST_TRY_BONUS} more for a first-try
                   solve. The exiled King is pretending not to check his inbox.
                 </p>
+                <TitleBonusChips notes={terms.rewardNotes} capped={terms.rewardCapped} />
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">

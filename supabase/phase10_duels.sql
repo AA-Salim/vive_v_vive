@@ -188,7 +188,7 @@ BEGIN
     v_winner := CASE WHEN r.challenger_side = p_winner_side THEN r.challenger_id ELSE r.opponent_id END;
     v_loser := CASE WHEN v_winner = r.challenger_id THEN r.opponent_id ELSE r.challenger_id END;
     v_pot := r.stake * 2;
-    v_tax := FLOOR(r.stake::NUMERIC * (v_rules->>'tax_pct')::INT / 100)::INT;
+    v_tax := vvv_title_duel_tithe(v_winner, r.stake, (v_rules->>'tax_pct')::INT); -- title effects: El Goblino Pequeno
 
     UPDATE duels SET
       status = CASE WHEN v_winner = r.challenger_id THEN 'won' ELSE 'lost' END,
@@ -204,6 +204,7 @@ BEGIN
     IF v_tax > 0 THEN
       PERFORM adjust_balance(v_winner, -v_tax, 'duel_tax', r.id);
     END IF;
+    PERFORM vvv_title_duel_consolation(v_loser, r.stake, r.id); -- title effects: Delayed Victory Specialist
 
     v_settled := v_settled || jsonb_build_array(jsonb_build_object(
       'id', r.id,

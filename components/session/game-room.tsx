@@ -14,6 +14,7 @@ import { ResultScreen } from "@/components/session/result-screen"
 import { StageHeader } from "@/components/session/stage-header"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 import { useLockToggle } from "@/components/session/use-session-actions"
+import { LoadoutStrip } from "@/components/titles/loadout-strip"
 import type { RoomPhase } from "@/components/session/copy"
 import type { RoomSession } from "@/lib/session/types"
 
@@ -127,6 +128,7 @@ export function GameRoom({ session, phase, serverTimeDelta, viewer, onSignIn, on
   ) : null
   const secondary = secondaryPanels(phase, session)
   const feed = <ActivityFeed sessionId={session.id} />
+  const titles = <LoadoutStrip session={session} phase={phase} playerId={viewer.playerId} />
   const courtProps = {
     userId: viewer.userId,
     playerId: viewer.playerId,
@@ -140,6 +142,7 @@ export function GameRoom({ session, phase, serverTimeDelta, viewer, onSignIn, on
     return (
       <div className="flex flex-col gap-6">
         {header}
+        {titles}
         <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6">
           <div className="flex min-w-0 flex-col gap-6">
             {mainLead}
@@ -161,6 +164,7 @@ export function GameRoom({ session, phase, serverTimeDelta, viewer, onSignIn, on
   return (
     <div className="flex flex-col gap-5">
       {header}
+      {titles}
       {isMd ? (
         <>
           {board}

@@ -38,7 +38,7 @@ import { DAILY_STIPEND } from "@/lib/lore/daily"
 import { CROWNS_PER_DAY, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
 
 export type ReasonGroup =
   | "games"
@@ -278,7 +278,7 @@ export const REASONS: Readonly<Record<string, Definition>> = {
   title_perk: def(
     "Title perk",
     "Your banner went to work.",
-    `What your equipped title paid after a game: never more than +${PERK_CAP}, never worse than -${PERK_PENALTY_CAP}.`,
+    `What one of your equipped titles paid after a game: never more than +${PERK_CAP} per title, +${USER_PERK_CAP} for all of them, never worse than -${PERK_PENALTY_CAP}.`,
     "titles",
     "signed",
     SparklesIcon
@@ -306,6 +306,38 @@ export const REASONS: Readonly<Record<string, Definition>> = {
     "titles",
     "spend",
     FeatherIcon
+  ),
+  title_stipend_bonus: def(
+    "Stipend bonus",
+    "A title doubled your daily stipend.",
+    "The extra half of a doubled daily stipend, paid by Still Kneeling.",
+    "titles",
+    "earn",
+    CalendarCheckIcon
+  ),
+  title_stipend_redirected: def(
+    "Stipend to Salaxe",
+    "A brand sent your daily stipend to Salaxe.",
+    "Your daily stipend was claimed, and Salaxe's Emotional Support paid it to the King instead of you.",
+    "titles",
+    "signed",
+    HeartHandshakeIcon
+  ),
+  title_stipend_tribute: def(
+    "Stipend tribute",
+    "Someone's daily stipend, redirected to the King.",
+    "A daily stipend redirected to you by the Salaxe's Emotional Support brand.",
+    "titles",
+    "earn",
+    HeartHandshakeIcon
+  ),
+  title_duel_refund: def(
+    "Duel consolation",
+    "A title returned part of a lost duel.",
+    "Part of a lost duel's stake, returned by Delayed Victory Specialist.",
+    "duels",
+    "refund",
+    SwordsIcon
   ),
 
   prophecy_bonus: def("Prophecy fulfilled", "The old oracle paid out.", "A payout from the first prophecy system, before the Tribunal.", "prophecy", "earn", EyeIcon),

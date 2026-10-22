@@ -215,6 +215,7 @@ DECLARE
   v_row praises%ROWTYPE;
   v_balance INTEGER;
   v_constraint TEXT;
+  v_reward INTEGER;
   v_riddle_bonus INTEGER;
 BEGIN
   IF v_uid IS NULL THEN
@@ -258,9 +259,11 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'too_similar', 'match_user_id', v_match);
   END IF;
 
+  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', 100); -- title effects: Last Loyalist, devotion honors
+
   BEGIN
     INSERT INTO praises (user_id, body, normalized, fingerprint, reward, praise_day)
-    VALUES (v_uid, v_body, v_norm, v_fp, 100, CURRENT_DATE)
+    VALUES (v_uid, v_body, v_norm, v_fp, v_reward, CURRENT_DATE)
     RETURNING * INTO v_row;
   EXCEPTION WHEN unique_violation THEN
     GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
@@ -270,8 +273,9 @@ BEGIN
     );
   END;
 
-  v_balance := adjust_balance(v_uid, 100, 'sing_his_praises', v_row.id);
-  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per day like the praise itself.
+  v_balance := adjust_balance(v_uid, v_reward, 'sing_his_praises', v_row.id);
+  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per day like the praise itself. Titles never
+  -- scale it: only the praise reward above carries the title bonus.
   IF v_riddle_bonus > 0 THEN
     v_balance := adjust_balance(v_uid, v_riddle_bonus, 'riddle_bonus', v_row.id);
   END IF;
@@ -281,7 +285,8 @@ BEGIN
     'praise', to_jsonb(v_row) - 'normalized' - 'fingerprint',
     'balance', v_balance,
     'riddle_bonus', coalesce(v_riddle_bonus, 0),
-    'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ
+    'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ,
+    'title_effects', vvv_title_fx_take()
   );
 END;
 $$;
@@ -295,6 +300,7 @@ DECLARE
   v_row praises%ROWTYPE;
   v_crowns INTEGER;
   v_balance INTEGER;
+  v_favor INTEGER := 0;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
@@ -334,6 +340,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM point_balances WHERE user_id = v_row.user_id) THEN
       RETURN jsonb_build_object('ok', false, 'error', 'author_unavailable');
     END IF;
+    v_favor := vvv_title_scaled(v_row.user_id, 'favor_bonus_pct', 50); -- title effects: Throne Polisher
   END IF;
 
   UPDATE praises
@@ -341,12 +348,12 @@ BEGIN
       verdict_note = v_note,
       judged_by = v_uid,
       judged_at = now(),
-      favor = CASE WHEN p_verdict = 'crowned' THEN 50 ELSE 0 END
+      favor = v_favor
   WHERE id = p_praise_id AND verdict IS NULL
   RETURNING * INTO v_row;
 
   IF p_verdict = 'crowned' THEN
-    v_balance := adjust_balance(v_row.user_id, 50, 'royal_favor', v_row.id);
+    v_balance := adjust_balance(v_row.user_id, v_favor, 'royal_favor', v_row.id);
     v_crowns := v_crowns + 1;
   END IF;
 
@@ -354,7 +361,8 @@ BEGIN
     'ok', true,
     'praise', to_jsonb(v_row) - 'normalized' - 'fingerprint',
     'author_balance', v_balance,
-    'crowns_left', greatest(0, 3 - v_crowns)
+    'crowns_left', greatest(0, 3 - v_crowns),
+    'title_effects', vvv_title_fx_take()
   );
 END;
 $$;

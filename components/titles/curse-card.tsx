@@ -5,9 +5,11 @@ import { motion, useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
+import { EffectLines } from "@/components/titles/effect-lines"
 import { PerkLine } from "@/components/titles/perk-line"
 import { dignityHelp } from "@/lib/titles/help"
 import { cn } from "@/lib/utils"
+import { formatPrice } from "@/lib/titles/pricing"
 import type { OwnedTitleView, TitleView } from "@/lib/titles/types"
 
 interface CurseCardProps {
@@ -37,15 +39,17 @@ export function CurseCard({ title, owned, locked, migrated, onDignity }: CurseCa
           name={title.name}
           category={title.category}
           perk={owned.perk}
+          price={title.price}
+          tier={title.tier}
           size="md"
           curse={{ bestowedBy: bestower, gamesLeft: curse.left, dignityCost: curse.dignity_cost }}
           description={title.description}
-          price={title.price}
           interactive
         />
         <span className="text-[11px] text-rose-200/80">by {bestower}</span>
       </div>
-      <PerkLine perk={owned.perk} className="mt-2" />
+      <EffectLines effects={title.effects} cursed className="mt-2" emptyLabel={null} />
+      <PerkLine perk={owned.perk} className="mt-1.5" />
       <div className="mt-3 flex items-center gap-2">
         <div
           role="img"
@@ -74,7 +78,7 @@ export function CurseCard({ title, owned, locked, migrated, onDignity }: CurseCa
           onClick={() => onDignity(title, owned)}
         >
           <Flame aria-hidden />
-          <span className="truncate">{migrated ? `Buy back your dignity · ${curse.dignity_cost} pts` : "Dignity buybacks open soon"}</span>
+          <span className="truncate">{migrated ? `Buy back your dignity · ${formatPrice(curse.dignity_cost)} pts` : "Dignity buybacks open soon"}</span>
         </Button>
         <InfoTip help={dignityHelp(title.name, curse.dignity_cost, owned.bestowed_by?.name ?? null, curse.left)} side="top" align="end" />
       </div>

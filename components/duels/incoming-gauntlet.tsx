@@ -3,9 +3,10 @@
 import { motion, useReducedMotion } from "motion/react"
 import { SwordsIcon } from "lucide-react"
 import { RespondButtons } from "@/components/duels/duel-actions"
+import { DuelTitleChips, useDuelTerms } from "@/components/duels/title-terms"
 import { VersusCard } from "@/components/duels/versus-card"
 import { DUEL_COPY } from "@/lib/duels/copy"
-import { SIDE_NAME, canAfford, duelPayout, duelProfit, otherSide } from "@/lib/duels/rules"
+import { SIDE_NAME, canAfford, otherSide } from "@/lib/duels/rules"
 import type { DuelAction, DuelView } from "@/lib/duels/types"
 
 interface IncomingGauntletProps {
@@ -23,6 +24,7 @@ export function IncomingGauntlet({ duel, viewerId, balance, pendingAction, busy,
   const reduceMotion = useReducedMotion() ?? false
   const answer = SIDE_NAME[otherSide(duel.challengerSide)]
   const cannotAfford = balance !== null && !canAfford(balance, duel.stake)
+  const terms = useDuelTerms(duel.stake)
 
   return (
     <motion.section
@@ -57,9 +59,11 @@ export function IncomingGauntlet({ duel, viewerId, balance, pendingAction, busy,
 
       <p className="relative mt-2.5 text-xs tabular-nums text-muted-foreground">
         Answer for <span className="font-semibold text-foreground">{duel.stake}</span>. Victory pays{" "}
-        <span className="font-semibold text-[var(--color-gold)]">{duelPayout(duel.stake)}</span> (+{duelProfit(duel.stake)} after
-        the tithe). Defeat costs {duel.stake}.
+        <span className="font-semibold text-[var(--color-gold)]">{terms.payout}</span> (+{terms.profit} after a {terms.tithe} point
+        tithe). Defeat costs {duel.stake - terms.refund}
+        {terms.refund > 0 ? ` (${terms.refund} comes back)` : ""}.
       </p>
+      <DuelTitleChips terms={terms} className="relative mt-1.5" />
 
       <div className="relative mt-3">
         <RespondButtons duel={duel} pendingAction={pendingAction} busy={busy} cannotAfford={cannotAfford} onAction={onAction} />

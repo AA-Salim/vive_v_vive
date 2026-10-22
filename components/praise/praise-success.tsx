@@ -3,10 +3,12 @@
 import { useEffect, useMemo } from "react"
 import confetti from "canvas-confetti"
 import { MotionConfig, motion } from "motion/react"
-import { CrownIcon, LibraryIcon } from "lucide-react"
+import { CrownIcon, LibraryIcon, SparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AnimatedNumber } from "@/components/praise/animated-number"
+import { submittedEffectLines } from "@/components/praise/title-bonus"
+import { PRAISE_REWARD } from "@/lib/praise/rules"
 import type { SubmitResult } from "@/lib/praise/types"
 import { COPY, RIDDLE_COPY, sungResponse } from "@/lib/praise/voice"
 
@@ -37,6 +39,8 @@ interface PraiseSuccessProps {
 export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProps) {
   const response = useMemo(() => sungResponse(result.praise.body, result.praise.id), [result])
   const reward = result.praise.reward
+  const effectLines = useMemo(() => submittedEffectLines(result), [result])
+  const titleBonus = reward - PRAISE_REWARD
   const bonus = result.riddleBonus ?? 0
   const total = reward + bonus
 
@@ -96,6 +100,22 @@ export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProp
             </motion.p>
           )}
         </div>
+
+        {(titleBonus > 0 || effectLines.length > 0) && (
+          <div className="-mt-2 flex max-w-full flex-col items-center gap-1">
+            {titleBonus > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-gold)]/40 bg-[var(--color-gold)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-gold-light)]">
+                <SparklesIcon className="size-3 text-[var(--color-gold)]" aria-hidden />
+                {PRAISE_REWARD} + {titleBonus} from your titles
+              </span>
+            )}
+            {effectLines.map((line) => (
+              <span key={line} className="text-[11px] text-muted-foreground">
+                {line}
+              </span>
+            ))}
+          </div>
+        )}
 
         <DialogDescription className="text-sm">
           Treasury{" "}

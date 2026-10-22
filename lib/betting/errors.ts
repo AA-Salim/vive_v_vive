@@ -1,4 +1,5 @@
 import { BET_RULES } from "@/lib/betting/rules"
+import { TITLE_EFFECTS } from "@/lib/titles/effects"
 
 export type BetErrorCode =
   | "not_authenticated"
@@ -23,7 +24,11 @@ export type BetErrorCode =
   | "stale_position"
   | "purse_changed"
   | "premium_changed"
+  | "title_bet_cap"
+  | "title_no_insurance"
   | "treason"
+
+const JESTER_CAP = TITLE_EFFECTS["Court Jester"]?.bet_cap
 
 export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string }> = {
   not_authenticated: { status: 401, message: "Log in with Discord to bet." },
@@ -50,6 +55,14 @@ export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string 
   premium_changed: {
     status: 409,
     message: "The odds moved and the Guardian Angel raised her price. Check the new premium and confirm again.",
+  },
+  title_bet_cap: {
+    status: 409,
+    message: `You wear the Court Jester brand: your bets are capped at ${JESTER_CAP ?? "a few"} points per game, all-in included.`,
+  },
+  title_no_insurance: {
+    status: 409,
+    message: "You wear The Crawling One brand: the Guardian Angel refuses to insure you until it burns out.",
   },
   treason: { status: 403, message: "Treason. You play in this game, so you can only bet on your own team." },
 }

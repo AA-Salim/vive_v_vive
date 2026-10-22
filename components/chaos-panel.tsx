@@ -8,21 +8,16 @@ import { useAct } from "@/hooks/use-act"
 import { useAuth } from "@/hooks/use-auth"
 import { useChaos, useIssueDecree } from "@/hooks/use-chaos"
 import { useSession } from "@/hooks/use-session"
+import { useMyTitleEffects, useTitleEffectsLookup } from "@/hooks/use-title-effects"
 import { useLiveSignal } from "@/components/live/live-provider"
 import { getActContent } from "@/lib/act-content"
 import { BOARD_DECREES, getDecree, type DecreeType } from "@/lib/chaos/catalog"
 import { decreeHeadline, decreeToast } from "@/lib/chaos/format"
-import {
-  DEFAULT_RULES,
-  decreeBlock,
-  decreeUsage,
-  goesIntoDebt,
-  ruleFor,
-  toBoardAssignments,
-  type DecreeContext,
-} from "@/lib/chaos/rules"
+import { DEFAULT_RULES, decreeBlock, decreeUsage, goesIntoDebt, toBoardAssignments, type DecreeContext } from "@/lib/chaos/rules"
 import type { DecreeRequest } from "@/lib/chaos/schema"
+import type { DecreeResponse } from "@/lib/chaos/types"
 import type { LiveEventPayloads } from "@/lib/live/events"
+import { noteText, parseNotes } from "@/lib/titles/effects"
 import type { SessionWithAssignments } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -33,12 +28,18 @@ import { DecreeLedger, DecreeLedgerSkeleton } from "@/components/chaos/decree-le
 import { EdictBoard, EdictBoardSkeleton } from "@/components/chaos/edict-board"
 import { TitleInPlay } from "@/components/titles/title-in-play"
 import { Proclamation, useProclamation } from "@/components/chaos/proclamation"
+import { decreeCardTitles } from "@/components/chaos/title-view"
 import { TreasuryStrip, TreasuryStripSkeleton } from "@/components/chaos/treasury-strip"
 import { formatClock, useRemainingMs } from "@/components/chaos/use-now"
 
 interface ChaosPanelProps {
   session: SessionWithAssignments
   isOpen: boolean
+}
+
+function responseNotes(result: DecreeResponse) {
+  const notes = parseNotes(result.titleEffects)
+  return notes.length > 0 ? notes : parseNotes(result.decree.details?.title_effects)
 }
 
 interface DialogState {
@@ -82,6 +83,10 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
   const [dialog, setDialog] = useState<DialogState>({ type: null, open: false, nonce: 0, phrase: "" })
   const sealing = useRef(false)
 
+  const { fx: myFx } = useMyTitleEffects()
+  const { ofPlayer } = useTitleEffectsLookup()
+  const titles = useMemo(() => ({ actor: myFx, ofPlayer }), [myFx, ofPlayer])
+
   const assignments = useMemo(() => toBoardAssignments(session), [session])
   const ctx: DecreeContext = useMemo(
     () => ({
@@ -91,20 +96,25 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
       assignments,
       viewer: board?.viewer ?? (user ? { userId: user.id, playerId: profile?.player_id ?? null, balance: null } : null),
       windowOpen,
+      titles,
     }),
-    [board, assignments, user, profile?.player_id, windowOpen]
+    [board, assignments, user, profile?.player_id, windowOpen, titles]
   )
 
   const cards = BOARD_DECREES.map((def) => {
     const { used, max } = decreeUsage(def.type, ctx)
+    const view = decreeCardTitles(def.type, ctx)
     return {
       def,
-      cost: ruleFor(def.type, ctx.rules).cost,
+      cost: view.cost,
+      baseCost: view.base,
       used,
       max,
       block: decreeBlock(def.type, ctx),
-      debt: goesIntoDebt(def.type, ctx),
+      debt: goesIntoDebt(def.type, ctx, view.cost),
       help: decreeHelp(def.type, ctx),
+      titleChips: [...view.chips, ...view.conditional],
+      titleHelp: view.help,
     }
   })
 
@@ -142,7 +152,8 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
       onSuccess: (result) => {
         setDialog((d) => ({ ...d, open: false }))
         const line = decreeToast(result.decree)
-        toast.success(line.title, { description: line.description })
+        const notes = responseNotes(result).map(noteText)
+        toast.success(line.title, { description: [line.description, ...notes].join(" · ") })
         proclaim({
           id: result.decree.id,
           actor: "You",

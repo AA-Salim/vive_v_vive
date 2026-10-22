@@ -1,4 +1,5 @@
 import { BET_RULES } from "@/lib/betting/rules"
+import { BASE_BET_TERMS, type BetTitleTerms } from "@/lib/betting/title-terms"
 import type { BetRow, RulesVersion } from "@/lib/betting/types"
 import type { Side } from "@/lib/types"
 
@@ -53,8 +54,8 @@ export function earlyBonusFor(profit: number, stake: number, earlyAmount: number
   return Math.floor((profit * BET_RULES.earlyBonusPct * Math.min(earlyAmount, stake)) / (100 * stake))
 }
 
-export function allInBonusFor(profit: number): number {
-  return profit > 0 ? Math.floor((profit * BET_RULES.allInBonusPct) / 100) : 0
+export function allInBonusFor(profit: number, pct: number = BET_RULES.allInBonusPct): number {
+  return profit > 0 ? Math.floor((profit * pct) / 100) : 0
 }
 
 export type ExistingStake = Pick<
@@ -71,6 +72,8 @@ export interface ProjectionInput {
   early: boolean
   allIn: boolean
   insure: boolean
+  // The bettor's title effects (coverage, premium, all-in bonus); the base rules when absent.
+  terms?: BetTitleTerms
 }
 
 export interface Projection {
@@ -95,6 +98,7 @@ export function usesLegacyTerms(rules: RulesVersion, current: ExistingStake | nu
 
 export function projectBet(input: ProjectionInput): Projection {
   const { rules, side, pools, current, early, insure } = input
+  const terms = input.terms ?? BASE_BET_TERMS
   const add = Math.max(0, Math.floor(input.add))
   const legacyTerms = usesLegacyTerms(rules, current)
   const stake = (current?.amount ?? 0) + add
@@ -116,10 +120,10 @@ export function projectBet(input: ProjectionInput): Projection {
       premiumAdd = wasInsured ? 0 : BET_RULES.legacyPremium
       coverage = coverageFor(stake, BET_RULES.legacyCoveragePct)
     } else {
-      premiumPct = premiumPctFor(sidePool, otherPool)
+      premiumPct = terms.premiumPct(premiumPctFor(sidePool, otherPool), side)
       premiumAdd = premiumFor(wasInsured ? add : stake, premiumPct)
       premiumTotal = (current?.premium ?? 0) + premiumAdd
-      coverage = coverageFor(stake, current?.insured && current.coverage_pct > 0 ? current.coverage_pct : BET_RULES.coveragePct)
+      coverage = coverageFor(stake, current?.insured && current.coverage_pct > 0 ? current.coverage_pct : terms.coveragePct)
     }
   }
 
@@ -127,7 +131,7 @@ export function projectBet(input: ProjectionInput): Projection {
   const profit = Math.max(payout - stake, 0)
   const earlyAmount = (current?.early_amount ?? 0) + (early ? add : 0)
   const earlyBonus = legacyTerms ? 0 : earlyBonusFor(profit, stake, earlyAmount)
-  const allInBonus = allIn ? allInBonusFor(profit) : 0
+  const allInBonus = allIn ? allInBonusFor(profit, terms.allInBonusPct) : 0
   const winPremiumKept = legacyTerms ? 0 : premiumTotal
 
   return {
@@ -190,13 +194,15 @@ export interface BreakdownLine {
 }
 
 // Rebuilds the payout components of a settled bet from its stored payout, bonus and premium.
+// A bet with no early stake owes its whole bonus to the all-in, whatever the title-raised all-in rate was.
 export function settledBreakdown(
-  bet: Pick<BetRow, "status" | "amount" | "payout" | "insured" | "scheme" | "premium" | "bonus" | "all_in">
+  bet: Pick<BetRow, "status" | "amount" | "payout" | "insured" | "scheme" | "premium" | "bonus" | "all_in"> &
+    Partial<Pick<BetRow, "early_amount">>
 ): BreakdownLine[] {
   if (bet.status === "won") {
     const base = (bet.payout ?? 0) - bet.bonus
     const profit = base - bet.amount
-    const allIn = bet.all_in ? Math.min(allInBonusFor(profit), bet.bonus) : 0
+    const allIn = !bet.all_in ? 0 : bet.early_amount === 0 ? bet.bonus : Math.min(allInBonusFor(profit), bet.bonus)
     const early = Math.max(bet.bonus - allIn, 0)
     const lines: BreakdownLine[] = [{ label: "Pool profit", value: profit }]
     if (early > 0) lines.push({ label: "Early conviction", value: early })

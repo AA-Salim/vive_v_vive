@@ -154,18 +154,48 @@ miss them all and there is no praise until midnight UTC.
 Titles change the game. Each one has an **effect** that works the moment you act (cheaper decrees, better insurance,
 bigger praise...) plus a small **perk** after each game. Open a title's bubble to see exactly what it does.
 
-| Tier | Price |
-| --- | --- |
-| Legendary | 1,500 (15 hand kisses) |
-| Epic | 1,000 (10 hand kisses) |
-| Rare | 600 |
-| Common | 300 |
+| Tier | Price | Slots |
+| --- | --- | --- |
+| Legendary | 1,500 (15 hand kisses) | super rare (2 slots, shared with Epic) |
+| Epic | 1,000 (10 hand kisses) | super rare |
+| Rare | 600 (6 hand kisses) | bronze (3 slots) |
+| Common | 300 (3 hand kisses) | basic (4 slots) |
+
+A hand kiss is one written praise (100 points).
+
+| Title | Tier | Effect, the moment you act |
+| --- | --- | --- |
+| The Usurper | Legendary | +1 use of every limited Royal Decree per game |
+| Kingslayer | Legendary | decrees aimed at Salaxe or his team cost 20% less |
+| Copium Dealer | Legendary | Guardian Angel covers 75% of the stake instead of 60% |
+| Last Loyalist | Epic | written praise pays +25% |
+| The One Who Stopped Kneeling | Epic | your champion cannot be exiled |
+| Delayed Victory Specialist | Epic | a lost duel gives back 20% of the stake |
+| Crown Thief | Rare | early-conviction bet window lasts 90 s instead of 60 s |
+| The Disrespector | Rare | bestowing a curse costs 20% less |
+| The Holdout | Rare | Guardian Angel costs 25% less on Salaxe's side |
+| Baron Caller (Derogatory) | Rare | King's Wager starts at x2.2 (still capped at x2.5) |
+| El Goblino Pequeno | Rare | duel tithe halved |
+| Main Character (Self-Diagnosed) | Rare | the Herald announces every bet, decree and duel you make |
+| The 0/8 Powerspike | Rare | all-in bonus is +25% of the profit instead of +15% |
+| Still Kneeling | Common | daily stipend doubled |
+| Throne Polisher | Common | Royal Favor pays +50% |
+| Court Jester (curse) | Legendary | bets capped at 50 points per game |
+| The Crawling One (curse) | Epic | no Guardian Angel insurance |
+| Boot Licker (curse) | Rare | your decrees cost 20% more |
+| Royal Carpet (curse) | Rare | decrees aimed at you cost others 20% less |
+| Salaxe's Emotional Support (curse) | Common | your daily stipend goes to Salaxe |
+
+The decree and devotion milestone titles also stack small bonuses (decrees -3/-5/-7%, praise +5/+5/+10%).
 
 - **Loadout**: wear up to 9 titles at once and build combos: 2 super rare slots (Legendary or Epic), 3 bronze slots
-  (Rare) and 4 basic slots (Common). A few super-broken pairs cannot be worn together, and every effect has a cap, so
-  combos are strong but never infinite. Your loadout is public: friends see your build on your profile.
+  (Rare) and 4 basic slots (Common). Two pairs never mix (Copium Dealer and The Holdout, El Goblino Pequeno and
+  Delayed Victory Specialist), and rebels and loyalists cannot share the super rare slots. Every effect has a cap
+  (decree discounts stop at 30% off, praise at +40%, coverage at 75%), and all your post-game perks together pay at
+  most 60 points a game. Your loadout is public: friends see your build on your profile ("See their strategy").
 - **Curses**: mockery titles (Court Jester, Boot Licker...) are bought for someone else. They hurt the wearer for 8
-  games and pay the person who bought them. The victim can buy back their dignity.
+  games, take no slot and pay the person who bought them. The victim can buy back their dignity for exactly the
+  curse's price.
 - Free titles come from milestones (games played, wins, bets, praises...) and act awards.
 - Your titles show on your player card during the draft and the game, next to your name everywhere, and in the live
   feed.

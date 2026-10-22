@@ -10,6 +10,13 @@ export interface LiveActor {
   avatarUrl?: string | null
 }
 
+// Title effects on an action: which titles changed the amount ("Kingslayer: -20% on this decree") and whether the
+// actor wears a Herald title (Main Character), which turns the event into a court-wide announcement.
+export interface TitleFlair {
+  titleEffects?: string[]
+  herald?: boolean
+}
+
 // The optional *UserId fields let clients recognise events aimed at them (personal alerts survive quiet mode).
 export interface LiveEventPayloads {
   "session.created": { mode: string }
@@ -26,7 +33,7 @@ export interface LiveEventPayloads {
     targetUserId?: string | null
     playerUserId?: string | null
   }
-  "bet.placed": {
+  "bet.placed": TitleFlair & {
     side: Side
     amount: number
     insured: boolean
@@ -36,7 +43,7 @@ export interface LiveEventPayloads {
     early?: boolean
     whale?: boolean
   }
-  "bet.insured": { side: Side; amount: number; premium: number }
+  "bet.insured": TitleFlair & { side: Side; amount: number; premium: number }
   "bet.resolved": {
     winner: Side
     totalPool: number
@@ -47,7 +54,7 @@ export interface LiveEventPayloads {
     bettors?: number
     insurancePaid?: number
   }
-  "chaos.decree": {
+  "chaos.decree": TitleFlair & {
     decree: string
     label: string
     cost: number
@@ -61,8 +68,15 @@ export interface LiveEventPayloads {
     changedAssignmentIds?: string[]
     changedPlayerIds?: string[]
   }
-  "praise.sung": { excerpt: string; reward: number; praiseId?: string }
-  "praise.judged": { verdict: string; authorName: string; delta: number; authorUserId?: string | null; praiseId?: string; note?: string | null }
+  "praise.sung": TitleFlair & { excerpt: string; reward: number; praiseId?: string }
+  "praise.judged": TitleFlair & {
+    verdict: string
+    authorName: string
+    delta: number
+    authorUserId?: string | null
+    praiseId?: string
+    note?: string | null
+  }
   "sidebet.placed": { market: string; label: string; amount: number }
   "sidebet.resolved": { market: string; label: string; winners: number; payout: number }
   "bounty.placed": { targetName: string; amount: number; targetUserId?: string | null; total?: number; backers?: number; opened?: boolean }
@@ -71,11 +85,19 @@ export interface LiveEventPayloads {
   "bounty.expired": { targetName: string; refunded: number; backers: number; targetUserId?: string | null }
   "shame.posted": { targetName: string; message?: string | null; targetUserId?: string | null; source?: "user" | "tribunal"; stat?: string | null }
   "shame.egged": { targetName: string; eggs: number; extended: boolean; targetUserId?: string | null }
-  "title.equipped": { title: string; perk?: string | null }
-  "title.bestowed": { title: string; targetName: string; targetUserId?: string | null; curse?: string | null }
+  // titles: the whole loadout after the change; effects: what it now does.
+  "title.equipped": { title: string; perk?: string | null; titles?: string[]; effects?: string[] }
+  "title.bestowed": TitleFlair & {
+    title: string
+    targetName: string
+    targetUserId?: string | null
+    curse?: string | null
+    effect?: string | null
+    price?: number
+  }
   "title.perk": { title: string; perk: string; delta: number; userId?: string; kind?: "perk" | "curse"; beneficiaryName?: string | null }
   "title.unequipped": { title: string }
-  "title.bought": { title: string; price: number }
+  "title.bought": { title: string; price: number; tier?: string; effect?: string | null }
   "title.claimed": { titles: string[] }
   "title.dignity": { title: string; cost: number; bestowerName?: string | null }
   "title.settled": {
@@ -98,9 +120,9 @@ export interface LiveEventPayloads {
     mode?: string
   }
   "fearless.changed": { action: "cleared" | "removed" | "added"; champion?: string | null }
-  "points.changed": { userId: string; delta: number; reason: string }
+  "points.changed": TitleFlair & { userId: string; delta: number; reason: string }
   "act.changed": { actNumber: number; status: string }
-  "duel.challenged": {
+  "duel.challenged": TitleFlair & {
     challengerName: string
     opponentName: string | null
     amount: number
@@ -108,7 +130,7 @@ export interface LiveEventPayloads {
     opponentUserId?: string | null
     duelId?: string
   }
-  "duel.accepted": {
+  "duel.accepted": TitleFlair & {
     challengerName: string
     opponentName: string
     amount: number

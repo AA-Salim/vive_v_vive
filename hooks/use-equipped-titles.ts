@@ -1,14 +1,16 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import type { EquippedTitle } from "@/lib/titles/types"
+import type { EquippedTitle, LoadoutEntry } from "@/lib/titles/types"
 
 export const EQUIPPED_TITLES_KEY = ["titles", "equipped"] as const
 
+// Every entry describes its primary title at the top level and its whole loadout in `loadout`.
 export interface EquippedIndex {
   equipped: EquippedTitle[]
   byPlayerId: Map<string, EquippedTitle>
   byUserId: Map<string, EquippedTitle>
+  loadoutByUserId: Map<string, LoadoutEntry[]>
   entryFor: (playerId?: string | null, userId?: string | null) => EquippedTitle | undefined
 }
 
@@ -25,6 +27,7 @@ function indexOf(list: EquippedTitle[]): EquippedIndex {
     equipped: list,
     byPlayerId,
     byUserId,
+    loadoutByUserId: new Map(list.map((t) => [t.userId, t.loadout ?? []])),
     entryFor: (playerId, userId) => (playerId ? byPlayerId.get(playerId) : undefined) ?? (userId ? byUserId.get(userId) : undefined),
   }
   INDEXES.set(list, index)

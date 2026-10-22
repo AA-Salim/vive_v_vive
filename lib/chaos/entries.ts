@@ -4,6 +4,7 @@ import type { ChaosErrorCode } from "@/lib/chaos/errors"
 import { decreeHeadline } from "@/lib/chaos/format"
 import { wagerMultiplier } from "@/lib/chaos/rules"
 import type { ChaosDecreeEntry, DecreeDetails, DecreeResponse, DecreeStatus } from "@/lib/chaos/types"
+import { parseNotes, type EffectNote } from "@/lib/titles/effects"
 import type { Role, Side } from "@/lib/types"
 
 type Named = { name: string } | { name: string }[] | null | undefined
@@ -57,7 +58,7 @@ function withWagerOdds(entry: ChaosDecreeEntry, all: ChaosDecreeEntry[]): ChaosD
   if (entry.action_type !== "double_or_nothing") return entry
   if (entry.status === "pending") {
     const multiplier = wagerMultiplier(entry, all)
-    return { ...entry, multiplier, potential_payout: Math.floor(entry.cost * multiplier) }
+    return { ...entry, multiplier, potential_payout: Math.floor((entry.cost * Math.round(multiplier * 100)) / 100) }
   }
   if (entry.status === "won") {
     const payout = entry.payout ?? entry.cost * 2
@@ -126,7 +127,7 @@ export async function loadEntries(supabase: SupabaseClient, sessionId: string): 
   return enrichActions(supabase, (data ?? []) as ActionRow[])
 }
 
-export function buildResponse(entry: ChaosDecreeEntry, balance: number | null): DecreeResponse {
+export function buildResponse(entry: ChaosDecreeEntry, balance: number | null, notes?: EffectNote[]): DecreeResponse {
   return {
     success: true,
     decree: entry,
@@ -134,5 +135,6 @@ export function buildResponse(entry: ChaosDecreeEntry, balance: number | null): 
     headline: decreeHeadline(entry),
     changedAssignmentIds: entry.changed_assignment_ids,
     changedPlayerIds: [...new Set((entry.details.changes ?? []).map((c) => c.player_id))],
+    titleEffects: notes ?? parseNotes(entry.details.title_effects),
   }
 }

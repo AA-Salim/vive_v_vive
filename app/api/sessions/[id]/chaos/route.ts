@@ -9,6 +9,8 @@ import type { ChaosDecreeEntry } from "@/lib/chaos/types"
 import { migrationPending } from "@/lib/db-errors"
 import { emitLive } from "@/lib/live/server"
 import { createClient } from "@/lib/supabase"
+import { isHerald, noteText } from "@/lib/titles/effects"
+import { loadUserEffects } from "@/lib/titles/server"
 
 const NO_STORE = { "Cache-Control": "no-store" }
 
@@ -68,7 +70,8 @@ export async function POST(request: Request, { params }: RouteContext) {
   const { response } = outcome
   const entry = response.decree
   const def = getDecree(entry.action_type)
-  const targetUserId = await decreeTargetUserId(supabase, entry)
+  const [targetUserId, fx] = await Promise.all([decreeTargetUserId(supabase, entry), loadUserEffects(supabase, user.id)])
+  const notes = response.titleEffects ?? []
   emitLive("chaos.decree", {
     sessionId: id,
     actor: { userId: user.id, name: entry.actor_name, avatarUrl: entry.discord_avatar_url },
@@ -85,6 +88,8 @@ export async function POST(request: Request, { params }: RouteContext) {
       affectedSide: entry.affected_side,
       changedAssignmentIds: response.changedAssignmentIds,
       changedPlayerIds: response.changedPlayerIds,
+      titleEffects: notes.length ? notes.map(noteText) : undefined,
+      herald: isHerald(fx) || undefined,
     },
   })
 

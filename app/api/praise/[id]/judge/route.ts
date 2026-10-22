@@ -6,6 +6,7 @@ import { emitLive, getActor } from "@/lib/live/server"
 import { VERDICT_NOTE_MAX } from "@/lib/praise/rules"
 import { asJudgeError, judgeFailure, loadAuthors, toPraiseView, type JudgeRpcResult } from "@/lib/praise/server"
 import type { JudgeResult } from "@/lib/praise/types"
+import { noteText, parseNotes } from "@/lib/titles/effects"
 
 const JudgeBody = z.object({
   verdict: z.enum(["crowned", "scorned"]),
@@ -46,6 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     getActor(supabase, user.id),
   ])
   const praise = toPraiseView(result.praise, authors)
+  const notes = parseNotes(result.title_effects)
 
   emitLive("praise.judged", {
     actor,
@@ -56,6 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       authorUserId: praise.author.userId,
       praiseId: praise.id,
       note: praise.verdictNote,
+      titleEffects: notes.length ? notes.map(noteText) : undefined,
     },
   })
 

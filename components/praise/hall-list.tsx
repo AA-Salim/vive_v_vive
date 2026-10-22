@@ -11,6 +11,9 @@ import { JudgeControls } from "@/components/praise/judge-controls"
 import { PraiseCard } from "@/components/praise/praise-card"
 import { useNow } from "@/components/praise/use-now"
 import { useEquippedTitles } from "@/hooks/use-equipped-titles"
+import { effectsOfEquipped } from "@/hooks/use-title-effects"
+import { effectNotes, favorReward, noteText } from "@/lib/titles/effects"
+import type { EquippedTitle } from "@/lib/titles/types"
 import { useJudgePraise, usePraiseHall } from "@/hooks/use-praise"
 import { COURT_WINDOW_DAYS } from "@/lib/praise/rules"
 import type { HallView, PraiseStateReady, PraiseVerdict, PraiseView } from "@/lib/praise/types"
@@ -32,6 +35,13 @@ interface HallListProps {
   userId: string | null
 }
 
+// A crown pays the author's Royal Favor, boosted by their own titles (Throne Polisher).
+function authorFavor(entry: EquippedTitle | undefined): { favor: number; favorNote: string | null } {
+  const fx = effectsOfEquipped(entry)
+  const notes = effectNotes(fx, "favor_bonus_pct")
+  return { favor: favorReward(fx), favorNote: notes.length ? notes.map(noteText).join(" · ") : null }
+}
+
 export function HallList({ view, state, userId }: HallListProps) {
   const [limit, setLimit] = useState(PAGE_SIZE)
   const hall = usePraiseHall(view, limit, userId)
@@ -42,8 +52,10 @@ export function HallList({ view, state, userId }: HallListProps) {
 
   const handleJudge = async (praise: PraiseView, verdict: PraiseVerdict, note: string) => {
     try {
-      await judge.mutateAsync({ id: praise.id, verdict, note })
-      if (verdict === "crowned") toast.success(`Crowned. ${praise.author.name} receives +${state.favor} Royal Favor.`)
+      const expected = authorFavor(byUserId.get(praise.author.userId)).favor
+      const result = await judge.mutateAsync({ id: praise.id, verdict, note, favor: expected })
+      const favor = result.praise.favor || expected
+      if (verdict === "crowned") toast.success(`Crowned. ${praise.author.name} receives +${favor} Royal Favor.`)
       else toast(`Scorned. ${praise.author.name} will remember this.`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : COPY.errorTitle)
@@ -140,6 +152,7 @@ export function HallList({ view, state, userId }: HallListProps) {
                         authorName={praise.author.name}
                         crownsLeft={state.court.crownsLeft}
                         pending={judge.isPending && judge.variables?.id === praise.id}
+                        {...authorFavor(byUserId.get(praise.author.userId))}
                         onJudge={(verdict, note) => void handleJudge(praise, verdict, note)}
                       />
                     )}

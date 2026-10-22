@@ -7,7 +7,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { LaneIcon } from "@/components/lane-icon"
-import { PlayerName, TitleCard } from "@/components/titles/player-name"
+import { LoadoutDetails } from "@/components/titles/loadout-chips"
+import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
+import { PlayerName } from "@/components/titles/player-name"
 import type { EquippedTitle } from "@/app/api/titles/equipped/route"
 import { getChampionSplashUrl, ROLE_LABELS } from "@/lib/champions"
 import type { RoomAssignment } from "@/lib/session/types"
@@ -91,9 +93,10 @@ export function PlayerDetails({
             Open {assignment.players.name}&apos;s court file
           </ProfileTrigger>
           {title ? (
-            <div className="rounded-md border border-border bg-muted/40 p-2">
-              <TitleCard name={assignment.players.name} entry={title} showName={false} />
-            </div>
+            <>
+              <LoadoutDetails title={title} className="max-h-72 overflow-y-auto overscroll-contain" />
+              <LoadoutSummaryBar userId={title.userId} name={assignment.players.name} />
+            </>
           ) : (
             <p className="text-xs text-muted-foreground">No title equipped. A blank page in the royal notebook.</p>
           )}

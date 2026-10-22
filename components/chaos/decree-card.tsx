@@ -8,16 +8,20 @@ import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 import { InfoTip } from "@/components/ui/info-tip"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
+import { TitleChipRow, type TitleChipModel } from "@/components/chaos/title-chips"
 import { TIER_STYLES } from "@/components/chaos/tier-styles"
 
 export interface DecreeCardModel {
   def: DecreeDef
   cost: number
+  baseCost: number
   used: number
   max: number
   block: DecreeBlock | null
   debt: boolean
   help: HelpEntry | null
+  titleChips: TitleChipModel[]
+  titleHelp: HelpEntry | null
 }
 
 interface DecreeCardProps extends DecreeCardModel {
@@ -33,12 +37,13 @@ function statusLabel({ block, used, max, debt }: Pick<DecreeCardModel, "block" |
 }
 
 // The whole card is one stretched button; the info bubble sits above it so it still opens on disabled cards.
-export function DecreeCard({ def, cost, used, max, block, debt, help, index, onSelect }: DecreeCardProps) {
+export function DecreeCard({ def, cost, baseCost, used, max, block, debt, help, titleChips, titleHelp, index, onSelect }: DecreeCardProps) {
   const reduceMotion = useReducedMotion()
   const style = TIER_STYLES[def.tier]
   const disabled = !!block
   const statusId = `decree-status-${def.type}`
   const detailsId = `decree-details-${def.type}`
+  const repriced = cost !== baseCost
 
   return (
     <motion.div
@@ -54,7 +59,8 @@ export function DecreeCard({ def, cost, used, max, block, debt, help, index, onS
         style.ring,
         disabled
           ? "opacity-55 saturate-[0.6]"
-          : "hover:bg-[var(--color-navy-light)] hover:shadow-[0_0_24px_-12px_currentColor] has-[>button:active]:scale-[0.98] motion-reduce:has-[>button:active]:scale-100"
+          : "hover:bg-[var(--color-navy-light)] hover:shadow-[0_0_24px_-12px_currentColor] has-[>button:active]:scale-[0.98] motion-reduce:has-[>button:active]:scale-100",
+        titleChips.length > 0 && !disabled && "ring-1 ring-emerald-400/20"
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -85,7 +91,7 @@ export function DecreeCard({ def, cost, used, max, block, debt, help, index, onS
         {def.short}
         <span className="sr-only">
           {" "}
-          Target: {TARGETING_LABELS[def.targeting]}. Costs {cost} points.
+          Target: {TARGETING_LABELS[def.targeting]}. Costs {cost} points{repriced ? ` instead of ${baseCost}, thanks to your titles` : ""}.
         </span>
       </span>
       <span className="mt-1.5 flex items-center justify-between gap-0.5">
@@ -96,10 +102,21 @@ export function DecreeCard({ def, cost, used, max, block, debt, help, index, onS
         {help && <InfoTip help={help} side="top" className="z-10 -my-1 -mr-2 [&_svg]:size-3.5" />}
       </span>
 
+      {titleChips.length > 0 && (
+        <TitleChipRow
+          chips={titleChips}
+          help={titleHelp ?? undefined}
+          size="xs"
+          className="relative z-10 mt-2"
+          label={`Title effects on ${def.name}`}
+        />
+      )}
+
       <span className="mt-auto flex items-end justify-between gap-2 pt-2">
         <span aria-hidden className="flex items-center gap-1 text-sm font-bold tabular-nums text-[var(--color-gold)]">
           <CoinsIcon className="size-3.5" />
-          {cost}
+          {repriced && <s className="text-xs font-medium text-[var(--color-gold-light)]/40">{baseCost}</s>}
+          <span className={cn(repriced && (cost < baseCost ? "text-emerald-300" : "text-rose-300"))}>{cost}</span>
         </span>
         <span
           id={statusId}

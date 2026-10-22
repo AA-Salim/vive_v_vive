@@ -4,18 +4,18 @@ import {
   TARGETING_LABELS,
   WAGER_BASE_MULTIPLIER,
   WAGER_DEFIANCE_STEP,
-  WAGER_MAX_DEFIANCE,
+  WAGER_MAX_MULTIPLIER,
   getDecree,
   type DecreeType,
 } from "@/lib/chaos/catalog"
-import { decreeUsage, ruleFor, type DecreeContext } from "@/lib/chaos/rules"
+import { decreeCostFor, decreeUsage, ruleFor, type DecreeContext } from "@/lib/chaos/rules"
 import type { ChaosSchema, DecreeRuleBook } from "@/lib/chaos/types"
 import { FREE, pts, ptsRange, type HelpEntry } from "@/lib/help"
 import { BETTING_DURATION_MS, CHAOS_DURATION_MS } from "@/lib/session/constants"
 import { durationLabel } from "@/components/session/help"
 
 const WAGER: DecreeType = "double_or_nothing"
-const WAGER_TOP_MULTIPLIER = WAGER_BASE_MULTIPLIER + WAGER_DEFIANCE_STEP * WAGER_MAX_DEFIANCE
+const WAGER_TOP_MULTIPLIER = WAGER_MAX_MULTIPLIER
 const wagerName = getDecree(WAGER)?.name ?? "The King's Wager"
 const wagerRef = wagerName.replace(/^The\b/, "the")
 
@@ -51,7 +51,8 @@ function usesLine(type: DecreeType, ctx: DecreeContext): string {
 export function decreeHelp(type: DecreeType, ctx: DecreeContext): HelpEntry | null {
   const def = getDecree(type)
   if (!def) return null
-  const cost = ruleFor(type, ctx.rules).cost
+  const base = ruleFor(type, ctx.rules).cost
+  const cost = decreeCostFor(type, ctx).cost
   const isWager = type === WAGER
   const shielded = !isWager && type !== "royal_pardon" && def.targeting !== "self"
 
@@ -70,7 +71,7 @@ export function decreeHelp(type: DecreeType, ctx: DecreeContext): HelpEntry | nu
   return {
     title: def.name,
     does: isWager ? def.short : ctx.schema === "v2" ? def.effect : (def.legacyEffect ?? def.effect),
-    cost: `${pts(cost)}, paid when you seal it`,
+    cost: `${pts(cost)}${cost !== base ? ` (${pts(base)} before your titles)` : ""}, paid when you seal it`,
     reward: isWager ? wagerReward(cost, ctx.schema) : `Nothing back: the chaos is the prize. A canceled game refunds all ${pts(cost)}.`,
     limits: limits.filter(Boolean).join(" "),
   }

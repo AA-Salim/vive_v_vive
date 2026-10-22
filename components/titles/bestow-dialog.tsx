@@ -2,19 +2,25 @@
 
 import { useState } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { Coins, Search, Skull, Stamp } from "lucide-react"
+import { Coins, Flame, Search, Skull, Stamp } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { HelpRows } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
+import { EffectBox, EffectLines } from "@/components/titles/effect-lines"
 import { PerkLine } from "@/components/titles/perk-line"
+import { TierChip } from "@/components/titles/tier-chip"
+import { useMyTitleEffects } from "@/hooks/use-title-effects"
 import { cn } from "@/lib/utils"
 import { perkInfo } from "@/lib/titles/catalog"
 import { proclamation, roastFor } from "@/lib/titles/copy"
+import { bestowPrice, effectNotes, noteChip } from "@/lib/titles/effects"
 import { titleHelp } from "@/lib/titles/help"
+import { formatPrice } from "@/lib/titles/pricing"
 import { CURSE_GAMES, MAX_ACTIVE_CURSES } from "@/lib/titles/rules"
 import { useCourt } from "@/lib/titles/use-titles"
 import type { CourtMember, TitleView } from "@/lib/titles/types"
@@ -59,7 +65,10 @@ function BestowBody({ title, me, balance, migrated, pending, onOpenChange, onCon
     : members
   const target = members.find((m) => m.id === targetId) ?? null
   const curse = perkInfo(title.name, title.category, "you")
-  const cantAfford = balance !== null && balance - title.price < -300
+  const { fx } = useMyTitleEffects()
+  const price = bestowPrice(title.price, fx)
+  const discounts = price !== title.price ? effectNotes(fx, "bestow_cost_pct") : []
+  const cantAfford = balance !== null && balance - price < -300
 
   return (
     <>
@@ -74,10 +83,27 @@ function BestowBody({ title, me, balance, migrated, pending, onOpenChange, onCon
       </DialogHeader>
 
       <div className="space-y-2 rounded-xl border border-rose-500/20 bg-rose-500/[0.05] p-3">
-        <TitleBadge name={title.name} category={title.category} rarity={title.rarity} size="md" interactive={false} />
-        <PerkLine perk={curse} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <TitleBadge name={title.name} category={title.category} rarity={title.rarity} size="md" interactive={false} />
+          <span className="flex items-center gap-1">
+            <TierChip tier={title.tier} price={title.price} cursed />
+            <InfoTip help={titleHelp(title)} align="end" />
+          </span>
+        </div>
+        <EffectBox label="While branded, the moment it lands" cursed>
+          <EffectLines effects={title.effects} cursed />
+        </EffectBox>
+        <EffectBox label="After each game" cursed>
+          <PerkLine perk={curse} />
+        </EffectBox>
+        {title.dignity_cost != null && (
+          <p className="flex items-center gap-1.5 text-[11px] text-rose-200/80">
+            <Flame aria-hidden className="size-3 shrink-0 text-rose-400" />
+            They can buy back their dignity for {formatPrice(title.dignity_cost)} points.
+          </p>
+        )}
         <div className="border-t border-rose-500/15 pt-2">
-          <HelpRows help={titleHelp({ name: title.name, category: title.category, perk: curse, price: title.price })} />
+          <HelpRows help={titleHelp({ name: title.name, category: title.category, perk: curse, price: title.price, tier: title.tier })} />
         </div>
       </div>
 
@@ -167,6 +193,23 @@ function BestowBody({ title, me, balance, migrated, pending, onOpenChange, onCon
         )}
       </AnimatePresence>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5 text-sm">
+        <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+          <Coins aria-hidden className="size-4 text-[var(--color-gold)]" />
+          Price
+          {price !== title.price && <span className="tabular-nums line-through">{formatPrice(title.price)}</span>}
+          <span className="font-semibold text-[var(--color-gold-light)] tabular-nums">{formatPrice(price)}</span>
+        </span>
+        {discounts.map((note) => (
+          <span
+            key={note.title}
+            className="inline-flex h-6 items-center rounded-md border border-emerald-400/30 bg-emerald-400/10 px-2 text-[11px] font-semibold text-emerald-200"
+          >
+            {noteChip(note)}
+          </span>
+        ))}
+      </div>
+
       <DialogFooter className="bg-transparent">
         <Button variant="outline" className="h-10" onClick={() => onOpenChange(false)}>
           Show mercy
@@ -178,7 +221,7 @@ function BestowBody({ title, me, balance, migrated, pending, onOpenChange, onCon
           onClick={() => target && onConfirm(title, target)}
         >
           <Coins aria-hidden />
-          {pending ? "Branding..." : cantAfford ? "Too poor to curse" : `Bestow for ${title.price}`}
+          {pending ? "Branding..." : cantAfford ? "Too poor to curse" : `Bestow for ${formatPrice(price)}`}
         </Button>
       </DialogFooter>
     </>

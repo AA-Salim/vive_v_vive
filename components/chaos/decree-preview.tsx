@@ -6,9 +6,9 @@ import { WAGER_DEFIANCE_STEP, WAGER_MAX_MULTIPLIER, type DecreeType } from "@/li
 import { seatLabel } from "@/lib/chaos/format"
 import { pardonedPlayerIds, ruleFor, sideName, viewerSeat, type DecreeContext } from "@/lib/chaos/rules"
 import type { BoardAssignment } from "@/lib/chaos/types"
+import { NO_EFFECTS, wagerBaseMultiplier } from "@/lib/titles/effects"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
-import { wagerPayouts } from "@/components/chaos/help"
 import { SIDE_STYLES } from "@/components/chaos/tier-styles"
 
 export interface DecreeSelection {
@@ -33,6 +33,11 @@ function line(seat: BoardAssignment, who: string, from: string, to: string): Pre
   return { key: `${seat.id}-${who}`, who, side: seat.side, from, to }
 }
 
+// Integer math on hundredths: 49 x 2.2 must floor to 107 like the database, not 107.80000000000001.
+function payoutAt(stake: number, multiplier: number): number {
+  return Math.floor((stake * Math.round(multiplier * 100)) / 100)
+}
+
 export function buildPreview(type: DecreeType, selection: DecreeSelection, ctx: DecreeContext): Preview | null {
   const seats = selection.seats
     .map((id) => ctx.assignments.find((a) => a.id === id))
@@ -44,11 +49,13 @@ export function buildPreview(type: DecreeType, selection: DecreeSelection, ctx: 
   switch (type) {
     case "double_or_nothing": {
       if (!selection.side) return null
-      const { base, top: max } = wagerPayouts(cost)
+      const start = ctx.schema === "v2" ? wagerBaseMultiplier(ctx.titles?.actor ?? NO_EFFECTS) : wagerBaseMultiplier(NO_EFFECTS)
+      const base = payoutAt(cost, start)
+      const max = payoutAt(cost, WAGER_MAX_MULTIPLIER)
       return {
         summary:
           ctx.schema === "v2"
-            ? `If ${sideName(selection.side)} wins you collect ${base}. Defiance pays: a hostile decree someone lands on ${sideName(selection.side)} after this adds +${WAGER_DEFIANCE_STEP}x, up to ${max} (${WAGER_MAX_MULTIPLIER}x).`
+            ? `If ${sideName(selection.side)} wins you collect ${base} (x${start}). Defiance pays: a hostile decree someone lands on ${sideName(selection.side)} after this adds +${WAGER_DEFIANCE_STEP}x, up to ${max} (${WAGER_MAX_MULTIPLIER}x).`
             : `If ${sideName(selection.side)} wins you collect ${base}. If they lose, the treasury keeps your ${cost}.`,
         lines: [],
       }

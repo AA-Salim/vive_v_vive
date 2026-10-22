@@ -49,11 +49,11 @@ export interface PraiseStateRow {
 }
 
 export type SubmitRpcResult =
-  | { ok: true; praise: PraiseRow; balance: number; riddle_bonus?: number; resets_at: string }
+  | { ok: true; praise: PraiseRow; balance: number; riddle_bonus?: number; resets_at: string; title_effects?: unknown }
   | { ok: false; error: string; match_user_id?: string | null; resets_at?: string }
 
 export type JudgeRpcResult =
-  | { ok: true; praise: PraiseRow; author_balance: number | null; crowns_left: number }
+  | { ok: true; praise: PraiseRow; author_balance: number | null; crowns_left: number; title_effects?: unknown }
   | { ok: false; error: string; verdict?: PraiseVerdict }
 
 interface ProfileRow {

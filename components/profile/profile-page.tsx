@@ -18,6 +18,7 @@ import {
 } from "@/components/profile/profile-parts"
 import { SeasonPicker, shortActName } from "@/components/profile/season-picker"
 import { CurseMarks, TitleLoadout } from "@/components/profile/title-loadout"
+import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
 import { ProfileApiError, useLiveTitles, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
 import { buttonVariants } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
@@ -68,6 +69,7 @@ function Overview({ profile }: { profile: PlayerProfileResponse }) {
           eyebrow="Worn into battle"
           action={<InfoTip help={PROFILE_HELP.loadout} align="end" />}
         >
+          <LoadoutSummaryBar userId={profile.player.userId} name={profile.player.name} className="mb-3" />
           <TitleLoadout titles={titles} linked={!!profile.player.userId} />
         </SectionCard>
         <div className="space-y-4">

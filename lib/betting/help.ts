@@ -152,9 +152,14 @@ interface GuardianQuote {
   coverage: number
   loser: Side | null
   raising?: boolean
+  // The viewer's own coverage once titles have spoken (Copium Dealer), and what their titles change.
+  coveragePct?: number
+  titleLines?: string[]
 }
 
 export function guardianHelp(q: GuardianQuote): HelpEntry {
+  const coveragePct = q.coveragePct ?? R.coveragePct
+  const titled = q.titleLines?.length ? ` Your titles: ${q.titleLines.join(". ")}.` : ""
   const loser = q.loser ? sideLabel(q.loser) : "the other side"
   if (q.rules === 1) {
     return {
@@ -178,13 +183,13 @@ export function guardianHelp(q: GuardianQuote): HelpEntry {
         : `${pts(q.premium)} now, ${percent(q.pct)} of your ${stakeOf(q.stake)}. ${PREMIUM_FORMULA}`
   return {
     title: MARKET_COPY.insuranceTitle,
-    does: `Insurance for your bet: if your side loses, ${percent(R.coveragePct)} of the stake comes back. The more of the pool is against you, the more she charges.`,
+    does: `Insurance for your bet: if your side loses, ${percent(coveragePct)} of the stake comes back. The more of the pool is against you, the more she charges.`,
     cost,
     reward:
       q.stake > 0
-        ? `${pts(q.coverage)} back if ${loser} wins (${percent(R.coveragePct)} of the stake, rounded down). Nothing extra if you win.`
-        : `${percent(R.coveragePct)} of your stake back if your side loses.`,
-    limits: `Stakes of ${R.insuranceMin}+ only, never on an all-in. The premium is kept if you win. Canceled game or nobody on the other side: stake and premium both come back. Priced so it never pays for itself on average.`,
+        ? `${pts(q.coverage)} back if ${loser} wins (${percent(coveragePct)} of the stake, rounded down). Nothing extra if you win.`
+        : `${percent(coveragePct)} of your stake back if your side loses.`,
+    limits: `Stakes of ${R.insuranceMin}+ only, never on an all-in. The premium is kept if you win. Canceled game or nobody on the other side: stake and premium both come back. Priced so it never pays for itself on average, unless a title tilts it.${titled}`,
   }
 }
 

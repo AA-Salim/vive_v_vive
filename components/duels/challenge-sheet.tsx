@@ -11,12 +11,13 @@ import { BannerPicker } from "@/components/duels/banner-picker"
 import { challengeHelp } from "@/components/duels/help"
 import { RivalPicker, type RivalChoice } from "@/components/duels/rival-picker"
 import { StakeField } from "@/components/duels/stake-field"
+import { DuelTitleChips, useDuelTerms } from "@/components/duels/title-terms"
 import { useCreateDuel } from "@/components/duels/use-duel-mutations"
 import { useDuelRoster } from "@/components/duels/use-duels"
 import { TitleInPlay } from "@/components/titles/title-in-play"
 import { rivalBlock, rivalsOf, type RivalBlock, type RivalContext } from "@/lib/duels/eligibility"
 import { DUEL_COPY } from "@/lib/duels/copy"
-import { DUEL_RULES, SIDE_NAME, canAfford, duelPayout, duelProfit, duelTax, isValidStake, otherSide } from "@/lib/duels/rules"
+import { DUEL_RULES, SIDE_NAME, canAfford, isValidStake, otherSide } from "@/lib/duels/rules"
 import type { DuelView, Duelist } from "@/lib/duels/types"
 import type { SessionWithAssignments, Side } from "@/lib/types"
 
@@ -105,6 +106,7 @@ function ChallengeForm({ session, duels, me, mySide, balance, gatesOpen, onDone 
   const entries = roster.data?.duelists
   const rivalEntry = rival && rival !== "open" ? entries?.find((e) => e.userId === rival) ?? null : null
   const stake = Number.parseInt(stakeText, 10) || 0
+  const terms = useDuelTerms(stake)
   const affordable = balance === null || canAfford(balance, stake)
   const thrown = duels.filter((d) => d.challenger.userId === me.userId)
   const mine = thrown.filter((d) => d.status === "open")
@@ -194,8 +196,10 @@ function ChallengeForm({ session, duels, me, mySide, balance, gatesOpen, onDone 
           </p>
           {valid && (
             <p className="tabular-nums">
-              Victory pays <span className="font-semibold text-[var(--color-gold)]">{duelPayout(stake)}</span> (+{duelProfit(stake)} after a{" "}
-              {duelTax(stake)} point tithe)
+              Victory pays <span className="font-semibold text-[var(--color-gold)]">{terms.payout}</span> (+{terms.profit} after a{" "}
+              {terms.tithe !== terms.baseTithe && <span className="line-through opacity-60">{terms.baseTithe}</span>} {terms.tithe} point
+              tithe)
+              {terms.refund > 0 && <> · Defeat returns {terms.refund}</>}
               {balance !== null && (
                 <>
                   {" "}
@@ -204,6 +208,7 @@ function ChallengeForm({ session, duels, me, mySide, balance, gatesOpen, onDone 
               )}
             </p>
           )}
+          {valid && <DuelTitleChips terms={terms} className="mt-1.5" />}
         </div>
         <Button
           onClick={submit}

@@ -2,9 +2,10 @@
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Requires phase10_foundation.sql (free-form point_transactions reasons).
 -- Rules mirrored in lib/titles/rules.ts: a curse brands its wearer for 8 resolved games, a wearer
--- carries at most 2 curses, dignity costs 1.5x the title price, one perk moves at most 60 points per game
+-- carries at most 2 curses, dignity costs 1x the title price, one perk moves at most 60 points per game
 -- and a perk can cost its own wearer at most 10. Each title also has its own cap (title_perk_caps, seeded
--- from lib/titles/perks.ts), and a perk only pays someone who took part in the game.
+-- from lib/titles/perks.ts), and a perk only pays someone who took part in the game. A loadout's perks share
+-- 60 points per wearer per game (vvv_title_perk_room, phase10_title-effects.sql).
 -- New point reasons: title_perk, title_curse (paid by a branded wearer), title_tribute (received by the
 -- bestower), title_dignity (brand bought back).
 
@@ -263,16 +264,22 @@ END $$;
 
 -- ============================================================
 -- ONE EQUIPPED TITLE PER USER (perks pay real points now). Keep the most recent if several are active.
+-- Loadouts (phase10_title-effects.sql) replace this rule: once they exist, re-running this file keeps them.
 -- ============================================================
 
-UPDATE user_titles ut SET is_active = false
-WHERE ut.is_active AND EXISTS (
-  SELECT 1 FROM user_titles other
-  WHERE other.user_id = ut.user_id AND other.is_active
-    AND (other.created_at, other.id) > (ut.created_at, ut.id)
-);
+DO $$
+BEGIN
+  IF to_regclass('public.title_slot_rules') IS NULL THEN
+    UPDATE user_titles ut SET is_active = false
+    WHERE ut.is_active AND EXISTS (
+      SELECT 1 FROM user_titles other
+      WHERE other.user_id = ut.user_id AND other.is_active
+        AND (other.created_at, other.id) > (ut.created_at, ut.id)
+    );
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_titles_one_active ON user_titles (user_id) WHERE is_active;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_titles_one_active ON user_titles (user_id) WHERE is_active;
+  END IF;
+END $$;
 
 -- ============================================================
 -- CURSE CLOCK: resolved games created after a brand was applied.
@@ -319,6 +326,7 @@ DECLARE
   v_active_curses INTEGER;
   v_row_id UUID;
   v_balance INTEGER;
+  v_price INTEGER;
 BEGIN
   IF v_caller IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
 
@@ -357,7 +365,9 @@ BEGIN
     IF v_active_curses >= 2 THEN RAISE EXCEPTION 'curse_limit'; END IF;
   END IF;
 
-  v_balance := adjust_balance(v_caller, -v_title.price, 'title_bought', p_title_id);
+  -- Title effects (phase10_title-effects.sql): The Disrespector curses for less.
+  v_price := CASE WHEN v_is_curse THEN vvv_title_scaled(v_caller, 'bestow_cost_pct', v_title.price) ELSE v_title.price END;
+  v_balance := adjust_balance(v_caller, -v_price, 'title_bought', p_title_id);
 
   IF v_has_existing THEN
     -- An expired brand can be burned in again: the clock restarts and the tribute goes to the new bestower.
@@ -375,8 +385,10 @@ BEGIN
     'title', v_title.name,
     'recipient', v_recipient,
     'rebranded', v_has_existing,
-    'price', v_title.price,
-    'balance', v_balance
+    'price', v_price,
+    'list_price', v_title.price,
+    'balance', v_balance,
+    'title_effects', vvv_title_fx_take()
   );
 END;
 $$;
@@ -420,7 +432,7 @@ END;
 $$;
 
 -- ============================================================
--- BUY BACK YOUR DIGNITY: pay 1.5x a mockery title's price to burn it off
+-- BUY BACK YOUR DIGNITY: pay a mockery title's price (1x) to burn it off
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION lift_title_curse(p_title_id UUID)
@@ -445,7 +457,7 @@ BEGIN
   WHERE ut.user_id = v_caller AND ut.title_id = p_title_id;
   IF NOT FOUND OR v_row.for_self THEN RAISE EXCEPTION 'not_cursed'; END IF;
 
-  v_cost := CEIL(v_row.price * 1.5);
+  v_cost := v_row.price; -- dignity costs 1x the brand's price (DIGNITY_MULTIPLIER in lib/titles/rules.ts)
   v_balance := adjust_balance(v_caller, -v_cost, 'title_dignity', p_title_id);
   DELETE FROM user_titles WHERE id = v_row.id;
 
@@ -554,6 +566,8 @@ BEGIN
 
   -- Charges never push a wearer past the -300 debt floor.
   IF v_amount < 0 THEN v_amount := LEAST(0, GREATEST(v_amount, -300 - v_balance)); END IF;
+  -- Title effects (phase10_title-effects.sql): a loadout's perks share 60 points per wearer per game.
+  IF p_kind = 'perk' AND v_amount > 0 THEN v_amount := vvv_title_perk_room(p_session_id, p_user_id, v_amount); END IF;
   IF v_amount = 0 THEN RETURN 0; END IF;
 
   PERFORM adjust_balance(p_user_id, v_amount, CASE WHEN p_kind = 'curse' THEN 'title_curse' ELSE 'title_perk' END, p_session_id);

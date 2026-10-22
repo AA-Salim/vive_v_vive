@@ -1,4 +1,5 @@
 import type { SessionStatus, Side } from "@/lib/types"
+import type { EffectNote } from "@/lib/titles/effects"
 
 export type BetStatus = "pending" | "won" | "lost" | "refunded"
 export type BetScheme = "legacy" | "v2"
@@ -111,6 +112,8 @@ export interface PlaceBetResult {
   all_in: boolean
   balance: number | null
   rules: RulesVersion
+  // The titles that changed this bet's terms (premium, coverage, early window).
+  title_effects?: EffectNote[]
 }
 
 export interface InsureBetResult {
@@ -119,6 +122,7 @@ export interface InsureBetResult {
   premium_pct?: number
   balance: number | null
   rules: RulesVersion
+  title_effects?: EffectNote[]
 }
 
 export type HallScope = "act" | "all"

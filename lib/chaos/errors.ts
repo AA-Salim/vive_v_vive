@@ -14,6 +14,10 @@ export const CHAOS_ERRORS = {
   same_target: { status: 400, message: "Pick two different players." },
   self_target: { status: 400, message: "That decree is for other people. Pick someone else." },
   target_pardoned: { status: 409, message: "That player holds a Royal Pardon. Their draft is untouchable." },
+  exile_immune: {
+    status: 409,
+    message: "That player wears The One Who Stopped Kneeling: their champion cannot be exiled. No points were taken.",
+  },
   already_pardoned: { status: 409, message: "That player is already pardoned." },
   not_enough_targets: { status: 409, message: "Not enough unpardoned players on that team." },
   no_champion: { status: 409, message: "The champion pool for that lane has run dry." },

@@ -17,6 +17,7 @@ import {
 } from "@/components/profile/profile-parts"
 import { SeasonPicker, shortActName } from "@/components/profile/season-picker"
 import { TitleLoadout } from "@/components/profile/title-loadout"
+import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
 import { ProfileApiError, useLiveTitles, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 import { buttonVariants } from "@/components/ui/button"
@@ -103,6 +104,7 @@ function QuickView({ player, scope, onScope, onLeave, Title, Description }: Quic
 
       <section className="space-y-2" aria-label="Banner loadout">
         <Eyebrow help={PROFILE_HELP.loadout}>Banner loadout</Eyebrow>
+        <LoadoutSummaryBar userId={who.userId} name={who.name} />
         <TitleLoadout titles={titles} linked={!!who.userId} />
       </section>
 

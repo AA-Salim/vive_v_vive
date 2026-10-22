@@ -3,12 +3,28 @@ import { WINDOW_GRACE_MS, getDecree } from "@/lib/chaos/catalog"
 import { buildResponse, enrichActions, loadEntries, type ActionRow, type IssueOutcome } from "@/lib/chaos/entries"
 import { parseChaosError } from "@/lib/chaos/errors"
 import { planEffect, type Seat } from "@/lib/chaos/legacy-plan"
-import { DEFAULT_RULES, toBoardAssignments, validateDecree, viewerSeat, type DecreeContext } from "@/lib/chaos/rules"
+import { DEFAULT_RULES, decreeCostFor, toBoardAssignments, validateDecree, viewerSeat, type DecreeContext } from "@/lib/chaos/rules"
 import { requestSide, requestTargets, type DecreeRequest } from "@/lib/chaos/schema"
+import type { DecreeTitles } from "@/lib/chaos/title-terms"
 import type { DecreeDetails } from "@/lib/chaos/types"
+import { NO_EFFECTS } from "@/lib/titles/effects"
+import { loadEffectsFor } from "@/lib/titles/server"
 import type { SessionWithAssignments } from "@/lib/types"
 
 // Fallback used only until supabase/phase10_chaos.sql is applied: same rules, but not atomic.
+
+// The caster's titles and every seat's, so the fallback prices decrees like vvv_title_decree_cost().
+async function legacyTitles(supabase: SupabaseClient, userId: string, session: SessionWithAssignments): Promise<DecreeTitles> {
+  const playerIds = session.session_assignments.map((a) => a.player_id)
+  const { data: players } = await supabase.from("players").select("id, auth_user_id").in("id", playerIds)
+  const userByPlayer = new Map((players ?? []).map((p) => [p.id as string, (p.auth_user_id as string | null) ?? null]))
+  const userIds = [userId, ...[...userByPlayer.values()].filter((id): id is string => !!id)]
+  const effects = await loadEffectsFor(supabase, [...new Set(userIds)])
+  return {
+    actor: effects.get(userId) ?? NO_EFFECTS,
+    ofPlayer: (playerId) => effects.get(userByPlayer.get(playerId) ?? "") ?? NO_EFFECTS,
+  }
+}
 
 const SESSION_SELECT = "*, session_assignments ( *, players:player_id ( id, name ) )"
 
@@ -31,6 +47,7 @@ export async function legacyIssueDecree(
   if (!session) return { ok: false, code: "session_not_found" }
 
   const endsAt = session.chaos_ends_at ? Date.parse(session.chaos_ends_at) : null
+  const titles = await legacyTitles(supabase, userId, session)
   const ctx: DecreeContext = {
     rules: DEFAULT_RULES,
     schema: "legacy",
@@ -38,6 +55,7 @@ export async function legacyIssueDecree(
     assignments: toBoardAssignments(session),
     viewer: { userId, playerId: (profile?.player_id as string | null) ?? null, balance: null },
     windowOpen: session.status === "chaos" && (endsAt === null || Date.now() <= endsAt + WINDOW_GRACE_MS),
+    titles,
   }
 
   const invalid = validateDecree(request, ctx)
@@ -47,7 +65,9 @@ export async function legacyIssueDecree(
   if (typeof plan === "string") return { ok: false, code: plan }
 
   const actionId = crypto.randomUUID()
-  const cost = def.cost
+  const [first, second] = requestTargets(request)
+  const price = decreeCostFor(def.type, ctx, { first, second, team: requestSide(request) })
+  const cost = price.cost
   const refund = () =>
     supabase.rpc("adjust_balance", { p_user_id: userId, p_amount: cost, p_reason: "chaos_refunded", p_reference_id: actionId })
 
@@ -83,7 +103,6 @@ export async function legacyIssueDecree(
     if (seat) applied.push(seat)
   }
 
-  const [first, second] = requestTargets(request)
   const actorPlayerId = viewerSeat(ctx)?.player_id ?? null
   const isTeam = def.targeting === "team"
   const row = {
@@ -128,5 +147,5 @@ export async function legacyIssueDecree(
     target_player_2: nameFor(row.target_player_2_id),
   }
   const [entry] = await enrichActions(supabase, [entryRow])
-  return { ok: true, response: buildResponse(entry, (charge.data as number | null) ?? null) }
+  return { ok: true, response: buildResponse(entry, (charge.data as number | null) ?? null, price.notes) }
 }

@@ -5,12 +5,14 @@ import { ArrowRightIcon, ScrollTextIcon } from "lucide-react"
 import { getDecree } from "@/lib/chaos/catalog"
 import { changeLines, decreeHeadline } from "@/lib/chaos/format"
 import type { ChaosDecreeEntry } from "@/lib/chaos/types"
+import { parseNotes } from "@/lib/titles/effects"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LEDGER_HELP } from "@/components/chaos/help"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
+import { noteChips, TitleChipRow } from "@/components/chaos/title-chips"
 import { SIDE_STYLES, TIER_STYLES } from "@/components/chaos/tier-styles"
 import { useNow } from "@/components/chaos/use-now"
 
@@ -24,8 +26,9 @@ function ago(iso: string, now: number): string {
   return `${Math.round(minutes / 60)}h ago`
 }
 
-function formatMultiplier(value: number | null): string {
-  return value == null ? "2x" : `${Number.isInteger(value) ? value : value.toFixed(1)}x`
+function formatMultiplier(value: number | null, fallback?: number): string {
+  const shown = value ?? fallback ?? 2
+  return `${Number.isInteger(shown) ? shown : shown.toFixed(1)}x`
 }
 
 function StatusChip({ entry }: { entry: ChaosDecreeEntry }) {
@@ -43,9 +46,10 @@ function StatusChip({ entry }: { entry: ChaosDecreeEntry }) {
   if (entry.status === "lost") {
     return <span className="rounded-full bg-[var(--color-red-team)]/12 px-2 py-0.5 text-[10px] text-red-300/90">Lost</span>
   }
+  const start = Number(entry.details?.base_multiplier) || undefined
   return (
     <span className="rounded-full bg-[var(--color-gold)]/12 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-gold)]">
-      Riding at {formatMultiplier(entry.multiplier)} · pays {entry.potential_payout ?? entry.cost * 2}
+      Riding at {formatMultiplier(entry.multiplier, start)} · pays {entry.potential_payout ?? Math.floor(entry.cost * (start ?? 2))}
     </span>
   )
 }
@@ -55,6 +59,7 @@ function LedgerEntry({ entry, mine, now }: { entry: ChaosDecreeEntry; mine: bool
   const def = getDecree(entry.action_type)
   const style = TIER_STYLES[def?.tier ?? "wager"]
   const lines = changeLines(entry)
+  const titleChips = noteChips(parseNotes(entry.details?.title_effects), entry.id)
 
   return (
     <motion.li
@@ -94,6 +99,7 @@ function LedgerEntry({ entry, mine, now }: { entry: ChaosDecreeEntry; mine: bool
           <span className="ml-auto shrink-0 text-[10px] text-[var(--color-gold-light)]/40">{ago(entry.created_at, now)}</span>
         </div>
         <p className="mt-0.5 text-xs leading-snug text-[var(--color-gold-light)]/65">{decreeHeadline(entry)}</p>
+        <TitleChipRow chips={titleChips} size="xs" className="mt-1" label="Titles that changed this decree" />
         {lines.length > 0 && (
           <ul className="mt-1.5 flex flex-wrap gap-1">
             {lines.map((l) => (

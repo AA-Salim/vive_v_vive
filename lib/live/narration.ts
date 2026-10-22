@@ -23,6 +23,7 @@ import {
   narrateStatus,
   narrateVainqueur,
 } from "@/lib/lore/herald/session"
+import { withTitleFlair } from "@/lib/titles/herald"
 import { narrateTitleEvent } from "@/lib/titles/narration"
 
 export type NarrationTone = "info" | "hype" | "royal" | "roast" | "danger"
@@ -41,8 +42,13 @@ function wellFormedTitle(event: LiveEvent): boolean {
 
 // One line per event for toasts and the Herald feed. Variants are seeded by event.id so every client
 // tells the same story. Null means the event is too granular or private to announce. A viewer is passed for
-// personal alerts only, so lines aimed at them can say "you".
+// personal alerts only, so lines aimed at them can say "you". Title flair (Main Character heralds, "Kingslayer: -20%"
+// notes) is layered on top.
 export function narrate(event: LiveEvent, viewer?: Viewer): Narration | null {
+  return withTitleFlair(event, narrateBase(event, viewer))
+}
+
+function narrateBase(event: LiveEvent, viewer?: Viewer): Narration | null {
   switch (event.type) {
     case "session.created":
       return narrateCreated(event)

@@ -11,6 +11,8 @@ interface PayoutPreviewProps {
   side: Side | null
   projection: Projection | null
   exact?: boolean
+  // The all-in bonus rate this bettor gets (The 0/8 Powerspike raises it).
+  allInPct?: number
 }
 
 export function outcomeTone(value: number): string {
@@ -34,7 +36,7 @@ function Breakdown({ parts }: { parts: Array<[string, number]> }) {
   )
 }
 
-export function PayoutPreview({ side, projection, exact = false }: PayoutPreviewProps) {
+export function PayoutPreview({ side, projection, exact = false, allInPct }: PayoutPreviewProps) {
   if (!side || !projection || projection.stake <= 0) {
     return (
       <div className="rounded-xl border border-dashed border-border px-3 py-3 text-center text-xs text-muted-foreground">
@@ -78,7 +80,7 @@ export function PayoutPreview({ side, projection, exact = false }: PayoutPreview
               parts={[
                 ["pool", win.profit],
                 ["early", win.early],
-                ["all-in", win.allIn],
+                [allInPct ? `all-in ${allInPct}%` : "all-in", win.allIn],
                 ["premium", -win.premiumKept],
               ]}
             />

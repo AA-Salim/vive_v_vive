@@ -12,6 +12,16 @@ interface PointsSnapshot {
 
 const NO_TRANSACTIONS: PointTransaction[] = []
 
+// POST /api/points/daily. amount, paid_to_salaxe and title_effects arrive with the title effects migration.
+export interface DailyClaim {
+  claimed?: boolean
+  already_claimed?: boolean
+  balance?: number
+  amount?: number
+  paid_to_salaxe?: boolean
+  title_effects?: unknown
+}
+
 // Balance queries are ["points", userId, ...]: live events refresh only the affected user's balance.
 export function pointsKey(userId: string | null | undefined) {
   return ["points", userId ?? "anonymous"] as const
@@ -70,8 +80,8 @@ export function usePoints(userId: string | null) {
     return data
   }, [refresh])
 
-  const claimDaily = useCallback(async () => {
-    const data = await postJson("/api/points/daily")
+  const claimDaily = useCallback(async (): Promise<DailyClaim | null> => {
+    const data = (await postJson("/api/points/daily")) as DailyClaim | null
     if (data?.claimed) setBalance(data.balance)
     await refresh()
     return data

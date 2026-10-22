@@ -8,9 +8,12 @@ import { MarketHeader, type MarketPhase } from "@/components/betting/market-head
 import { PoolBars } from "@/components/betting/pool-bars"
 import { PositionCard } from "@/components/betting/position-card"
 import { ResultReveal } from "@/components/betting/result-reveal"
+import { useBetTerms } from "@/components/betting/use-bet-terms"
 import { marketClock, useServerNow, type MarketClock } from "@/components/betting/use-clock"
 import { useBettingBalance, useMarket, type Market } from "@/components/betting/use-market"
+import { noteChips } from "@/components/chaos/title-chips"
 import { useAuth } from "@/hooks/use-auth"
+import { effectNotes } from "@/lib/titles/effects"
 import { cn } from "@/lib/utils"
 
 interface BettingPanelProps {
@@ -34,11 +37,14 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
   const [raising, setRaising] = useState(false)
   const data = market.data
   const now = useServerNow(data?.serverTimeDelta ?? 0, data?.session?.status === "betting")
+  const { terms, fx, salaxeSide } = useBetTerms(sessionId)
 
   if (market.isPending) return <MarketSkeleton />
   if (!data) return <MarketError onRetry={() => market.refetch()} retrying={market.isFetching} />
 
-  const clock = marketClock(data.session, now)
+  const clock = marketClock(data.session, now, userId ? terms.earlySeconds : undefined)
+  const titleChips = userId ? noteChips(terms.notesFor(salaxeSide ?? "blue"), "market") : []
+  const earlyChips = userId ? noteChips(effectNotes(fx, "early_window_bonus_s"), "early") : []
   const phase = phaseOf(data, isBettingOpen, clock)
   const entries = data.entries ?? data.bets
   const myBet = data.user_bet ?? (userId ? entries.find((b) => b.user_id === userId) ?? null : null)
@@ -51,7 +57,13 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
         aria-hidden
         className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-gold)]/70 to-transparent"
       />
-      <MarketHeader phase={phase} clock={clock} rulesVersion={data.rules_version} />
+      <MarketHeader
+        phase={phase}
+        clock={clock}
+        rulesVersion={data.rules_version}
+        titleChips={titleChips}
+        earlyChips={earlyChips}
+      />
 
       <div className="mt-4">
         <PoolBars
@@ -78,6 +90,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
               balance={purse}
               balanceLoading={balance.isPending}
               clock={clock}
+              terms={terms}
               mode="new"
             />
           )}
@@ -90,6 +103,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
               balance={purse}
               balanceLoading={balance.isPending}
               clock={clock}
+              terms={terms}
               mode="raise"
               onDone={() => setRaising(false)}
             />
@@ -103,6 +117,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
               userId={userId}
               balance={purse}
               open={phase === "open"}
+              terms={terms}
               onRaise={() => setRaising(true)}
             />
           )}

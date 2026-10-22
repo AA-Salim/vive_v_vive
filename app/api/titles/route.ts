@@ -2,7 +2,10 @@ import { NextResponse } from "next/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
-import { isCurseCategory, perkInfo, rarityOf } from "@/lib/titles/catalog"
+import { isCurseCategory, perkInfo, rarityOf, tierOf } from "@/lib/titles/catalog"
+import { titleDomain, titleEffects } from "@/lib/titles/effects"
+import { loadoutSlotOf, primaryOf } from "@/lib/titles/loadout"
+import { dignityCost } from "@/lib/titles/rules"
 import { brandState, earliest, isBrand, loadIdentities, loadOwnership, loadResolvedGames, loadTitles, titlesLocked } from "@/lib/titles/server"
 import type { LedgerItem, OwnedTitleView, PerkLedger, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
@@ -25,12 +28,13 @@ export async function GET() {
     return !!t && isBrand(o, t)
   })
 
-  const [locked, resolved, identities, balance, ledger] = await Promise.all([
+  const [locked, resolved, identities, balance, ledger, loadouts] = await Promise.all([
     titlesLocked(supabase),
     loadResolvedGames(supabase, earliest(myBrands.map((b) => b.created_at))),
     loadIdentities(supabase, myBrands.map((b) => b.assigned_by ?? "")),
     user ? loadBalance(supabase, user.id) : Promise.resolve(null),
     user ? loadLedger(supabase, user.id) : Promise.resolve({ ledger: null, migrated: true }),
+    loadoutsReady(supabase),
   ])
 
   const holders = new Map<string, number>()
@@ -40,19 +44,27 @@ export async function GET() {
     if (o.is_active) wearing.set(o.title_id, (wearing.get(o.title_id) ?? 0) + 1)
   }
 
-  const views: TitleView[] = titles.map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    price: t.price,
-    category: t.category,
-    for_self: t.for_self,
-    is_permanent: t.is_permanent,
-    rarity: rarityOf(t.name, t.category, t.price),
-    perk: perkInfo(t.name, t.category, "you"),
-    holders: holders.get(t.id) ?? 0,
-    wearing: wearing.get(t.id) ?? 0,
-  }))
+  const views: TitleView[] = titles.map((t) => {
+    const tier = tierOf(t.name, t.category, t.price)
+    return {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      price: t.price,
+      category: t.category,
+      for_self: t.for_self,
+      is_permanent: t.is_permanent,
+      rarity: rarityOf(t.name, t.category, t.price),
+      perk: perkInfo(t.name, t.category, "you"),
+      holders: holders.get(t.id) ?? 0,
+      wearing: wearing.get(t.id) ?? 0,
+      tier,
+      slot: loadoutSlotOf({ name: t.name, category: t.category, tier }),
+      effects: titleEffects(t.name),
+      domain: titleDomain(t.name),
+      dignity_cost: t.for_self ? null : dignityCost(t.price),
+    }
+  })
 
   const collection: OwnedTitleView[] = mine.flatMap((o) => {
     const t = titleById.get(o.title_id)
@@ -63,6 +75,7 @@ export async function GET() {
       {
         title_id: o.title_id,
         is_active: o.is_active,
+        equipped_at: o.equipped_at ?? null,
         acquired_at: o.created_at,
         bestowed_by: o.assigned_by ? { id: o.assigned_by, name: bestower?.name ?? "A mystery noble" } : null,
         curse,
@@ -75,10 +88,18 @@ export async function GET() {
     ]
   })
 
+  const viewById = new Map(views.map((v) => [v.id, v]))
+  const worn = mine.flatMap((o) => {
+    const v = o.is_active ? viewById.get(o.title_id) : undefined
+    return v ? [{ id: v.id, name: v.name, category: v.category, tier: v.tier, equippedAt: o.equipped_at ?? null }] : []
+  })
+
   const body: TitlesCatalogResponse = {
     titles: views,
     owned: mine.map((o) => o.title_id),
-    active_title_id: mine.find((o) => o.is_active)?.title_id ?? null,
+    active_title_id: primaryOf(worn)?.id ?? null,
+    active_title_ids: worn.map((w) => w.id),
+    loadouts,
     collection,
     balance,
     locked,
@@ -86,6 +107,12 @@ export async function GET() {
     migrated: ledger.migrated,
   }
   return NextResponse.json(body)
+}
+
+// Loadouts need supabase/phase10_title-effects.sql; before it, one title at a time.
+async function loadoutsReady(supabase: SupabaseClient): Promise<boolean> {
+  const { error } = await supabase.from("title_slot_rules").select("slot").limit(1)
+  return !error
 }
 
 async function loadBalance(supabase: SupabaseClient, userId: string): Promise<number | null> {

@@ -6,8 +6,12 @@ import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TitleBadge } from "@/components/title-badge"
+import { EffectLines } from "@/components/titles/effect-lines"
 import { PerkLine } from "@/components/titles/perk-line"
+import { TierChip } from "@/components/titles/tier-chip"
 import { cn } from "@/lib/utils"
+import { tierOf } from "@/lib/titles/catalog"
+import { titleEffects } from "@/lib/titles/effects"
 import { MILESTONES_HELP, titleHelp } from "@/lib/titles/help"
 import { MILESTONE_GROUP_HELP, MILESTONE_GROUPS } from "@/lib/milestones"
 import type { MilestoneView } from "@/lib/titles/types"
@@ -105,15 +109,19 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 space-y-1.5">
-                        <TitleBadge
-                          name={m.title}
-                          category="award"
-                          rarity={m.rarity}
-                          perk={m.perk}
-                          size="md"
-                          interactive
-                          className={cn(!m.unlocked && "opacity-60 grayscale-[40%]")}
-                        />
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <TitleBadge
+                            name={m.title}
+                            category="award"
+                            rarity={m.rarity}
+                            perk={m.perk}
+                            price={0}
+                            size="md"
+                            interactive
+                            className={cn(!m.unlocked && "opacity-60 grayscale-[40%]")}
+                          />
+                          <TierChip tier={tierOf(m.title, "award")} size="sm" />
+                        </span>
                         <p className="text-xs text-muted-foreground">{m.description}</p>
                       </div>
                       <span className="flex shrink-0 items-center gap-1.5">
@@ -134,7 +142,8 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
                       ) : null}
                       </span>
                     </div>
-                    <PerkLine perk={m.perk} className="mt-2" />
+                    <EffectLines effects={titleEffects(m.title)} className="mt-2" emptyLabel={null} />
+                    <PerkLine perk={m.perk} className="mt-1.5" />
                     {!m.claimed && (
                       <div className="mt-2.5 flex items-center gap-2">
                         <div

@@ -6,14 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { InspirationPrompt } from "@/components/praise/inspiration-prompt"
 import { PraiseChecklist } from "@/components/praise/praise-checklist"
+import { BoostedAmount, TitleBonusChips, usePraiseTerms } from "@/components/praise/title-bonus"
 import { readDraft, writeDraft } from "@/lib/praise/draft"
-import {
-  analyzePraise,
-  PRAISE_INPUT_MAX,
-  PRAISE_MAX_CHARS,
-  PRAISE_MIN_CHARS,
-  PRAISE_REWARD,
-} from "@/lib/praise/rules"
+import { analyzePraise, PRAISE_INPUT_MAX, PRAISE_MAX_CHARS, PRAISE_MIN_CHARS, PRAISE_REWARD } from "@/lib/praise/rules"
 import { COPY, submitErrorMessage } from "@/lib/praise/voice"
 import { cn } from "@/lib/utils"
 
@@ -53,6 +48,7 @@ export function PraiseComposer({
   onChange,
 }: PraiseComposerProps) {
   const [text, setText] = useState(readDraft)
+  const terms = usePraiseTerms()
   const analysis = useMemo(() => analyzePraise(text, knownFingerprints), [text, knownFingerprints])
   const textareaId = useId()
   const checklistId = useId()
@@ -150,12 +146,15 @@ export function PraiseComposer({
             <>
               <FeatherIcon aria-hidden />
               {COPY.sing}
-              <span className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums">
-                +{PRAISE_REWARD + bonus}
-              </span>
+              <BoostedAmount
+                value={terms.reward + bonus}
+                base={PRAISE_REWARD + bonus}
+                className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums"
+              />
             </>
           )}
         </Button>
+        <TitleBonusChips notes={terms.rewardNotes} capped={terms.rewardCapped} className="justify-center" />
         <p className="hidden text-center text-[11px] text-muted-foreground sm:block">{COPY.shortcut}</p>
       </div>
     </div>

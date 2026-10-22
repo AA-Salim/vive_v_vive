@@ -148,11 +148,13 @@ $$;
 -- Double or nothing pays 2x. Wagers placed through chaos_issue_decree (rules_version 2) gain +0.5x once a
 -- hostile decree another user lands on the backed side after the wager, capped at 2.5x: defiance pays, but
 -- 3x printed points. Mirrored in lib/chaos/catalog.ts (WAGER_* constants).
+-- Title effects (phase10_title-effects.sql): Baron Caller stores a higher starting multiplier in details; the
+-- 2.5x cap still holds.
 CREATE OR REPLACE FUNCTION chaos_wager_multiplier(p_wager chaos_actions) RETURNS NUMERIC
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT CASE
     WHEN p_wager.rules_version < 2 THEN 2.0
-    ELSE 2.0 + 0.5 * LEAST(1, (
+    ELSE LEAST(2.5, COALESCE((p_wager.details->>'base_multiplier')::NUMERIC, 2.0) + 0.5 * LEAST(1, (
       SELECT count(*)
       FROM chaos_actions h
       WHERE h.session_id = p_wager.session_id
@@ -161,7 +163,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
         AND h.user_id <> p_wager.user_id
         AND h.created_at > p_wager.created_at
         AND h.action_type IN ('champion_ban', 'lane_force', 'shuffle_lanes', 'reroll_champs', 'target_reroll')
-    ))
+    )))
   END;
 $$;
 
@@ -241,7 +243,8 @@ BEGIN
     AND ca.user_id = v_user
     AND ca.status <> 'refunded'
     AND r.limit_group = v_rule.limit_group;
-  IF v_used >= v_rule.max_uses THEN
+  -- Title effects (phase10_title-effects.sql): The Usurper adds a use.
+  IF v_used >= vvv_title_decree_uses(v_user, v_rule.max_uses, v_used) THEN
     RAISE EXCEPTION 'chaos:limit_reached';
   END IF;
 
@@ -484,13 +487,16 @@ BEGIN
     RAISE EXCEPTION 'chaos:unknown_decree';
   END IF;
 
+  -- Title effects (phase10_title-effects.sql): discounts, markups and exile immunity set the price.
+  v_rule.cost := vvv_title_decree_cost(v_user, p_session_id, p_action_type, v_rule.cost, v_target_1, v_target_2, v_target_team);
+
   IF v_rule.cost > 0 THEN
     v_balance := adjust_balance(v_user, -v_rule.cost, v_reason, v_id);
   ELSE
     SELECT balance INTO v_balance FROM point_balances WHERE user_id = v_user;
   END IF;
 
-  v_details := jsonb_build_object('changes', v_changes) || v_extra;
+  v_details := jsonb_build_object('changes', v_changes) || v_extra || vvv_title_decree_details(v_user, p_action_type);
 
   INSERT INTO chaos_actions (
     id, session_id, user_id, action_type, tier, cost, side, target_player_id, target_player_2_id,

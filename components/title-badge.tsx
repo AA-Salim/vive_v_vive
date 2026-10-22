@@ -1,13 +1,18 @@
 "use client"
 
-import { Hourglass } from "lucide-react"
+import { Flame, Hourglass } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { HelpRows } from "@/components/ui/info-tip"
 import { cn } from "@/lib/utils"
-import { CATEGORY_META, RARITY_LABEL, isCurseCategory, perkInfo, rarityOf } from "@/lib/titles/catalog"
+import { CATEGORY_META, RARITY_LABEL, isCurseCategory, perkInfo, rarityOf, tierOf } from "@/lib/titles/catalog"
+import { titleEffects } from "@/lib/titles/effects"
 import { titleHelp } from "@/lib/titles/help"
+import { multiplierLabel, shopTier, tierPrice, type PriceTier } from "@/lib/titles/pricing"
+import { dignityCost } from "@/lib/titles/rules"
 import type { PerkInfo, TitleCategory, TitleRarity } from "@/lib/titles/types"
+import { EffectLines } from "@/components/titles/effect-lines"
 import { PerkLine } from "@/components/titles/perk-line"
+import { TierChip } from "@/components/titles/tier-chip"
 import { CATEGORY_ICON, RARITY_BADGE, RARITY_TEXT, iconKeyFor } from "@/components/titles/title-visuals"
 
 interface TitleBadgeProps {
@@ -18,10 +23,11 @@ interface TitleBadgeProps {
   perk?: string | PerkInfo | null
   description?: string | null
   curse?: { bestowedBy?: string | null; gamesLeft?: number; dignityCost?: number | null } | null
-  // Shop price, for the cost line of the popover. Seeded shop prices are used when omitted.
+  // Shown in the popover. Derived for shop titles when omitted; honors are free.
   price?: number | null
+  tier?: PriceTier
   size?: "sm" | "md" | "lg"
-  // Opt-in popover with the perk. Keep it off inside buttons and other popover triggers.
+  // Opt-in popover with the effect and perk. Keep it off inside buttons and other popover triggers.
   interactive?: boolean
   className?: string
 }
@@ -47,6 +53,14 @@ function resolvePerk(name: string, category: string, perk: TitleBadgeProps["perk
   return perk
 }
 
+// Price when it is known: given, a seeded shop title, or a free honor. Unknown titles show the tier only.
+function resolvePrice(name: string, category: string, price: number | null | undefined): number | null {
+  if (price != null) return price
+  const seeded = shopTier(name)
+  if (seeded) return tierPrice(seeded)
+  return category === "award" ? 0 : null
+}
+
 export function TitleBadge({
   name,
   category,
@@ -55,16 +69,17 @@ export function TitleBadge({
   description,
   curse,
   price,
+  tier,
   size = "sm",
   interactive = false,
   className,
 }: TitleBadgeProps) {
   const cat = category ?? ""
-  const tier = rarity ?? rarityOf(name, cat)
-  const Icon = CATEGORY_ICON[iconKeyFor(cat, tier)]
+  const look = rarity ?? rarityOf(name, cat, price ?? undefined)
+  const Icon = CATEGORY_ICON[iconKeyFor(cat, look)]
   const classes = cn(
     "inline-flex max-w-full min-w-0 items-center rounded-md border font-semibold leading-none whitespace-nowrap",
-    RARITY_BADGE[tier],
+    RARITY_BADGE[look],
     SIZES[size],
     className
   )
@@ -79,8 +94,12 @@ export function TitleBadge({
     return <span className={classes}>{content}</span>
   }
 
+  const cursed = isCurseCategory(cat) || look === "cursed"
   const info = resolvePerk(name, cat, perk, curse?.bestowedBy)
   const categoryLabel = CATEGORY_META[cat as TitleCategory]?.label
+  const priceTier = tier ?? tierOf(name, cat, price ?? undefined)
+  const shownPrice = resolvePrice(name, cat, price)
+  const effects = titleEffects(name)
 
   return (
     <Popover>
@@ -89,7 +108,7 @@ export function TitleBadge({
         delay={150}
         nativeButton={false}
         render={<span />}
-        aria-label={`Title: ${name}${info ? `. ${info.kind === "curse" ? "Curse" : "Perk"}: ${info.summary}` : ""}`}
+        aria-label={`Title: ${name}${effects.length ? `. Effect: ${effects.map((e) => e.text).join(". ")}` : ""}${info ? `. ${info.kind === "curse" ? "Curse" : "Perk"}: ${info.summary}` : ""}`}
         className={cn(
           classes,
           "cursor-help outline-none transition-[filter] hover:brightness-125 focus-visible:ring-2 focus-visible:ring-[var(--color-gold)]/60"
@@ -103,16 +122,37 @@ export function TitleBadge({
         className="max-h-[min(30rem,75dvh)] w-80 gap-2 overflow-y-auto border border-border bg-[var(--color-navy-light)] p-3"
       >
         <div className="flex items-start gap-2">
-          <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", RARITY_TEXT[tier])} />
-          <div className="min-w-0">
+          <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", RARITY_TEXT[look])} />
+          <div className="min-w-0 flex-1">
             <p className="font-display text-sm leading-tight text-[var(--color-gold-light)]">{name}</p>
-            <p className={cn("mt-0.5 text-[10px] font-semibold tracking-wider uppercase", RARITY_TEXT[tier])}>
-              {RARITY_LABEL[tier]}
+            <p className={cn("mt-0.5 text-[10px] font-semibold tracking-wider uppercase", RARITY_TEXT[look])}>
+              {RARITY_LABEL[look]}
               {categoryLabel ? <span className="text-muted-foreground"> · {categoryLabel}</span> : null}
             </p>
           </div>
+          <TierChip tier={priceTier} price={shownPrice} cursed={cursed} size="sm" />
         </div>
-        <PerkLine perk={info} />
+        {shownPrice != null && shownPrice > 0 && (
+          <p className="text-[10px] text-muted-foreground">{multiplierLabel(priceTier)}</p>
+        )}
+        <div className="space-y-1">
+          <p className={cn("text-[10px] font-bold tracking-wider uppercase", cursed ? "text-rose-300" : "text-amber-200/80")}>
+            {cursed ? "While branded" : "While equipped"}
+          </p>
+          <EffectLines effects={effects} cursed={cursed} />
+        </div>
+        <div className="space-y-1">
+          <p className={cn("text-[10px] font-bold tracking-wider uppercase", cursed ? "text-rose-300" : "text-[var(--color-gold)]/80")}>
+            After each game
+          </p>
+          <PerkLine perk={info} />
+        </div>
+        {cursed && shownPrice != null && shownPrice > 0 ? (
+          <p className="flex items-center gap-1.5 text-[11px] text-rose-200/80">
+            <Flame aria-hidden className="size-3 shrink-0 text-rose-400" />
+            Dignity buyback: {(curse?.dignityCost ?? dignityCost(shownPrice)).toLocaleString("en-US")} points
+          </p>
+        ) : null}
         {curse ? (
           <p className="flex items-center gap-1.5 text-[11px] text-rose-200/80">
             <Hourglass aria-hidden className="size-3 shrink-0" />
@@ -127,7 +167,8 @@ export function TitleBadge({
               name,
               category: cat,
               perk: info,
-              price,
+              price: shownPrice,
+              tier: priceTier,
               curse: curse ? { bestowedBy: curse.bestowedBy, gamesLeft: curse.gamesLeft, dignityCost: curse.dignityCost } : null,
             })}
           />

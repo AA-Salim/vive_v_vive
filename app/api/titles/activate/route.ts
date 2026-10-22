@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
 import { emitLive, getActor } from "@/lib/live/server"
 import { isCurseCategory, perkInfo } from "@/lib/titles/catalog"
+import { titleEffects } from "@/lib/titles/effects"
 import { titleError, titleErrorKey } from "@/lib/titles/errors"
 import { titlesLocked } from "@/lib/titles/server"
 
@@ -46,8 +47,10 @@ export async function POST(request: Request) {
   const joined = previous?.titles as { name?: string } | { name?: string }[] | null | undefined
   const prevName = (Array.isArray(joined) ? joined[0]?.name : joined?.name) ?? null
   if (titleId && titleName && titleName !== prevName) {
-    const perk = category && !isCurseCategory(category) ? perkInfo(titleName, category)?.summary ?? null : null
-    emitLive("title.equipped", { actor: await getActor(supabase, user.id), data: { title: titleName, perk } })
+    const curse = !category || isCurseCategory(category)
+    const perk = category && !curse ? (perkInfo(titleName, category)?.summary ?? null) : null
+    const effects = curse ? [] : titleEffects(titleName).map((e) => e.text)
+    emitLive("title.equipped", { actor: await getActor(supabase, user.id), data: { title: titleName, perk, titles: [titleName], effects } })
   } else if (!titleId && prevName) {
     emitLive("title.unequipped", { actor: await getActor(supabase, user.id), data: { title: prevName } })
   }

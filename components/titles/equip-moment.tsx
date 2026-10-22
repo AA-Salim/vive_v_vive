@@ -4,7 +4,9 @@ import { motion, useReducedMotion } from "motion/react"
 import { toast } from "sonner"
 import { PlayerName } from "@/components/titles/player-name"
 import { CATEGORY_ICON, iconKeyFor } from "@/components/titles/title-visuals"
+import { Zap } from "lucide-react"
 import { perkInfo } from "@/lib/titles/catalog"
+import { titleEffects } from "@/lib/titles/effects"
 import type { EquippedTitle, TitleRarity } from "@/lib/titles/types"
 import { cn } from "@/lib/utils"
 
@@ -32,6 +34,7 @@ function EquipToast({ banner }: { banner: RaisedBanner }) {
   const reduced = useReducedMotion() ?? false
   const Icon = CATEGORY_ICON[iconKeyFor(banner.category, banner.rarity)]
   const perk = perkInfo(banner.title, banner.category)
+  const effects = banner.category === "mockery" ? [] : titleEffects(banner.title)
 
   return (
     <div className="relative w-full overflow-hidden rounded-xl border border-[var(--color-gold)]/50 bg-linear-to-br from-[var(--color-gold-dark)]/45 via-popover to-popover p-3 text-popover-foreground shadow-lg shadow-black/40 min-[601px]:w-[var(--width)]">
@@ -54,13 +57,27 @@ function EquipToast({ banner }: { banner: RaisedBanner }) {
           <Icon aria-hidden className="size-4" />
         </motion.span>
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold tracking-[0.16em] text-[var(--color-gold)] uppercase">Banner raised</p>
+          <p className="text-[10px] font-semibold tracking-[0.16em] text-[var(--color-gold)] uppercase">Title equipped</p>
           <p className="mt-0.5 font-display text-sm leading-snug font-semibold">
             Hear ye: you are now{" "}
             <PlayerName name={banner.wearer || "you"} title={asEntry(banner)} epithet marks={false} inline />
           </p>
+          {effects.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {effects.map((effect) => (
+                <li key={effect.key} className="flex gap-1.5 text-[13px] leading-snug text-[var(--color-gold-light)]">
+                  <Zap aria-hidden className="mt-0.5 size-3.5 shrink-0 text-[var(--color-gold)]" />
+                  {effect.text}, from now on.
+                </li>
+              ))}
+            </ul>
+          )}
           <p className="mt-0.5 text-[13px] leading-snug text-muted-foreground">
-            {perk ? `${perk.summary}. Fires after your next game.` : "Pure prestige: the court sees your colors, the purse sees nothing."}
+            {perk
+              ? `After each game: ${perk.summary}.`
+              : effects.length
+                ? "No post-game perk: the effect is the whole point."
+                : "Pure prestige: the court sees your colors, the purse sees nothing."}
           </p>
         </div>
       </div>

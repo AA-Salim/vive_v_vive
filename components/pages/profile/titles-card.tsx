@@ -7,6 +7,8 @@ import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTitlesCatalog } from "@/lib/titles/use-titles"
+import { useAuth } from "@/hooks/use-auth"
+import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
 import type { OwnedTitleView, TitleView } from "@/lib/titles/types"
 
 interface OwnedTitle {
@@ -15,6 +17,7 @@ interface OwnedTitle {
 }
 
 export function TitlesCard() {
+  const { user } = useAuth()
   const catalog = useTitlesCatalog()
   const data = catalog.data
 
@@ -66,6 +69,7 @@ export function TitlesCard() {
 
   return (
     <div className="space-y-4">
+      <LoadoutSummaryBar userId={user?.id ?? null} />
       {equipped ? (
         <div className="rounded-xl border border-[var(--color-gold)]/30 bg-[var(--color-gold)]/[0.05] p-3">
           <p className="mb-2 text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase">Banner raised</p>

@@ -4,7 +4,7 @@ import Image from "next/image"
 import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { LaneIcon } from "@/components/lane-icon"
-import { TitleBadge } from "@/components/title-badge"
+import { LoadoutChips } from "@/components/titles/loadout-chips"
 import { PlayerName } from "@/components/titles/player-name"
 import { FLAIR_EDGE } from "@/components/titles/title-visuals"
 import { WantedBadge } from "@/components/bounties/wanted-badge"
@@ -146,13 +146,7 @@ export function PlayerCard({
               <span className="text-muted-foreground">{state === "shuffling" ? "Rolling..." : "Awaiting fate"}</span>
             )}
           </span>
-          {revealed && title && (
-            <span className={cn("mt-1 flex min-w-0", mirrored && "justify-end")}>
-              <span className="inline-flex min-w-0 max-w-full [&>span]:truncate">
-                <TitleBadge name={title.title} category={title.category} rarity={title.rarity} />
-              </span>
-            </span>
-          )}
+          {revealed && title && <LoadoutChips title={title} mirrored={mirrored} className="mt-1" />}
         </span>
       </PlayerDetails>
 

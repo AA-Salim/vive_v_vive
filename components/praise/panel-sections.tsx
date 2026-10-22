@@ -17,6 +17,7 @@ import { AnimatedNumber } from "@/components/praise/animated-number"
 import { COMPOSE_HELP, VERDICT_HELP } from "@/components/praise/help"
 import { AuthorAvatar, PraiseQuote } from "@/components/praise/praise-card"
 import { PraiseCountdown } from "@/components/praise/praise-countdown"
+import { BoostedAmount, TitleBonusChips, usePraiseTerms } from "@/components/praise/title-bonus"
 import { VerdictChip } from "@/components/praise/verdict-chip"
 import { formatRelative } from "@/lib/praise/format"
 import { PRAISE_MIN_WORDS, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
@@ -82,6 +83,7 @@ export function LoggedOutSection({ onLogin }: { onLogin: () => void }) {
 }
 
 export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () => void }) {
+  const terms = usePraiseTerms()
   return (
     <div className="space-y-2.5">
       <div className="flex items-center gap-2.5">
@@ -93,13 +95,15 @@ export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () =>
             <FeatherIcon aria-hidden />
             <span className="truncate">{COPY.compose}</span>
           </span>
-          <span className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums">+{PRAISE_REWARD}</span>
+          <BoostedAmount value={terms.reward} base={PRAISE_REWARD} className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums" />
         </Button>
         <InfoTip help={COMPOSE_HELP} side="top" align="end" />
       </div>
+      <TitleBonusChips notes={[...terms.rewardNotes, ...terms.favorNotes]} />
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         One praise a day: solve the King&apos;s Riddle (+{RIDDLE_FIRST_TRY_BONUS} on the first try), then write{" "}
-        {PRAISE_MIN_WORDS}+ words that name him. The best ones get crowned for +{ROYAL_FAVOR}.
+        {PRAISE_MIN_WORDS}+ words that name him. The best ones get crowned for +{terms.favor}
+        {terms.favor !== ROYAL_FAVOR ? ` (instead of +${ROYAL_FAVOR})` : ""}.
       </p>
       {me.total > 0 && (
         <p className="text-[11px] text-muted-foreground">

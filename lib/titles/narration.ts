@@ -1,5 +1,17 @@
 import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
 import type { Narration } from "@/lib/live/narration"
+import { effectSummary } from "@/lib/titles/effects"
+import { TIER_LABEL, formatPrice, type PriceTier } from "@/lib/titles/pricing"
+
+const strings = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0) : []
+
+const text = (value: unknown): string | null => (typeof value === "string" && value.trim() ? value.trim() : null)
+
+const tierLabel = (value: unknown): string | null =>
+  typeof value === "string" && Object.prototype.hasOwnProperty.call(TIER_LABEL, value) ? TIER_LABEL[value as PriceTier] : null
+
+const amount = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null)
 
 // Lines for the title events added by the titles feature; lib/live/narration.ts can delegate to this.
 export function narrateTitleEvent(event: LiveEvent): Narration | null {
@@ -7,7 +19,12 @@ export function narrateTitleEvent(event: LiveEvent): Narration | null {
   switch (event.type) {
     case "title.equipped": {
       const d = event.data as LiveEventPayloads["title.equipped"]
-      return { title: `${who} raised a new banner: ${d.title}`, description: d.perk ?? undefined, tone: "royal" }
+      const effect = text(effectSummary(d.title)) ?? strings(d.effects)[0] ?? null
+      const worn = strings(d.titles).length
+      const description = [effect, text(d.perk) ? `After each game: ${d.perk}` : null, worn > 1 ? `${worn} titles worn` : null]
+        .filter(Boolean)
+        .join(" · ")
+      return { title: `${who} equipped ${d.title}`, description: description || undefined, tone: "royal" }
     }
     case "title.unequipped": {
       const d = event.data as LiveEventPayloads["title.unequipped"]
@@ -15,11 +32,23 @@ export function narrateTitleEvent(event: LiveEvent): Narration | null {
     }
     case "title.bought": {
       const d = event.data as LiveEventPayloads["title.bought"]
-      return { title: `${who} bought the title ${d.title}`, description: `${d.price} points to the Crown.`, tone: "royal" }
+      const tier = tierLabel(d.tier)
+      const price = amount(d.price)
+      const effect = text(d.effect) ?? effectSummary(d.title)
+      return {
+        title: `${who} bought ${tier ? `the ${tier} title` : "the title"} ${d.title}`,
+        description: [price != null ? `${formatPrice(price)} points to the Crown.` : null, effect].filter(Boolean).join(" ") || undefined,
+        tone: "royal",
+      }
     }
     case "title.bestowed": {
       const d = event.data as LiveEventPayloads["title.bestowed"]
-      return { title: `${who} branded ${d.targetName} "${d.title}"`, description: d.curse ?? undefined, tone: "roast" }
+      const price = amount(d.price)
+      const effect = text(d.effect) ?? effectSummary(d.title)
+      const description = [effect, text(d.curse) ? `After each game: ${d.curse}` : null, price != null ? `Cost ${formatPrice(price)} points.` : null]
+        .filter(Boolean)
+        .join(" · ")
+      return { title: `${who} branded ${d.targetName} "${d.title}"`, description: description || undefined, tone: "roast" }
     }
     case "title.claimed": {
       const d = event.data as LiveEventPayloads["title.claimed"]

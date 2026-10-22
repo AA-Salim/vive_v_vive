@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { RefreshCw } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -14,14 +14,15 @@ import { BuyDialog } from "@/components/titles/buy-dialog"
 import { CollectionGrid } from "@/components/titles/collection-grid"
 import { DignityDialog } from "@/components/titles/dignity-dialog"
 import { HallHeader } from "@/components/titles/hall-header"
+import { buildLoadout } from "@/components/titles/loadout-model"
 import { MilestonesPanel } from "@/components/titles/milestones-panel"
 import { useAuth } from "@/hooks/use-auth"
 import {
   useBuyTitle,
   useClaimMilestones,
-  useEquipTitle,
   useLiftCurse,
   useMilestones,
+  useSetLoadout,
   useTitlesCatalog,
   useTitlesLockSync,
   useWallet,
@@ -38,7 +39,7 @@ export default function TitlesPage() {
   const catalog = useTitlesCatalog()
   const wallet = useWallet(user?.id ?? null)
   const milestones = useMilestones(signedIn)
-  const equip = useEquipTitle()
+  const equip = useSetLoadout()
   const buy = useBuyTitle()
   const lift = useLiftCurse()
   const claim = useClaimMilestones()
@@ -49,13 +50,13 @@ export default function TitlesPage() {
   const [bestowTarget, setBestowTarget] = useState<TitleView | null>(null)
   const [dignityTarget, setDignityTarget] = useState<{ title: TitleView; owned: OwnedTitleView } | null>(null)
   const [pledged, setPledged] = useState<(() => void) | null>(null)
-  const [raisedId, setRaisedId] = useState<string | null>(null)
 
   const data = catalog.data
   const balance = wallet.data ?? data?.balance ?? null
   const locked = data?.locked ?? false
+  const loadout = useMemo(() => buildLoadout(data), [data])
   const me = user ? { id: user.id, name: profile?.players?.name ?? profile?.discord_username ?? "You" } : null
-  const busyId = (equip.isPending && equip.variables?.titleId) || (buy.isPending && buy.variables?.titleId) || null
+  const busyId = (equip.isPending && equip.variables?.change?.title.id) || (buy.isPending && buy.variables?.titleId) || null
   const claimable = milestones.data?.milestones.filter((m) => m.unlocked && !m.claimed).length ?? 0
 
   const withPledge = (action: () => void) => {
@@ -65,22 +66,25 @@ export default function TitlesPage() {
 
   const look = (title: TitleView) => ({ category: title.category, rarity: title.rarity, wearer: me?.name ?? null })
 
-  const equipTitle = (title: TitleView | null) =>
-    equip.mutate(
-      { titleId: title?.id ?? null, name: title?.name, ...(title ? look(title) : {}) },
-      { onSuccess: () => setRaisedId(title?.id ?? null) }
-    )
+  const equipTitle = (title: TitleView) =>
+    equip.mutate({ titleIds: loadout.idsWith(title), change: { title, equipped: true, wearer: me?.name ?? null } })
+  const unequipTitle = (title: TitleView) => equip.mutate({ titleIds: loadout.idsWithout(title), change: { title, equipped: false } })
+  const clearLoadout = () => {
+    const lead = loadout.worn[0]?.title
+    equip.mutate({ titleIds: [], change: lead ? { title: lead, equipped: false } : undefined })
+  }
 
   const confirmBuy = (title: TitleView, equipNow: boolean) =>
     withPledge(() =>
       buy.mutate(
-        { titleId: title.id, name: title.name, equip: equipNow, ...look(title) },
         {
-          onSuccess: (result) => {
-            setBuyTarget(null)
-            if (result.equipped) setRaisedId(title.id)
-          },
-        }
+          titleId: title.id,
+          name: title.name,
+          title,
+          equipWith: equipNow ? loadout.idsWith(title) : undefined,
+          ...look(title),
+        },
+        { onSuccess: () => setBuyTarget(null) }
       )
     )
 
@@ -116,15 +120,18 @@ export default function TitlesPage() {
         <aside className="lg:sticky lg:top-6 lg:order-2" aria-label="Your banner and brands">
           <BannerPanel
             catalog={data}
+            loadout={loadout}
             isLoading={authLoading || catalog.isLoading}
             signedIn={signedIn || authLoading}
             onSignIn={signIn}
-            onUnequip={() => equipTitle(null)}
-            unequipping={equip.isPending}
+            onRemove={unequipTitle}
+            onClear={clearLoadout}
+            pending={equip.isPending}
             onBrowse={setTab}
             onDignity={(title, owned) => setDignityTarget({ title, owned })}
+            userId={me?.id ?? null}
+            name={me?.name ?? null}
             wearer={me?.name ?? null}
-            raisedId={raisedId}
           />
         </aside>
 
@@ -157,6 +164,7 @@ export default function TitlesPage() {
               <Armory
                 titles={data.titles}
                 collection={data.collection}
+                loadout={loadout}
                 balance={balance}
                 signedIn={signedIn}
                 locked={locked}
@@ -164,6 +172,7 @@ export default function TitlesPage() {
                 onBuy={setBuyTarget}
                 onBestow={setBestowTarget}
                 onEquip={equipTitle}
+                onUnequip={unequipTitle}
               />
             )}
           </TabsContent>
@@ -173,9 +182,10 @@ export default function TitlesPage() {
               <CollectionGrid
                 titles={data.titles}
                 collection={data.collection}
-                locked={locked}
+                loadout={loadout}
                 busyId={busyId}
                 onEquip={equipTitle}
+                onUnequip={unequipTitle}
                 onBrowse={() => setTab("armory")}
               />
             ) : (
@@ -202,6 +212,7 @@ export default function TitlesPage() {
         title={buyTarget}
         balance={balance}
         locked={locked}
+        equipBlock={buyTarget ? loadout.blockFor(buyTarget) : null}
         pending={buy.isPending}
         onOpenChange={(open) => !open && setBuyTarget(null)}
         onConfirm={confirmBuy}

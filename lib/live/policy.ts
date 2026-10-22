@@ -5,6 +5,7 @@ import {
   type LiveEvent,
   type LiveEventPayloads,
 } from "@/lib/live/events"
+import { isHeraldEvent } from "@/lib/titles/herald"
 import type { SessionStatus } from "@/lib/types"
 
 export type LivePhase = "idle" | "lobby" | "timed" | "aftermath"
@@ -141,6 +142,7 @@ export function isPersonal(event: LiveEvent, viewer: Viewer): boolean {
 }
 
 function isBigMoment(event: LiveEvent): boolean {
+  if (isHeraldEvent(event)) return true
   switch (event.type) {
     case "session.created":
     case "bounty.placed":
@@ -190,12 +192,15 @@ export function toastDecision(event: LiveEvent, ctx: { phase: LivePhase; viewer:
   if (ctx.viewer.userId && event.actor?.userId === ctx.viewer.userId) return HIDDEN
   if (isPersonal(event, ctx.viewer)) return { show: true, personal: true, big: true }
   if (ctx.quiet) return HIDDEN
+  // A Main Character's every move is announced to the whole court, whatever the phase.
+  if (isHeraldEvent(event)) return { show: true, personal: false, big: true }
   const show = MAJOR_TYPES.has(event.type) || allowedInPhase(event, ctx.phase)
   return show ? { show, personal: false, big: isBigMoment(event) } : HIDDEN
 }
 
 // Events that arrive in bursts share one toast that updates in place instead of stacking.
 export function coalesceKey(event: LiveEvent): string | null {
+  if (isHeraldEvent(event)) return null
   const scope = event.sessionId ?? "global"
   switch (event.type) {
     case "bet.placed":

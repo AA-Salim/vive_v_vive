@@ -1,13 +1,14 @@
 "use client"
 
 import Image from "next/image"
-import { CheckIcon, ShieldCheckIcon } from "lucide-react"
+import { CheckIcon, ShieldCheckIcon, ShieldXIcon } from "lucide-react"
 import { getChampionImageUrl, ROLE_LABELS } from "@/lib/champions"
 import { sideName } from "@/lib/chaos/rules"
 import type { BoardAssignment } from "@/lib/chaos/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { LaneIcon } from "@/components/lane-icon"
+import { TitleChip, type TitleChipModel } from "@/components/chaos/title-chips"
 import { SIDE_STYLES } from "@/components/chaos/tier-styles"
 
 const SIDES: Side[] = ["blue", "red"]
@@ -35,6 +36,7 @@ export interface SideOption {
   side: Side
   block: string | null
   hint: string
+  chips?: TitleChipModel[]
 }
 
 interface SideChoiceProps {
@@ -47,7 +49,7 @@ interface SideChoiceProps {
 export function SideChoice({ label, value, options, onChange }: SideChoiceProps) {
   return (
     <div role="radiogroup" aria-label={label} className="grid grid-cols-2 gap-2">
-      {options.map(({ side, block, hint }) => {
+      {options.map(({ side, block, hint, chips = [] }) => {
         const selected = value === side
         const style = SIDE_STYLES[side]
         return (
@@ -71,6 +73,13 @@ export function SideChoice({ label, value, options, onChange }: SideChoiceProps)
               {selected && <CheckIcon aria-hidden className="size-4" />}
             </span>
             <span className="text-[11px] leading-snug text-[var(--color-gold-light)]/60">{block ?? hint}</span>
+            {chips.length > 0 && (
+              <span className="flex max-w-full flex-wrap gap-1">
+                {chips.map((chip) => (
+                  <TitleChip key={chip.key} chip={chip} size="xs" />
+                ))}
+              </span>
+            )}
           </button>
         )
       })}
@@ -82,6 +91,8 @@ export interface PlayerOption {
   seat: BoardAssignment
   block: string | null
   pardoned: boolean
+  immune?: boolean
+  chips?: TitleChipModel[]
 }
 
 interface PlayerChoiceProps {
@@ -107,7 +118,7 @@ export function PlayerChoice({ label, mode, selected, options, viewerPlayerId, o
           {options
             .filter((o) => o.seat.side === side)
             .sort((a, b) => LANE_ORDER.indexOf(a.seat.lane) - LANE_ORDER.indexOf(b.seat.lane))
-            .map(({ seat, block, pardoned }) => {
+            .map(({ seat, block, pardoned, immune = false, chips = [] }) => {
               const isSelected = selected.includes(seat.id)
               const isViewer = !!viewerPlayerId && seat.player_id === viewerPlayerId
               return (
@@ -137,6 +148,7 @@ export function PlayerChoice({ label, mode, selected, options, viewerPlayerId, o
                         </span>
                       )}
                       {pardoned && <ShieldCheckIcon aria-label="Pardoned" className="size-3.5 shrink-0 text-emerald-300" />}
+                      {immune && <ShieldXIcon aria-label="Cannot be exiled" className="size-3.5 shrink-0 text-rose-300" />}
                     </span>
                     <span className="flex items-center gap-1 text-[11px] text-[var(--color-gold-light)]/55">
                       <LaneIcon lane={seat.lane} size={12} className="shrink-0" />
@@ -144,6 +156,13 @@ export function PlayerChoice({ label, mode, selected, options, viewerPlayerId, o
                         {ROLE_LABELS[seat.lane]} · {seat.champion}
                       </span>
                     </span>
+                    {chips.length > 0 && (
+                      <span className="mt-0.5 flex flex-wrap gap-1">
+                        {chips.map((chip) => (
+                          <TitleChip key={chip.key} chip={chip} size="xs" />
+                        ))}
+                      </span>
+                    )}
                   </span>
                   {isSelected ? (
                     <CheckIcon aria-hidden className="size-4 shrink-0 text-[var(--color-gold)]" />

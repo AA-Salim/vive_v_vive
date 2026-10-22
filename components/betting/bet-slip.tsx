@@ -13,11 +13,14 @@ import { StakePicker } from "@/components/betting/stake-picker"
 import { usePlaceBet, type Market } from "@/components/betting/use-market"
 import { TitleInPlay } from "@/components/titles/title-in-play"
 import type { MarketClock } from "@/components/betting/use-clock"
+import { noteChips, TitleChipRow } from "@/components/chaos/title-chips"
 import { MARKET_COPY } from "@/lib/betting/copy"
 import { allInHelp, betHelp, earlyHelp } from "@/lib/betting/help"
 import { maxAffordableAdd, otherSide, projectBet, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
+import { BASE_BET_TERMS, type BetTitleTerms } from "@/lib/betting/title-terms"
 import type { PlaceBetInput, PlaceBetResult } from "@/lib/betting/types"
+import { noteText, parseNotes } from "@/lib/titles/effects"
 import type { Side } from "@/lib/types"
 
 const NO_POOLS = { blue: 0, red: 0 }
@@ -30,16 +33,17 @@ interface BetSlipProps {
   balanceLoading: boolean
   clock: MarketClock
   mode: "new" | "raise"
+  terms?: BetTitleTerms
   onDone?: () => void
   // Sides the viewer may not back, with the reason shown on the slip. Wire it when the server enforces a side rule.
 }
 
-function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" | "raise", coverage: number) {
+function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" | "raise", coverage: number, terms: BetTitleTerms) {
   const side = sideLabel(input.side)
   const total = typeof result.bet?.amount === "number" ? result.bet.amount : result.staked
   const lines: string[] = []
   if (result.early) lines.push(`Early conviction locked: +${BET_RULES.earlyBonusPct}% on profit.`)
-  if (result.all_in) lines.push(`All-in. +${BET_RULES.allInBonusPct}% on profit if you are right. If not, the court will hear about it.`)
+  if (result.all_in) lines.push(`All-in. +${terms.allInBonusPct}% on profit if you are right. If not, the court will hear about it.`)
   if (result.premium > 0) {
     lines.push(
       result.rules === 2
@@ -47,12 +51,15 @@ function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" |
         : `Insured for ${result.premium}: half your stake back if you lose.`
     )
   }
+  for (const note of parseNotes(result.title_effects)) {
+    lines.push(`${noteText(note)}.`)
+  }
   toast.success(mode === "raise" ? `Raised to ${total} on ${side}.` : `${total} on ${side}. Written in the notebook.`, {
     description: lines.join(" ") || undefined,
   })
 }
 
-export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, onDone }: BetSlipProps) {
+export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, terms = BASE_BET_TERMS, onDone }: BetSlipProps) {
   const ids = useId()
   const rules = market.rules_version
   const current = mode === "raise" ? market.user_bet : null
@@ -70,10 +77,12 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
   const amount = allIn ? allInStake : Number.parseInt(amountText, 10) || 0
   const allInBonus = allIn && rules === 2
   const alreadyInsured = !!current?.insured
-  const insureNow = !allInBonus && (alreadyInsured || insure)
+  const titled = rules === 2
+  const insuranceRefused = titled && terms.insuranceBlocked && !alreadyInsured
+  const insureNow = !allInBonus && (alreadyInsured || (insure && !insuranceRefused))
   const early = rules === 2 && clock.isEarly
 
-  // Before a side is picked, premiums are quoted at the even-odds floor.
+  // Title terms only exist under the v2 rules; before a side is picked, premiums are quoted at the even-odds floor.
   const project = (add: number, withInsurance: boolean) =>
     projectBet({
       rules,
@@ -84,20 +93,33 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
       early,
       allIn: allInBonus,
       insure: withInsurance,
+      terms: titled ? terms : BASE_BET_TERMS,
     })
   const projection = side ? project(amount, insureNow) : null
   const insuredQuote = project(amount, true)
 
-  const maxAdd = maxAffordableAdd(purse, (add) => project(add, insureNow).cost)
-  const sliderMax = purse > 0 ? Math.min(purse, maxAdd) : maxAdd
-  const stakeAfter = (current?.amount ?? 0) + amount
-  const allInEnabled = rules === 2 ? purse >= 1 && (current?.amount ?? 0) + purse >= BET_RULES.allInMin && !alreadyInsured : purse >= 1
+  const currentStake = current?.amount ?? 0
+  const cap = titled ? terms.cap : null
+  const capRoom = cap == null ? Number.POSITIVE_INFINITY : Math.max(0, cap - currentStake)
+  const notes = titled ? terms.notesFor(side ?? "blue") : []
+  const noteOf = (key: (typeof notes)[number]["key"]) => notes.filter((n) => n.key === key)
+  const capLine = noteOf("bet_cap").map(noteText)[0] ?? null
 
-  const insuranceReason = allInBonus
-    ? "All-in bets cannot be insured. Die with your boots on."
-    : !alreadyInsured && rules === 2 && amount > 0 && stakeAfter < BET_RULES.insuranceMin
-      ? `Covers stakes of ${BET_RULES.insuranceMin} or more.`
-      : null
+  const maxAdd = Math.min(maxAffordableAdd(purse, (add) => project(add, insureNow).cost), capRoom)
+  const sliderMax = purse > 0 ? Math.min(purse, maxAdd) : maxAdd
+  const stakeAfter = currentStake + amount
+  const allInEnabled =
+    rules === 2
+      ? purse >= 1 && currentStake + purse >= BET_RULES.allInMin && !alreadyInsured && (cap == null || currentStake + purse <= cap)
+      : purse >= 1
+
+  const insuranceReason = insuranceRefused
+    ? `No insurance: ${noteOf("insurance_blocked").map((n) => n.title).join(", ") || "a curse"} burns on you.`
+    : allInBonus
+      ? "All-in bets cannot be insured. Die with your boots on."
+      : !alreadyInsured && rules === 2 && amount > 0 && stakeAfter < BET_RULES.insuranceMin
+        ? `Covers stakes of ${BET_RULES.insuranceMin} or more.`
+        : null
   const quoteStake = stakeAfter > 0 ? stakeAfter : 0
 
   const reason = clock.isExpired
@@ -112,8 +134,12 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
             ? allIn
               ? "Your purse is empty. Nothing to shove."
               : mode === "raise"
-                ? "Choose how much to add."
+                ? capRoom === 0 && capLine
+                  ? `${capLine}. Your stake is already at the cap.`
+                  : "Choose how much to add."
                 : "Choose a stake."
+            : cap != null && stakeAfter > cap
+              ? `${capLine ?? `Bets capped at ${cap} a game`}. You can put in at most ${capRoom}.`
             : allInBonus && stakeAfter < BET_RULES.allInMin
               ? `All-in needs at least ${BET_RULES.allInMin} points on the line.`
               : insureNow && rules === 2 && stakeAfter < BET_RULES.insuranceMin
@@ -123,6 +149,13 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
                     ? `Over the debt limit. You can put in at most ${maxAdd}.`
                     : `Debt limit reached (${BET_RULES.debtFloor}). Even Salaxe's notebook has a last page.`
                   : null
+  const capChips = noteChips(noteOf("bet_cap"), "slip-cap")
+  const insuranceChips = noteChips(
+    [...noteOf("insurance_blocked"), ...noteOf("insurance_coverage_bonus"), ...noteOf("insurance_premium_salaxe_pct")],
+    "slip-insurance"
+  )
+  const allInChips = noteChips(noteOf("all_in_bonus_pct"), "slip-all-in")
+  const earlyChips = noteChips(noteOf("early_window_bonus_s"), "slip-early")
 
   const submitLabel = !side
     ? "Pick a side"
@@ -138,7 +171,7 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
     const coverage = projection?.lose.coverage ?? 0
     place.mutate(input, {
       onSuccess: (result) => {
-        placedToast(input, result, mode, coverage)
+        placedToast(input, result, mode, coverage, titled ? terms : BASE_BET_TERMS)
         setAmountText("")
         setAllIn(false)
         onDone?.()
@@ -197,12 +230,30 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           disabled={place.isPending || clock.isExpired}
         />
 
-        {allInBonus && <p className="-mt-2 text-xs text-[var(--color-red-team)]/90">{MARKET_COPY.allInHint}</p>}
+        {capChips.length > 0 && (
+          <div className="-mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-rose-200/85">
+            <TitleChipRow chips={capChips} label="Stake cap" />
+            <span>
+              {capRoom > 0 ? `${capRoom} more allowed on this game.` : "Your stake is at the cap for this game."}
+            </span>
+          </div>
+        )}
+
+        {allInBonus && (
+          <div className="-mt-2 space-y-1">
+            <p className="text-xs text-[var(--color-red-team)]/90">
+              {allInChips.length > 0
+                ? `Stake your whole purse (${BET_RULES.allInMin}+). Win: +${terms.allInBonusPct}% on profit. Lose: the court hears about it.`
+                : MARKET_COPY.allInHint}
+            </p>
+            <TitleChipRow chips={allInChips} label="All-in title" />
+          </div>
+        )}
 
         <InsuranceToggle
           id={`${ids}-insurance`}
           rules={rules}
-          checked={insure && !allInBonus}
+          checked={insure && !allInBonus && !insuranceRefused}
           locked={alreadyInsured}
           onCheckedChange={setInsure}
           disabledReason={insuranceReason}
@@ -211,21 +262,30 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           coverage={insuredQuote.lose.coverage}
           stake={quoteStake}
           otherSide={side ? otherSide(side) : null}
+          terms={titled ? terms : BASE_BET_TERMS}
+          titleChips={insuranceChips}
         />
 
         {early && amount > 0 && (
-          <div className="flex items-start gap-1.5 text-xs font-medium text-[var(--color-gold)]">
-            <ZapIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <p className="min-w-0 flex-1">
-              Early conviction: this {mode === "raise" ? "raise" : "bet"} earns +{BET_RULES.earlyBonusPct}% on its share of the profit.
-            </p>
-            <InfoTip help={earlyHelp(projection?.win.early ?? 0)} align="end" className="-my-0.5" />
+          <div className="space-y-1">
+            <div className="flex items-start gap-1.5 text-xs font-medium text-[var(--color-gold)]">
+              <ZapIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1">
+                Early conviction: this {mode === "raise" ? "raise" : "bet"} earns +{BET_RULES.earlyBonusPct}% on its share of the profit.
+              </p>
+              <InfoTip help={earlyHelp(projection?.win.early ?? 0)} align="end" className="-my-0.5" />
+            </div>
+            <TitleChipRow chips={earlyChips} label="Early window title" />
           </div>
         )}
 
         <TitleInPlay userId={userId} context="bet" />
 
-        <PayoutPreview side={side} projection={amount > 0 ? projection : null} />
+        <PayoutPreview
+          side={side}
+          projection={amount > 0 ? projection : null}
+          allInPct={titled ? terms.allInBonusPct : BET_RULES.allInBonusPct}
+        />
 
         <div className="space-y-2">
           <div className="flex min-h-5 items-center justify-center gap-1">

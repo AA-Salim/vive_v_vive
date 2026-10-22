@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
+import { tierOf } from "@/lib/titles/catalog"
+import { primaryOf } from "@/lib/titles/loadout"
 import { brandState, earliest, isBrand, loadAllIdentities, loadOwnership, loadResolvedGames, loadTitles } from "@/lib/titles/server"
 import type { CourtMember, CourtResponse } from "@/lib/titles/types"
 
@@ -21,13 +23,18 @@ export async function GET() {
   const members: CourtMember[] = identities
     .map((identity) => {
       const rows = ownership.filter((o) => o.user_id === identity.userId)
-      const equipped = rows.find((o) => o.is_active)
+      const worn = rows.flatMap((o) => {
+        const t = o.is_active ? titleById.get(o.title_id) : undefined
+        return t ? [{ name: t.name, category: t.category, tier: tierOf(t.name, t.category, t.price), equippedAt: o.equipped_at ?? null }] : []
+      })
+      const primary = primaryOf(worn)
       return {
         id: identity.userId,
         name: identity.name,
         username: identity.username,
         avatar_url: identity.avatarUrl,
-        equipped: equipped ? titleById.get(equipped.title_id)?.name ?? null : null,
+        equipped: primary?.name ?? null,
+        loadout: primary ? [primary.name, ...worn.filter((w) => w !== primary).map((w) => w.name)] : [],
         curses: brands
           .filter((b) => b.user_id === identity.userId)
           .flatMap((b) => {

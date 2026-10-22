@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react"
 import { CheckIcon, HourglassIcon, LockIcon, RotateCcwIcon, TimerIcon, ZapIcon } from "lucide-react"
 import { formatClock, type MarketClock } from "@/components/betting/use-clock"
+import { chipsHelp, TitleChipRow, type TitleChipModel } from "@/components/chaos/title-chips"
 import { InfoTip } from "@/components/ui/info-tip"
 import { MARKET_COPY } from "@/lib/betting/copy"
 import { earlyHelp, LAST_CALL_HELP, marketHelp } from "@/lib/betting/help"
@@ -16,6 +17,9 @@ interface MarketHeaderProps {
   phase: MarketPhase
   clock: MarketClock
   rulesVersion: RulesVersion
+  // The viewer's title terms on this market, and the one that stretches the early window.
+  titleChips?: TitleChipModel[]
+  earlyChips?: TitleChipModel[]
 }
 
 function PhaseChip({ phase, clock }: { phase: MarketPhase; clock: MarketClock }) {
@@ -59,7 +63,7 @@ const bannerMotion = {
   transition: { duration: 0.25 },
 }
 
-export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) {
+export function MarketHeader({ phase, clock, rulesVersion, titleChips = [], earlyChips = [] }: MarketHeaderProps) {
   const subtitle =
     phase === "locked" ? MARKET_COPY.locked : phase === "closing" ? MARKET_COPY.closing : MARKET_COPY.subtitle
   const showEarly = phase === "open" && rulesVersion === 2 && clock.isEarly
@@ -80,6 +84,16 @@ export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) 
         <PhaseChip phase={phase} clock={clock} />
       </div>
 
+      {phase === "open" && rulesVersion === 2 && titleChips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] px-2.5 py-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200/80">Your titles</span>
+          <TitleChipRow
+            chips={titleChips}
+            help={chipsHelp("Your titles on this market", "Your equipped titles and burning brands change what your bets cost and pay.", titleChips)}
+          />
+        </div>
+      )}
+
       <AnimatePresence initial={false}>
         {showEarly && (
           <motion.div key="early" {...bannerMotion} className="overflow-hidden">
@@ -95,10 +109,11 @@ export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) 
                 </span>
               </div>
               <p className="mt-0.5 text-[11px] text-[var(--color-gold-light)]/70">{MARKET_COPY.earlyHint}</p>
+              {earlyChips.length > 0 && <TitleChipRow chips={earlyChips} size="xs" className="mt-1" label="Early window title" />}
               <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[var(--color-navy)]">
                 <div
                   className="h-full rounded-full bg-[var(--color-gold)] transition-[width] duration-500 ease-linear"
-                  style={{ width: `${Math.min(100, (clock.earlyRemainingMs / (BET_RULES.earlySeconds * 1000)) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (clock.earlyRemainingMs / clock.earlyTotalMs) * 100)}%` }}
                 />
               </div>
             </div>

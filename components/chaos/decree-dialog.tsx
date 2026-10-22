@@ -7,12 +7,14 @@ import {
   decreeBlock,
   pardonedPlayerIds,
   playerBlock,
-  ruleFor,
+  shortfall,
   sideBlock,
   viewerSeat,
+  type DecreeBlock,
   type DecreeContext,
 } from "@/lib/chaos/rules"
 import type { DecreeRequest } from "@/lib/chaos/schema"
+import { seatExileImmune, type DecreeAim } from "@/lib/chaos/title-terms"
 import type { BoardAssignment } from "@/lib/chaos/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -24,6 +26,8 @@ import { decreeHelp } from "@/components/chaos/help"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
 import { buildPreview, DecreePreview, type DecreeSelection } from "@/components/chaos/decree-preview"
 import { PlayerChoice, SideChoice, type PlayerOption, type SideOption } from "@/components/chaos/target-pickers"
+import { chipsHelp, TitleChipRow } from "@/components/chaos/title-chips"
+import { decreeDialogPrice, seatTitleChips, sideTitleChips } from "@/components/chaos/title-view"
 import { TIER_STYLES } from "@/components/chaos/tier-styles"
 import { formatClock } from "@/components/chaos/use-now"
 
@@ -87,7 +91,7 @@ function sideOptions(type: DecreeType, ctx: DecreeContext): SideOption[] {
       type === "double_or_nothing"
         ? team.map((a) => a.name).join(", ")
         : `${open} of ${team.length} seats unpardoned`
-    return { side, block: sideBlock(type, side, ctx), hint }
+    return { side, block: sideBlock(type, side, ctx), hint, chips: sideTitleChips(type, side, ctx) }
   })
 }
 
@@ -101,7 +105,25 @@ function playerOptions(type: DecreeType, selection: DecreeSelection, ctx: Decree
       seat,
       pardoned: pardoned.has(seat.player_id),
       block: playerBlock(type, seat, ctx, type === "lane_force" && first && first.id !== seat.id ? first : null),
+      immune: type === "champion_ban" && seatExileImmune(seat, ctx.titles),
+      chips: seatTitleChips(type, seat, ctx),
     }))
+}
+
+function aimOf(type: DecreeType, selection: DecreeSelection, ctx: DecreeContext): DecreeAim {
+  const [first, second] = selection.seats.map((id) => seatById(ctx, id))
+  const def = getDecree(type)
+  return {
+    first: first?.player_id ?? null,
+    second: second?.player_id ?? null,
+    team: def?.targeting === "team" ? selection.side : null,
+  }
+}
+
+// The card checks funds at the caster's own price; a discount on the chosen target can make it affordable.
+function exactBlock(block: DecreeBlock | null, missing: number): DecreeBlock | null {
+  if (block?.code !== "funds") return block
+  return missing > 0 ? { code: "funds", label: `Need ${missing} more` } : null
 }
 
 function initialSelection(type: DecreeType | null, ctx: DecreeContext): DecreeSelection {
@@ -127,10 +149,12 @@ export function DecreeDialog({
   if (!type || !def) return null
 
   const style = TIER_STYLES[def.tier]
-  const cost = ruleFor(type, ctx.rules).cost
+  const price = decreeDialogPrice(type, ctx, aimOf(type, selection, ctx))
+  const cost = price.cost
+  const repriced = cost !== price.base
   const balance = ctx.viewer?.balance ?? null
   const after = balance == null ? null : balance - cost
-  const block = decreeBlock(type, ctx)
+  const block = exactBlock(decreeBlock(type, ctx), shortfall(type, ctx, cost))
   const targetBlock = selectionBlock(type, selection, ctx)
   const request = buildRequest(type, selection, ctx)
   const needsPledge = balance != null && balance < 0
@@ -209,6 +233,16 @@ export function DecreeDialog({
 
         <DecreePreview preview={buildPreview(type, selection, ctx)} />
 
+        {price.chips.length > 0 && (
+          <div className="space-y-1.5 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.05] p-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200/80">Your titles on this decree</p>
+            <TitleChipRow
+              chips={price.chips}
+              help={chipsHelp(def.name, "These titles changed what this decree costs or pays.", price.chips)}
+            />
+          </div>
+        )}
+
         {needsPledge && (
           <div className="space-y-2 rounded-lg border border-amber-400/30 bg-amber-400/5 p-3">
             <p className="text-xs text-amber-200/90">
@@ -237,7 +271,16 @@ export function DecreeDialog({
             <div className="flex items-center gap-1.5">
               <CoinsIcon aria-hidden className="size-3.5 text-[var(--color-gold)]" />
               <span>
-                Costs <strong className="text-[var(--color-gold)]">{cost}</strong>
+                Costs{" "}
+                {repriced && (
+                  <s className="text-[var(--color-gold-light)]/40">
+                    <span className="sr-only">was </span>
+                    {price.base}
+                  </s>
+                )}{" "}
+                <strong className={cn(repriced ? (cost < price.base ? "text-emerald-300" : "text-rose-300") : "text-[var(--color-gold)]")}>
+                  {cost}
+                </strong>
                 {after != null && (
                   <>
                     {" "}

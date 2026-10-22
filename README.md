@@ -150,7 +150,9 @@ bigger praise...) plus a small **perk** after each game. Open a title's bubble t
 | Rare | 600 |
 | Common | 300 |
 
-- **Loadout**: wear up to 3 titles at once. Only one Legendary or Epic at a time. Rebels and Loyalists do not mix.
+- **Loadout**: wear up to 9 titles at once and build combos: 2 super rare slots (Legendary or Epic), 3 bronze slots
+  (Rare) and 4 basic slots (Common). A few super-broken pairs cannot be worn together, and every effect has a cap, so
+  combos are strong but never infinite. Your loadout is public: friends see your build on your profile.
 - **Curses**: mockery titles (Court Jester, Boot Licker...) are bought for someone else. They hurt the wearer for 8
   games and pay the person who bought them. The victim can buy back their dignity.
 - Free titles come from milestones (games played, wins, bets, praises...) and act awards.

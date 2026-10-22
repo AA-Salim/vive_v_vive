@@ -4,9 +4,10 @@
 --   1. Deploy the app version that ships this file (it calls the guarded functions and only falls back to the
 --      old direct writes while those functions are missing).
 --   2. Run every phase10 file, in this order: foundation, live-sync, titles, prophecy-vote, chaos, betting,
---      praise, duels, bounties-shame, lobby, storytelling, hardening.
+--      praise, duels, bounties-shame, lobby, storytelling, hardening. phase10_all.sql holds the first eleven in
+--      that order, so phase10_all.sql then phase10_hardening.sql is the same thing.
 --   3. Check the site works (declare a game, place a bet, claim the daily stipend, add a roster player...).
---   4. Run this file. Idempotent: running it again changes nothing.
+--   4. Run this file between games (no game in progress). Idempotent: running it again changes nothing.
 --
 -- What it protects, now that every legitimate write goes through a SECURITY DEFINER function:
 --   * Points minting. adjust_balance and the legacy settle/refund functions (resolve_bets, refund_all_bets,
@@ -21,13 +22,14 @@
 --     All of them are written by functions only.
 --   * Narrow guards on tables the app still writes directly, limited to what the app itself never does:
 --     the host of a game (game_sessions.created_by, trusted by every settle and refund function) cannot be
---     rewritten and only a fresh draft can be deleted, the seats of a game (session_assignments) freeze when the
---     draft ends, a recorded game row cannot be edited or deleted, acts and act snapshots are admin-only, and
---     titles can only be self-engraved when they are free honors (no free shop perks, no forged brands, no
---     repricing).
+--     rewritten, a game only moves forward through its phases (the app's own transitions, by the people the app
+--     lets make them), a finished or canceled game is final, only a fresh draft can be deleted, the seats of a
+--     game (session_assignments) freeze when the draft ends, a recorded game row cannot be edited or deleted,
+--     acts and act snapshots are admin-only, and titles can only be self-engraved when they are free honors (no
+--     free shop perks, no forged brands, no repricing).
 --
 -- Not locked, because the app still writes them directly as the user and a lockdown would break it:
---   game_sessions (status, resolved_by, game_id), games   the session lifecycle and the declare claim
+--   game_sessions phase moves and the declare claim, games inserts   the session lifecycle (guarded above)
 --   session_assignments during the draft, titles / user_titles honors   lobby draft, award and milestone engraving
 --   daily_fearless, player_queue, vainqueur_state, coach_draft_picks, prophecies (legacy), champion_roles
 --
@@ -175,22 +177,99 @@ REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
 -- Functions run as the owner and are never affected.
 -- ============================================================
 
--- The host. Sessions are created with created_by = the signed-in creator and nothing ever changes it, but anyone
--- could rewrite it and then settle, refund or cancel someone else's live game through the v2 functions. The app
--- only deletes a draft it just created (when seating failed); deleting anything else wiped bets, decrees and
--- stakes through the cascades.
+-- The host and the lifecycle. Every settle and refund function trusts created_by and the status, and the seat
+-- freeze below only holds if a game can never go back to its draft. Clients get exactly the moves the app makes:
+--   insert   a fresh draft or coach draft hosted by the caller, nothing claimed or linked yet
+--   forward  coach_draft -> draft (host, admin or a coach), draft -> chaos (host or admin), chaos -> betting and
+--            betting -> in_game (host or admin anytime, anyone else once the timer ran out, 5 s of clock slack)
+--   back     draft -> coach_draft only while no seat exists (the coach confirm rollback)
+--   finish   in_game -> blue_win / red_win by the host or an admin holding the claim, only for the game that
+--            record_game_outcome() recorded with that winner
+--   cancel   any live phase -> canceled by the host or an admin, never once a game is linked
+--   claim    resolved_by and game_id move only while in_game, by the host or an admin, for themselves
+-- A finished or canceled game is final, the host and coaches never change, and each timer is only set when its
+-- phase opens. The app only deletes a draft it just created (when seating failed).
 CREATE OR REPLACE FUNCTION vvv_game_sessions_host_guard() RETURNS TRIGGER
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_manager BOOLEAN;
+  v_coach BOOLEAN;
+  v_ok BOOLEAN;
 BEGIN
   IF current_user NOT IN ('anon', 'authenticated') THEN
     RETURN COALESCE(NEW, OLD);
   END IF;
-  IF (TG_OP = 'INSERT' AND (auth.uid() IS NULL OR NEW.created_by IS DISTINCT FROM auth.uid()))
-     OR (TG_OP = 'UPDATE' AND NEW.created_by IS DISTINCT FROM OLD.created_by)
-     OR (TG_OP = 'DELETE' AND (OLD.status NOT IN ('coach_draft', 'draft') OR OLD.created_by IS DISTINCT FROM auth.uid())) THEN
+
+  IF TG_OP = 'INSERT' THEN
+    IF v_uid IS NULL OR NEW.created_by IS DISTINCT FROM v_uid OR NEW.status NOT IN ('coach_draft', 'draft')
+       OR NEW.game_id IS NOT NULL OR NEW.resolved_by IS NOT NULL THEN
+      RAISE EXCEPTION 'session:host_locked' USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.status NOT IN ('coach_draft', 'draft') OR v_uid IS NULL OR OLD.created_by IS DISTINCT FROM v_uid THEN
+      RAISE EXCEPTION 'session:host_locked' USING ERRCODE = '42501';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF NEW.created_by IS DISTINCT FROM OLD.created_by
+     OR NEW.blue_coach_id IS DISTINCT FROM OLD.blue_coach_id
+     OR NEW.red_coach_id IS DISTINCT FROM OLD.red_coach_id
+     OR NEW.game_mode IS DISTINCT FROM OLD.game_mode THEN
     RAISE EXCEPTION 'session:host_locked' USING ERRCODE = '42501';
   END IF;
-  RETURN COALESCE(NEW, OLD);
+
+  v_manager := v_uid IS NOT NULL AND (
+    OLD.created_by IS NULL OR OLD.created_by = v_uid
+    OR EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_uid AND is_admin)
+  );
+  v_coach := v_uid IS NOT NULL AND v_uid IN (OLD.blue_coach_id, OLD.red_coach_id);
+
+  IF NEW.status IS DISTINCT FROM OLD.status THEN
+    v_ok := CASE
+      WHEN OLD.status = 'coach_draft' AND NEW.status = 'draft' THEN v_manager OR v_coach
+      WHEN OLD.status = 'draft' AND NEW.status = 'coach_draft' THEN
+        (v_manager OR v_coach) AND NOT EXISTS (SELECT 1 FROM session_assignments WHERE session_id = OLD.id)
+      WHEN OLD.status = 'draft' AND NEW.status = 'chaos' THEN v_manager
+      WHEN OLD.status = 'chaos' AND NEW.status = 'betting' THEN
+        v_manager OR OLD.chaos_ends_at IS NULL OR OLD.chaos_ends_at <= now() + interval '5 seconds'
+      WHEN OLD.status = 'betting' AND NEW.status = 'in_game' THEN
+        v_manager OR OLD.betting_ends_at IS NULL OR OLD.betting_ends_at <= now() + interval '5 seconds'
+      WHEN OLD.status = 'in_game' AND NEW.status IN ('blue_win', 'red_win') THEN
+        v_manager AND NEW.game_id IS NOT NULL AND NEW.resolved_by = v_uid
+        AND EXISTS (
+          SELECT 1 FROM game_outcome_records r
+          WHERE r.session_id = OLD.id AND r.game_id = NEW.game_id AND r.winner_side || '_win' = NEW.status
+        )
+      WHEN OLD.status IN ('coach_draft', 'draft', 'chaos', 'betting', 'in_game') AND NEW.status = 'canceled' THEN
+        v_manager AND NEW.game_id IS NULL AND (NEW.resolved_by IS NULL OR NEW.resolved_by = v_uid)
+      ELSE false
+    END;
+    IF NOT COALESCE(v_ok, false) THEN
+      RAISE EXCEPTION 'session:phase_locked' USING ERRCODE = '42501';
+    END IF;
+  END IF;
+
+  IF (NEW.chaos_ends_at IS DISTINCT FROM OLD.chaos_ends_at AND NOT (OLD.status = 'draft' AND NEW.status = 'chaos'))
+     OR (NEW.betting_ends_at IS DISTINCT FROM OLD.betting_ends_at AND NOT (OLD.status = 'chaos' AND NEW.status = 'betting')) THEN
+    RAISE EXCEPTION 'session:phase_locked' USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT (OLD.status <> 'canceled' AND NEW.status = 'canceled')
+     AND (NEW.resolved_by IS DISTINCT FROM OLD.resolved_by OR NEW.game_id IS DISTINCT FROM OLD.game_id)
+     AND NOT (
+       v_manager AND OLD.status = 'in_game'
+       AND (NEW.resolved_by IS NULL OR NEW.resolved_by = v_uid)
+       AND (NEW.game_id IS NOT DISTINCT FROM OLD.game_id OR NEW.resolved_by = v_uid)
+     ) THEN
+    RAISE EXCEPTION 'session:claim_locked' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
 END;
 $$;
 
@@ -198,7 +277,7 @@ REVOKE EXECUTE ON FUNCTION vvv_game_sessions_host_guard() FROM PUBLIC, anon, aut
 
 DROP TRIGGER IF EXISTS vvv_game_sessions_host_guard ON game_sessions;
 CREATE TRIGGER vvv_game_sessions_host_guard
-  BEFORE INSERT OR UPDATE OF created_by OR DELETE ON game_sessions
+  BEFORE INSERT OR UPDATE OR DELETE ON game_sessions
   FOR EACH ROW EXECUTE FUNCTION vvv_game_sessions_host_guard();
 
 -- Recorded games. The declare flow inserts a game row and, when recording fails before anything landed, deletes
@@ -225,21 +304,34 @@ CREATE TRIGGER vvv_games_guard
   BEFORE UPDATE OR DELETE ON games
   FOR EACH ROW EXECUTE FUNCTION vvv_games_guard();
 
--- The seats. The lobby writes them during the draft only (create, coach confirm, reroll, locks); decrees change
--- them later through chaos_issue_decree(). Counters, game points and bounty hunters are read from the seats at
--- declare time, so a seat swapped mid-game was a free win.
+-- The seats. The lobby writes them during the draft only, as the host, an admin or a coach (create, coach
+-- confirm, reroll, locks); decrees change them later through chaos_issue_decree(). Counters, game points and
+-- bounty hunters are read from the seats at declare time, so a seat swapped mid-game was a free win.
 CREATE OR REPLACE FUNCTION vvv_session_assignments_guard() RETURNS TRIGGER
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_session UUID;
 BEGIN
   IF current_user NOT IN ('anon', 'authenticated') THEN
     RETURN COALESCE(NEW, OLD);
   END IF;
-  IF (TG_OP IN ('UPDATE', 'DELETE') AND NOT EXISTS (
-        SELECT 1 FROM game_sessions WHERE id = OLD.session_id AND status IN ('coach_draft', 'draft')))
-     OR (TG_OP IN ('INSERT', 'UPDATE') AND NOT EXISTS (
-        SELECT 1 FROM game_sessions WHERE id = NEW.session_id AND status IN ('coach_draft', 'draft'))) THEN
-    RAISE EXCEPTION 'session:seats_locked' USING ERRCODE = '42501';
-  END IF;
+  FOREACH v_session IN ARRAY CASE TG_OP
+    WHEN 'INSERT' THEN ARRAY[NEW.session_id]
+    WHEN 'DELETE' THEN ARRAY[OLD.session_id]
+    ELSE ARRAY[OLD.session_id, NEW.session_id]
+  END LOOP
+    IF v_uid IS NULL OR NOT EXISTS (
+      SELECT 1 FROM game_sessions s
+      WHERE s.id = v_session AND s.status IN ('coach_draft', 'draft')
+        AND (
+          s.created_by IS NULL OR v_uid IN (s.created_by, s.blue_coach_id, s.red_coach_id)
+          OR EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_uid AND is_admin)
+        )
+    ) THEN
+      RAISE EXCEPTION 'session:seats_locked' USING ERRCODE = '42501';
+    END IF;
+  END LOOP;
   RETURN COALESCE(NEW, OLD);
 END;
 $$;

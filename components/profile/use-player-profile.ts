@@ -1,10 +1,8 @@
 "use client"
 
 import { useQuery, useQueryClient } from "@tanstack/react-query"
-import { useCallback, useMemo } from "react"
-import { useEquippedTitles } from "@/hooks/use-equipped-titles"
-import { readTitles } from "@/lib/profiles/loadout"
-import type { PlayerProfileResponse, ProfileTitles, ScopeKey } from "@/lib/profiles/types"
+import { useCallback } from "react"
+import type { PlayerProfileResponse, ScopeKey } from "@/lib/profiles/types"
 
 export type ProfileScope = "current" | ScopeKey
 
@@ -64,16 +62,4 @@ export function usePrefetchProfile() {
       }),
     [queryClient]
   )
-}
-
-// The equipped-titles feed is live and app-wide: prefer it for the loadout, fall back to the file's own copy.
-export function useLiveTitles(profile: PlayerProfileResponse | undefined): ProfileTitles | null {
-  const { byUserId, byPlayerId } = useEquippedTitles()
-  return useMemo(() => {
-    if (!profile) return null
-    const { userId, id } = profile.player
-    if (!userId) return null
-    const live = byUserId.get(userId) ?? byPlayerId.get(id)
-    return (live ? readTitles(live, profile.titles?.owned ?? null) : null) ?? profile.titles
-  }, [profile, byUserId, byPlayerId])
 }

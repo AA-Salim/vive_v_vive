@@ -423,11 +423,13 @@ interface IdentityBlockProps {
   profile: PlayerProfileResponse
   // The rendered name heading: a dialog title in the sheet, the page h1 on the full page.
   heading: ReactNode
+  // The primary title, worn under the name.
+  epithet?: ReactNode
   large?: boolean
   className?: string
 }
 
-export function IdentityBlock({ profile, heading, large = false, className }: IdentityBlockProps) {
+export function IdentityBlock({ profile, heading, epithet, large = false, className }: IdentityBlockProps) {
   const { player, allTime } = profile
   return (
     <div className={cn("flex min-w-0 items-center gap-3 sm:gap-4", className)}>
@@ -444,6 +446,7 @@ export function IdentityBlock({ profile, heading, large = false, className }: Id
           {!player.isActive ? <span className="rounded bg-muted px-1 py-px tracking-wider text-muted-foreground">Benched</span> : null}
         </p>
         {heading}
+        {epithet}
         <p className="truncate text-sm text-muted-foreground">
           {player.username ? `@${player.username}` : "Unclaimed seat"}
           {allTime.games > 0 ? ` · ${plural(allTime.games, "game")} all time` : " · fresh off the boat"}

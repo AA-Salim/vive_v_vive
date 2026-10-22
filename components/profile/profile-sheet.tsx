@@ -15,15 +15,16 @@ import {
   RivalCards,
   StatGrid,
 } from "@/components/profile/profile-parts"
+import { LoadoutPanel } from "@/components/profile/loadout-panel"
 import { SeasonPicker, shortActName } from "@/components/profile/season-picker"
-import { TitleLoadout } from "@/components/profile/title-loadout"
-import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
-import { ProfileApiError, useLiveTitles, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
+import { TitleEpithet } from "@/components/profile/title-loadout"
+import { ProfileApiError, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 import { buttonVariants } from "@/components/ui/button"
 import { Drawer, DrawerClose, DrawerContent, DrawerDescription, DrawerTitle } from "@/components/ui/drawer"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { PROFILE_HELP } from "@/lib/profiles/help"
 import { cn } from "@/lib/utils"
 
@@ -66,7 +67,7 @@ interface QuickViewProps {
 function QuickView({ player, scope, onScope, onLeave, Title, Description }: QuickViewProps) {
   const query = usePlayerProfile(player, scope)
   const profile = query.data
-  const titles = useLiveTitles(profile)
+  const { entryFor } = useEquippedTitles()
 
   if (!profile) {
     if (query.isPending) return <QuickSkeleton Title={Title} />
@@ -95,20 +96,23 @@ function QuickView({ player, scope, onScope, onLeave, Title, Description }: Quic
         <IdentityBlock
           profile={profile}
           className="pr-10"
+          epithet={<TitleEpithet entry={entryFor(who.id, who.userId)} size="md" />}
           heading={<Title className="truncate font-display text-2xl leading-tight font-semibold text-[var(--color-gold-light)]">{who.name}</Title>}
         />
         <Description className="sr-only">Record, banners and rivals of {who.name}</Description>
         <BountyBanner bounty={profile.bounty} name={who.name} />
-        <SeasonPicker seasons={profile.seasons} scope={scope} onChange={onScope} compact />
       </div>
 
-      <section className="space-y-2" aria-label="Banner loadout">
-        <Eyebrow help={PROFILE_HELP.loadout}>Banner loadout</Eyebrow>
-        <LoadoutSummaryBar userId={who.userId} name={who.name} />
-        <TitleLoadout titles={titles} linked={!!who.userId} />
-      </section>
+      <LoadoutPanel
+        userId={who.userId}
+        name={who.name}
+        className="rounded-2xl border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/40 p-3"
+      />
 
-      <StatGrid profile={profile} />
+      <div className="space-y-3">
+        <SeasonPicker seasons={profile.seasons} scope={scope} onChange={onScope} compact />
+        <StatGrid profile={profile} />
+      </div>
 
       {profile.record.games === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--color-gold)]/20 px-4 py-5 text-center text-sm text-muted-foreground">

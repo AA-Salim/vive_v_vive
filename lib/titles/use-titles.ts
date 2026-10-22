@@ -44,10 +44,11 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 const post = <T>(url: string, payload: unknown) =>
   request<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
 
-export function useTitlesCatalog() {
+export function useTitlesCatalog(enabled = true) {
   return useQuery({
     queryKey: TITLES_KEYS.catalog,
     queryFn: () => request<TitlesCatalogResponse>("/api/titles"),
+    enabled,
     staleTime: 15_000,
   })
 }
@@ -88,6 +89,13 @@ export function useTitlesLockSync() {
       (signal.kind === "db" && signal.table === "game_sessions")
     if (sessionMoved) queryClient.invalidateQueries({ queryKey: TITLES_KEYS.catalog })
   })
+}
+
+// True while a live game seals the signed-in user's loadout. Pass false for anyone else's loadout: no fetch.
+export function useTitlesSealed(enabled = true): boolean {
+  useTitlesLockSync()
+  const catalog = useTitlesCatalog(enabled)
+  return enabled && (catalog.data?.locked ?? false)
 }
 
 function useRefreshTitles() {

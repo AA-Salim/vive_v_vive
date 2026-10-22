@@ -66,7 +66,7 @@ export function curseHelp(curse: CurseBadge): HelpEntry {
   return { ...help, title: `${curse.title} (curse)`, limits: `${curse.bestowedBy ? `Branded by ${curse.bestowedBy}, ` : ""}${clock}. ${help.limits ?? ""}` }
 }
 
-function MiniChip({ name, category, rarity }: Pick<LoadoutEntry, "category" | "rarity"> & { name: string }) {
+export function MiniChip({ name, category, rarity }: Pick<LoadoutEntry, "category" | "rarity"> & { name: string }) {
   const Icon = CATEGORY_ICON[iconKeyFor(category, rarity)]
   return (
     <span
@@ -76,6 +76,16 @@ function MiniChip({ name, category, rarity }: Pick<LoadoutEntry, "category" | "r
       )}
     >
       <Icon aria-hidden className="size-2.5 shrink-0" />
+      <span className="truncate">{name}</span>
+    </span>
+  )
+}
+
+export function CurseChip({ name }: { name: string }) {
+  return (
+    <span className="inline-flex h-4 max-w-[7.5rem] min-w-0 items-center gap-0.5 rounded border border-dashed border-rose-500/50 bg-rose-500/10 px-1 text-[9px] leading-none font-semibold text-rose-200">
+      <Skull aria-hidden className="size-2.5 shrink-0" />
+      <span className="sr-only">Curse: </span>
       <span className="truncate">{name}</span>
     </span>
   )
@@ -118,13 +128,7 @@ export function LoadoutChips({ title, mirrored = false, className }: LoadoutChip
       ))}
       {hidden > 0 && <span className="text-[9px] font-semibold text-muted-foreground">+{hidden}</span>}
       {curses.map((c) => (
-        <span
-          key={c.title}
-          className="inline-flex h-4 max-w-[7.5rem] min-w-0 items-center gap-0.5 rounded border border-dashed border-rose-500/50 bg-rose-500/10 px-1 text-[9px] leading-none font-semibold text-rose-200"
-        >
-          <Skull aria-hidden className="size-2.5 shrink-0" />
-          <span className="truncate">{c.title}</span>
-        </span>
+        <CurseChip key={c.title} name={c.title} />
       ))}
     </span>
   )

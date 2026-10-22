@@ -1,6 +1,7 @@
 import {
   AwardIcon,
   ChartColumnIcon,
+  ContactRoundIcon,
   CrosshairIcon,
   CrownIcon,
   DicesIcon,
@@ -43,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Court",
     blurb: "Purses, titles and the King's ledger",
     links: [
+      { href: "/players", label: "Players", short: "Players", description: "Every noble, their record and the titles they wear.", icon: ContactRoundIcon },
       { href: "/leaderboard", label: "Leaderboard", short: "Ranks", description: "Who holds the purse. Who holds the debt.", icon: CrownIcon },
       { href: "/titles", label: "Titles", short: "Titles", description: "Perks, curses and the going rate for dignity.", icon: AwardIcon },
       { href: "/gamba", label: "Gamba", short: "Gamba", description: "The Gambling Hall. Glory, or a page in the notebook.", icon: DicesIcon },

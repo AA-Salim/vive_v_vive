@@ -213,7 +213,7 @@ export function ProfileView() {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard id="titles" eyebrow="Wardrobe" title="Titles" help={titlesHelp}>
+        <SectionCard id="titles" eyebrow="Titles you own, not worn" title="Wardrobe" help={titlesHelp}>
           <TitlesCard />
         </SectionCard>
         <SectionCard id="deeds" eyebrow="Milestones" title="Deeds" help={PROFILE_HELP.deeds}>

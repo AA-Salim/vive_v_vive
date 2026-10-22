@@ -2,6 +2,7 @@ import type { HelpEntry } from "@/lib/help"
 import { LOADOUT_TIERS, type TierSpec } from "@/lib/profiles/loadout"
 import { PROFILE_RULES, type LoadoutTitle } from "@/lib/profiles/types"
 import { CATEGORY_META, RARITY_LABEL } from "@/lib/titles/catalog"
+import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
 import type { TitleCategory } from "@/lib/titles/types"
 
 const READING = "Nothing. Reading another noble's file is free."
@@ -42,6 +43,13 @@ export const PROFILE_HELP = {
     cost: "The wearer pays tribute to whoever branded them while the curse burns.",
   },
 } satisfies Record<string, HelpEntry>
+
+export const DIRECTORY_HELP: HelpEntry = {
+  title: "Loadouts",
+  does: `Every claimed player wears up to ${MAX_EQUIPPED} titles: ${LOADOUT_SLOTS.map((s) => `${SLOT_COUNT[s]} ${SLOT_LABEL[s].toLowerCase()}`).join(", ")}. Each one acts the moment its wearer decrees, bets, praises or duels, and the line under the chips sums up the whole build. The highest title is the epithet under the name.`,
+  cost: READING,
+  limits: "Curses, marked with a skull, are branded by someone else and never take a slot. Loadouts are sealed while a game is live. Tap a card for the full file.",
+}
 
 export function titleHelp(title: LoadoutTitle, tier: TierSpec): HelpEntry {
   const category = CATEGORY_META[title.category as TitleCategory]?.label

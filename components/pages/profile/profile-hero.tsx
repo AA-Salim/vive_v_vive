@@ -6,9 +6,11 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { formatNumber, formatSigned } from "@/components/pages/format"
 import { toneOf } from "@/components/pages/indicators"
 import { StatTile } from "@/components/pages/stat-tile"
-import { PlayerTitles } from "@/components/titles/player-titles"
+import { LoadoutPanel } from "@/components/profile/loadout-panel"
+import { TitleEpithet } from "@/components/profile/title-loadout"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { PURSE_HELP } from "@/lib/economy"
 import { PROFILE_HELP } from "@/lib/pages/help"
 import type { PointsHistoryResponse } from "@/lib/pages/types"
@@ -37,6 +39,7 @@ function rankLine(rank: number | null, of: number): string {
 export function ProfileHero({ userId, name, username, avatarUrl, playerName, balance, today, history }: ProfileHeroProps) {
   const devotion = history?.breakdown.filter((r) => isDevotion(r.reason)).reduce((sum, r) => sum + r.count, 0) ?? 0
   const net = history ? history.income - history.spending : 0
+  const { byUserId } = useEquippedTitles()
 
   return (
     <section
@@ -53,11 +56,11 @@ export function ProfileHero({ userId, name, username, avatarUrl, playerName, bal
               {history?.act ? history.act.name : "Your court file"}
             </p>
             <h1 className="truncate font-display text-3xl leading-tight font-semibold text-[var(--color-gold-light)] sm:text-4xl">{name}</h1>
+            <TitleEpithet entry={byUserId.get(userId)} className="mt-0.5" />
             <p className="truncate text-sm text-muted-foreground">
               {username ? `@${username}` : null}
               {playerName ? ` · plays as ${playerName}` : " · no player claimed"}
             </p>
-            <PlayerTitles userId={userId} size="md" className="mt-1.5" />
           </div>
         </div>
 
@@ -83,6 +86,12 @@ export function ProfileHero({ userId, name, username, avatarUrl, playerName, bal
           </div>
         </div>
       </div>
+
+      <LoadoutPanel
+        userId={userId}
+        name={name}
+        className="relative border-t border-[var(--color-gold)]/12 bg-[var(--color-navy)]/30 p-4 sm:p-6"
+      />
 
       <div className="relative grid grid-cols-2 gap-2 border-t border-[var(--color-gold)]/10 p-3 sm:grid-cols-4 sm:p-4">
         <StatTile

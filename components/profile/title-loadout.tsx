@@ -1,48 +1,69 @@
 "use client"
 
-import { HourglassIcon, PlusIcon, SkullIcon, SparklesIcon } from "lucide-react"
+import { CrownIcon, HourglassIcon, PlusIcon, SkullIcon, SparklesIcon, ZapIcon } from "lucide-react"
+import { curseHelp, loadoutHelp, loadoutOf } from "@/components/titles/loadout-chips"
 import { CATEGORY_ICON, RARITY_BADGE, RARITY_TEXT, iconKeyFor } from "@/components/titles/title-visuals"
 import { InfoTip } from "@/components/ui/info-tip"
-import { PROFILE_HELP, titleHelp } from "@/lib/profiles/help"
-import { groupByTier, LOADOUT_CAPACITY, LOADOUT_TIERS, type TierSpec } from "@/lib/profiles/loadout"
-import type { LoadoutTitle, ProfileCurse, ProfileTitles } from "@/lib/profiles/types"
+import { PROFILE_HELP } from "@/lib/profiles/help"
 import { RARITY_LABEL } from "@/lib/titles/catalog"
+import { effectSummary } from "@/lib/titles/effects"
+import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_HINT, SLOT_LABEL, type LoadoutSlot } from "@/lib/titles/loadout"
+import type { CurseBadge, EquippedTitle, LoadoutEntry } from "@/lib/titles/types"
 import { cn } from "@/lib/utils"
 
-const TIER_ACCENT: Record<TierSpec["tier"], string> = {
-  super: "text-[var(--color-gold)]",
-  bronze: "text-amber-500/90",
-  basic: "text-[var(--color-gold-light)]/60",
+const SLOT_ACCENT: Record<LoadoutSlot, string> = {
+  super_rare: "text-violet-200",
+  rare: "text-sky-200",
+  common: "text-[var(--color-gold-light)]/70",
 }
 
-const TIER_COLUMNS: Record<TierSpec["tier"], string> = {
-  super: "grid-cols-2",
-  bronze: "grid-cols-3",
-  basic: "grid-cols-4",
+// Effect lines need room: on phones every tier wraps to two columns, so the 2/3/4 shape still reads.
+const SLOT_COLUMNS: Record<LoadoutSlot, string> = {
+  super_rare: "grid-cols-2",
+  rare: "grid-cols-2 sm:grid-cols-3",
+  common: "grid-cols-2 sm:grid-cols-4",
 }
 
-// Perk text needs room: on phones the detailed rows wrap to two columns.
-const DETAILED_COLUMNS: Record<TierSpec["tier"], string> = {
-  super: "grid-cols-2",
-  bronze: "grid-cols-2 sm:grid-cols-3",
-  basic: "grid-cols-2 sm:grid-cols-4",
+// The primary title, "the" epithet worn under a player's name.
+export function primaryTitleOf(entry: EquippedTitle | null | undefined): LoadoutEntry | null {
+  if (!entry) return null
+  const loadout = loadoutOf(entry)
+  return loadout.find((t) => t.primary) ?? loadout[0] ?? null
 }
 
-interface TitleSlotProps {
-  title: LoadoutTitle
-  tier: TierSpec
-  detailed: boolean
-  // Bronze and basic rows each hold a single rarity, so only mixed slots spell it out.
-  showRarity: boolean
+interface TitleEpithetProps {
+  entry: EquippedTitle | null | undefined
+  size?: "md" | "lg"
+  className?: string
 }
 
-function TitleSlot({ title, tier, detailed, showRarity }: TitleSlotProps) {
+export function TitleEpithet({ entry, size = "lg", className }: TitleEpithetProps) {
+  const primary = primaryTitleOf(entry)
+  if (!primary) return null
+  const Icon = CATEGORY_ICON[iconKeyFor(primary.category, primary.rarity)]
+  return (
+    <p
+      className={cn(
+        "flex min-w-0 items-center gap-1.5 font-display leading-tight font-semibold italic",
+        size === "lg" ? "text-lg sm:text-xl" : "text-base",
+        RARITY_TEXT[primary.rarity],
+        className
+      )}
+    >
+      <Icon aria-hidden className={cn("shrink-0", size === "lg" ? "size-4 sm:size-5" : "size-4")} />
+      <span className="sr-only">Known as </span>
+      <span className="truncate">{primary.title}</span>
+    </p>
+  )
+}
+
+function TitleSlot({ title, showRarity }: { title: LoadoutEntry; showRarity: boolean }) {
   const Icon = CATEGORY_ICON[iconKeyFor(title.category, title.rarity)]
-  const lines = [...new Set([title.effect, title.perk].filter((line): line is string => !!line))]
+  const effect = title.effect ?? (title.category === "mockery" ? null : effectSummary(title.title))
   return (
     <li className="min-w-0">
       <InfoTip
-        help={titleHelp(title, tier)}
+        help={loadoutHelp(title)}
         side="top"
         className={cn(
           "flex size-auto h-full min-h-16 w-full flex-col items-start justify-start gap-1 rounded-xl border p-2 text-left before:inset-0 hover:brightness-125",
@@ -51,104 +72,105 @@ function TitleSlot({ title, tier, detailed, showRarity }: TitleSlotProps) {
       >
         <span className="flex w-full items-center justify-between gap-1">
           <Icon aria-hidden className={cn("size-4 shrink-0", RARITY_TEXT[title.rarity])} />
-          {showRarity ? (
+          {title.primary ? (
+            <CrownIcon aria-label="Primary title" className="size-3.5 shrink-0 text-[var(--color-gold)]" />
+          ) : showRarity ? (
             <span className={cn("truncate text-[9px] font-semibold tracking-[0.14em] uppercase", RARITY_TEXT[title.rarity])}>
               {RARITY_LABEL[title.rarity]}
             </span>
           ) : null}
         </span>
-        <span className="line-clamp-2 w-full text-[11px] leading-tight font-semibold break-words sm:text-xs">{title.name}</span>
-        {detailed
-          ? lines.map((line, i) => (
-              <span
-                key={line}
-                className={cn(
-                  "line-clamp-3 w-full text-[11px] leading-snug font-normal",
-                  i === 0 ? "text-[var(--color-gold-light)]/70" : "text-emerald-200/80"
-                )}
-              >
-                {line}
-              </span>
-            ))
-          : null}
+        <span className="line-clamp-2 w-full text-[11px] leading-tight font-semibold break-words sm:text-xs">{title.title}</span>
+        <span className="flex w-full gap-1 text-[11px] leading-snug font-normal text-[var(--color-gold-light)]/75">
+          <ZapIcon aria-hidden className="mt-px size-3 shrink-0 text-[var(--color-gold)]" />
+          <span className="line-clamp-3">{effect ?? "No immediate effect: its perk pays after the game."}</span>
+        </span>
       </InfoTip>
     </li>
   )
 }
 
-function EmptySlot({ tier }: { tier: TierSpec }) {
+function EmptySlot({ slot, onAdd, disabled }: { slot: LoadoutSlot; onAdd?: () => void; disabled: boolean }) {
+  const classes =
+    "flex h-full min-h-16 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--color-gold)]/20 bg-[var(--color-navy)]/40 p-2 text-center text-[11px] text-muted-foreground/80"
+  const label = `Empty ${SLOT_LABEL[slot].toLowerCase()} slot`
+  if (!onAdd) {
+    return (
+      <li className={classes} aria-label={label}>
+        <PlusIcon aria-hidden className="size-3.5 opacity-60" />
+        Empty slot
+      </li>
+    )
+  }
   return (
-    <li
-      className="flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--color-gold)]/15 bg-[var(--color-navy)]/40 p-2 text-center text-muted-foreground/70"
-      aria-label={`Empty ${tier.label.toLowerCase()} slot`}
-    >
-      <PlusIcon aria-hidden className="size-3.5" />
-      <span className="text-[10px] leading-none">Empty</span>
+    <li className="min-w-0">
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={disabled}
+        aria-label={`${label}: open the loadout editor`}
+        className={cn(
+          classes,
+          "transition-colors outline-none hover:border-[var(--color-gold)]/50 hover:bg-[var(--color-gold)]/[0.06] hover:text-[var(--color-gold-light)] focus-visible:ring-2 focus-visible:ring-[var(--color-gold)]/60 disabled:pointer-events-none disabled:opacity-50"
+        )}
+      >
+        <PlusIcon aria-hidden className="size-4 text-[var(--color-gold)]/80" />
+        Empty slot
+      </button>
     </li>
   )
 }
 
-function SingleBanner({ title }: { title: LoadoutTitle | undefined }) {
-  if (!title) {
-    return (
-      <div className="flex min-h-16 items-center gap-3 rounded-xl border border-dashed border-[var(--color-gold)]/20 bg-[var(--color-navy)]/40 px-3 py-3">
-        <PlusIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground">No banner raised. Walks into battle as a commoner, bold choice.</p>
-      </div>
-    )
-  }
-  const tier = LOADOUT_TIERS.find((t) => t.tier === title.tier) ?? LOADOUT_TIERS[LOADOUT_TIERS.length - 1]
-  return (
-    <ul className="grid grid-cols-1">
-      <TitleSlot title={title} tier={tier} detailed showRarity />
-    </ul>
-  )
-}
+const curseClock = (curse: CurseBadge) =>
+  `${curse.bestowedBy ? `Branded by ${curse.bestowedBy} · ` : "Branded · "}${curse.gamesLeft} game${curse.gamesLeft === 1 ? "" : "s"} left`
 
-export function CurseMarks({ curses, heading = true, className }: { curses: ProfileCurse[]; heading?: boolean; className?: string }) {
+export function CurseMarks({ curses, heading = true, className }: { curses: CurseBadge[]; heading?: boolean; className?: string }) {
   if (curses.length === 0) return null
   return (
-    <div className={cn("space-y-2", className)}>
+    <section aria-label="Marks of shame" className={cn("space-y-2", className)}>
       {heading ? (
         <p className="flex items-center gap-1 text-[10px] font-semibold tracking-[0.18em] text-rose-300/90 uppercase">
           <SkullIcon aria-hidden className="size-3.5" />
-          Marks of shame
+          Marks of shame · no slot
           <InfoTip help={PROFILE_HELP.curses} />
         </p>
       ) : null}
-      <ul className="space-y-1.5">
+      <ul className="grid gap-1.5 sm:grid-cols-2">
         {curses.map((curse) => (
           <li
-            key={curse.name}
+            key={curse.title}
             className="flex min-w-0 items-start gap-2.5 rounded-xl border border-dashed border-rose-500/40 bg-rose-500/[0.07] px-3 py-2"
           >
             <SkullIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-rose-400" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-rose-100">{curse.name}</p>
-              {curse.perk ? <p className="text-xs leading-snug text-rose-100/75">{curse.perk}</p> : null}
+              <p className="truncate text-sm font-semibold text-rose-100">{curse.title}</p>
+              <p className="text-xs leading-snug text-rose-100/80">{curse.effect ?? curse.perk ?? "Bites after each game."}</p>
               <p className="mt-0.5 flex items-center gap-1 text-[11px] text-rose-200/70">
                 <HourglassIcon aria-hidden className="size-3 shrink-0" />
-                {curse.bestowedBy ? `Branded by ${curse.bestowedBy}` : "Branded"}
-                {` · ${curse.gamesLeft} game${curse.gamesLeft === 1 ? "" : "s"} left`}
+                {curseClock(curse)}
               </p>
             </div>
+            <InfoTip help={curseHelp(curse)} align="end" />
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   )
 }
 
 interface TitleLoadoutProps {
-  titles: ProfileTitles | null
+  entry: EquippedTitle | null | undefined
+  // A Discord account claims the seat. Without one there is no purse and no banner.
   linked: boolean
-  // Detailed: perk text inside each slot (full page). Otherwise the info bubble carries it.
-  detailed?: boolean
+  // Your own loadout: empty slots open the editor.
+  onEmpty?: (slot: LoadoutSlot) => void
+  disabled?: boolean
   showCurses?: boolean
   className?: string
 }
 
-export function TitleLoadout({ titles, linked, detailed = false, showCurses = true, className }: TitleLoadoutProps) {
+// The full 2/3/4 loadout by slot tier, every slot with its effect line, empty ones as placeholders. Curses apart.
+export function TitleLoadout({ entry, linked, onEmpty, disabled = false, showCurses = true, className }: TitleLoadoutProps) {
   if (!linked) {
     return (
       <p className={cn("text-sm text-muted-foreground", className)}>
@@ -156,61 +178,46 @@ export function TitleLoadout({ titles, linked, detailed = false, showCurses = tr
       </p>
     )
   }
-  if (!titles) {
-    return <p className={cn("text-sm text-muted-foreground", className)}>The herald lost the banner list. Try again in a moment.</p>
-  }
 
-  const filled = titles.loadout.length
+  const loadout = entry ? loadoutOf(entry) : []
+  const curses = entry?.curses ?? []
   return (
     <div className={cn("space-y-3", className)}>
-      {titles.summary ? (
-        <p className="flex items-start gap-2 rounded-lg bg-[var(--color-gold)]/[0.06] px-3 py-2 text-xs leading-snug text-[var(--color-gold-light)] ring-1 ring-[var(--color-gold)]/20">
-          <SparklesIcon aria-hidden className="mt-px size-3.5 shrink-0 text-[var(--color-gold)]" />
-          <span>
-            <span className="font-semibold">Build: </span>
-            {titles.summary}
-          </span>
-        </p>
-      ) : null}
-
-      {titles.source === "single" ? (
-        <SingleBanner title={titles.loadout[0]} />
-      ) : (
-        <div className="space-y-2.5">
-          {groupByTier(titles.loadout).map(({ spec, titles: worn, empty }) => (
-            <section key={spec.tier} aria-label={`${spec.label} slots`}>
+      <div className="space-y-2.5">
+        {LOADOUT_SLOTS.map((slot) => {
+          const worn = loadout.filter((t) => t.slot === slot)
+          const empty = Math.max(0, SLOT_COUNT[slot] - worn.length)
+          return (
+            <section key={slot} aria-label={`${SLOT_LABEL[slot]} slots`}>
               <p className="mb-1.5 flex items-baseline justify-between gap-2 text-[10px] font-semibold tracking-[0.18em] uppercase">
-                <span className={TIER_ACCENT[spec.tier]}>
-                  {spec.label}
-                  <span className="ml-1.5 font-normal tracking-normal text-muted-foreground normal-case">{spec.rarities}</span>
+                <span className={cn("min-w-0 truncate", SLOT_ACCENT[slot])}>
+                  {SLOT_LABEL[slot]}
+                  <span className="ml-1.5 font-normal tracking-normal text-muted-foreground normal-case">{SLOT_HINT[slot]}</span>
                 </span>
-                <span className="text-muted-foreground tabular-nums">
-                  {Math.min(worn.length, spec.slots)}/{spec.slots}
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {Math.min(worn.length, SLOT_COUNT[slot])}/{SLOT_COUNT[slot]}
                 </span>
               </p>
-              <ul className={cn("grid gap-1.5 sm:gap-2", (detailed ? DETAILED_COLUMNS : TIER_COLUMNS)[spec.tier])}>
+              <ul className={cn("grid gap-1.5 sm:gap-2", SLOT_COLUMNS[slot])}>
                 {worn.map((title) => (
-                  <TitleSlot
-                    key={`${title.name}-${title.slot ?? ""}`}
-                    title={title}
-                    tier={spec}
-                    detailed={detailed}
-                    showRarity={spec.tier === "super"}
-                  />
+                  <TitleSlot key={title.title} title={title} showRarity={slot === "super_rare"} />
                 ))}
                 {Array.from({ length: empty }, (_, i) => (
-                  <EmptySlot key={`empty-${i}`} tier={spec} />
+                  <EmptySlot key={`empty-${i}`} slot={slot} disabled={disabled} onAdd={onEmpty ? () => onEmpty(slot) : undefined} />
                 ))}
               </ul>
             </section>
-          ))}
-          {filled === 0 ? (
-            <p className="text-xs text-muted-foreground">All {LOADOUT_CAPACITY} slots empty. Saving up, or saving face.</p>
-          ) : null}
-        </div>
-      )}
+          )
+        })}
+        {loadout.length === 0 ? (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <SparklesIcon aria-hidden className="size-3.5 shrink-0 text-[var(--color-gold)]/60" />
+            All {MAX_EQUIPPED} slots empty. Saving up, or saving face.
+          </p>
+        ) : null}
+      </div>
 
-      {showCurses ? <CurseMarks curses={titles.curses} /> : null}
+      {showCurses ? <CurseMarks curses={curses} /> : null}
     </div>
   )
 }

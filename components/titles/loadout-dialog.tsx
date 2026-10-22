@@ -24,7 +24,7 @@ import { effectSummary } from "@/lib/titles/effects"
 import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL, type LoadoutSlot } from "@/lib/titles/loadout"
 import { shopPrice } from "@/lib/titles/pricing"
 import type { TitleView } from "@/lib/titles/types"
-import { useSetLoadout, useTitlesCatalog } from "@/lib/titles/use-titles"
+import { useSetLoadout, useTitlesCatalog, useTitlesSealed } from "@/lib/titles/use-titles"
 
 // The loadout as a popup, mountable from any page: a bottom drawer on phones, a dialog on wider screens.
 // edit: the signed-in user's own loadout (GET /api/titles). view: anyone's build, read-only (GET /api/titles/equipped).
@@ -39,6 +39,8 @@ export interface LoadoutDialogProps {
   mode: LoadoutDialogMode
   // Display name for the view title ("<name>'s strategy").
   name?: string | null
+  // Edit mode: open with "Your titles" filtered to this slot tier (an empty slot was tapped).
+  slot?: LoadoutSlot | null
 }
 
 const RANK: Record<string, number> = { legendary: 0, epic: 1, rare: 2, common: 3 }
@@ -48,7 +50,7 @@ function possessive(name: string | null | undefined): string {
   return name.endsWith("s") ? `${name}'` : `${name}'s`
 }
 
-export function LoadoutDialog({ open, onOpenChange, userId, mode, name }: LoadoutDialogProps) {
+export function LoadoutDialog({ open, onOpenChange, userId, mode, name, slot = null }: LoadoutDialogProps) {
   const desktop = useMediaQuery("(min-width: 768px)")
   const { user } = useAuth()
   const editing = mode === "edit" && !!user && (!userId || userId === user.id)
@@ -58,7 +60,7 @@ export function LoadoutDialog({ open, onOpenChange, userId, mode, name }: Loadou
     : `What ${name ?? "they"} wear${name ? "s" : ""}, and what it does to every decree, bet, praise and duel.`
   const body: ReactNode = open ? (
     editing ? (
-      <EditBody />
+      <EditBody slot={slot} />
     ) : (
       <ViewBody userId={userId ?? user?.id ?? null} name={name ?? null} />
     )
@@ -97,11 +99,11 @@ export function LoadoutDialog({ open, onOpenChange, userId, mode, name }: Loadou
   )
 }
 
-function EditBody() {
+function EditBody({ slot }: { slot: LoadoutSlot | null }) {
   const catalog = useTitlesCatalog()
   const equip = useSetLoadout()
   const loadout = useMemo(() => buildLoadout(catalog.data), [catalog.data])
-  const [focus, setFocus] = useState<LoadoutSlot | null>(null)
+  const [focus, setFocus] = useState<LoadoutSlot | null>(slot)
   const data = catalog.data
 
   if (catalog.isLoading || !data) {
@@ -320,23 +322,60 @@ function ViewBody({ userId, name }: { userId: string | null; name: string | null
   )
 }
 
+interface LoadoutTriggerProps {
+  isSelf: boolean
+  onClick: () => void
+  // Yourself only: a live game seals the loadout. The dialog still opens, read-only, with the seal notice.
+  sealed?: boolean
+  label?: string
+  className?: string
+  variant?: "outline" | "ghost" | "default" | "royal"
+  size?: "default" | "lg" | "xl"
+}
+
+// The button alone, for surfaces that own the dialog (the profile hero opens it from empty slots too).
+export function LoadoutTrigger({ isSelf, onClick, sealed = false, label, className, variant, size = "lg" }: LoadoutTriggerProps) {
+  const Icon = !isSelf ? Swords : sealed ? Lock : Layers
+  const text = label ?? (isSelf ? "Manage loadout" : "See their strategy")
+  return (
+    <Button
+      variant={variant ?? "outline"}
+      size={size}
+      className={cn("gap-1.5", sealed && "border-amber-400/40 bg-amber-400/10 text-amber-100 hover:bg-amber-400/15", className)}
+      onClick={onClick}
+    >
+      <Icon aria-hidden />
+      {isSelf && sealed ? (
+        <span className="flex flex-col items-start leading-tight">
+          <span>{text}</span>
+          <span className="text-[10px] font-normal text-amber-200/80">Sealed while a game is live</span>
+        </span>
+      ) : (
+        text
+      )}
+    </Button>
+  )
+}
+
+function SealedTrigger(props: Omit<LoadoutTriggerProps, "sealed" | "isSelf">) {
+  return <LoadoutTrigger {...props} isSelf sealed={useTitlesSealed()} />
+}
+
 export interface LoadoutButtonProps {
   userId: string | null
   isSelf: boolean
   name?: string | null
   className?: string
-  variant?: "outline" | "ghost" | "default"
+  variant?: "outline" | "ghost" | "default" | "royal"
 }
 
 // "Manage loadout" for yourself, "See their strategy" for anyone else; opens LoadoutDialog.
 export function LoadoutButton({ userId, isSelf, name, className, variant = "outline" }: LoadoutButtonProps) {
   const [open, setOpen] = useState(false)
+  const trigger = { onClick: () => setOpen(true), className: cn("h-10", className), variant }
   return (
     <>
-      <Button variant={variant} className={cn("h-10 gap-1.5", className)} onClick={() => setOpen(true)}>
-        {isSelf ? <Layers aria-hidden /> : <Swords aria-hidden />}
-        {isSelf ? "Manage loadout" : "See their strategy"}
-      </Button>
+      {isSelf ? <SealedTrigger {...trigger} /> : <LoadoutTrigger {...trigger} isSelf={false} />}
       <LoadoutDialog open={open} onOpenChange={setOpen} userId={userId} mode={isSelf ? "edit" : "view"} name={name} />
     </>
   )

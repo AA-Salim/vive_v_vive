@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { HistoryIcon, ScrollTextIcon, ShieldIcon, SkullIcon, SwordsIcon, UsersRoundIcon } from "lucide-react"
+import { HistoryIcon, ScrollTextIcon, SwordsIcon, UsersRoundIcon } from "lucide-react"
 import { plural } from "@/components/pages/format"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
 import {
@@ -17,13 +17,14 @@ import {
   StatGrid,
 } from "@/components/profile/profile-parts"
 import { SeasonPicker, shortActName } from "@/components/profile/season-picker"
-import { CurseMarks, TitleLoadout } from "@/components/profile/title-loadout"
-import { LoadoutSummaryBar } from "@/components/titles/loadout-summary"
-import { ProfileApiError, useLiveTitles, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
+import { LoadoutPanel } from "@/components/profile/loadout-panel"
+import { TitleEpithet } from "@/components/profile/title-loadout"
+import { ProfileApiError, usePlayerProfile, type ProfileScope } from "@/components/profile/use-player-profile"
 import { buttonVariants } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { PROFILE_HELP } from "@/lib/profiles/help"
 import type { PlayerProfileResponse, ProfileSeason } from "@/lib/profiles/types"
 import { cn } from "@/lib/utils"
@@ -32,7 +33,6 @@ const TABS = [
   { value: "overview", label: "Overview", icon: ScrollTextIcon },
   { value: "games", label: "Games", icon: SwordsIcon },
   { value: "rivals", label: "Rivals", icon: UsersRoundIcon },
-  { value: "titles", label: "Titles", icon: ShieldIcon },
 ] as const
 
 function PageSkeleton() {
@@ -59,28 +59,17 @@ function NoGames({ profile, season }: { profile: PlayerProfileResponse; season: 
 }
 
 function Overview({ profile }: { profile: PlayerProfileResponse }) {
-  const titles = useLiveTitles(profile)
   const played = profile.record.games > 0
   return (
     <div className="space-y-4">
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-        <SectionCard
-          title="Banner loadout"
-          eyebrow="Worn into battle"
-          action={<InfoTip help={PROFILE_HELP.loadout} align="end" />}
-        >
-          <LoadoutSummaryBar userId={profile.player.userId} name={profile.player.name} className="mb-3" />
-          <TitleLoadout titles={titles} linked={!!profile.player.userId} />
-        </SectionCard>
-        <div className="space-y-4">
-          <StatGrid profile={profile} />
-          {played ? (
-            <SectionCard title="Lanes" eyebrow="Where the dice sent him">
-              <FormLine profile={profile} className="mb-3" />
-              <LaneBreakdown lanes={profile.lanes} />
-            </SectionCard>
-          ) : null}
-        </div>
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <StatGrid profile={profile} />
+        {played ? (
+          <SectionCard title="Lanes" eyebrow="Where the dice sent him">
+            <FormLine profile={profile} className="mb-3" />
+            <LaneBreakdown lanes={profile.lanes} />
+          </SectionCard>
+        ) : null}
       </div>
       {played ? (
         <>
@@ -145,38 +134,6 @@ function Rivals({ profile }: { profile: PlayerProfileResponse }) {
   )
 }
 
-function Titles({ profile }: { profile: PlayerProfileResponse }) {
-  const titles = useLiveTitles(profile)
-  const linked = !!profile.player.userId
-  const curses = titles?.curses ?? []
-  const owned = titles ? Math.max(titles.owned ?? 0, titles.loadout.length) : 0
-  return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <SectionCard
-        title="Banner loadout"
-        eyebrow={owned ? `${plural(owned, "title")} in the wardrobe` : "Worn into battle"}
-        description="Tap a banner for its effect and perk."
-        action={<InfoTip help={PROFILE_HELP.loadout} align="end" />}
-      >
-        <TitleLoadout titles={titles} linked={linked} detailed showCurses={false} />
-      </SectionCard>
-      <SectionCard title="Marks of shame" eyebrow="Curses burning on him" action={<InfoTip help={PROFILE_HELP.curses} align="end" />}>
-        {curses.length > 0 ? (
-          <CurseMarks curses={curses} heading={false} />
-        ) : (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <SkullIcon aria-hidden className="size-4 shrink-0 text-rose-300/50" />
-            {linked ? "No curses burning. A clean record, which is suspicious." : "No purse, so nobody bothered to curse him."}
-          </p>
-        )}
-        <Link href="/titles" className={cn(buttonVariants({ variant: "outline", size: "lg" }), "mt-4 w-full")}>
-          Visit the armory
-        </Link>
-      </SectionCard>
-    </div>
-  )
-}
-
 interface PlayerProfilePageProps {
   player: string
   initialScope: ProfileScope
@@ -187,6 +144,7 @@ export function PlayerProfilePage({ player, initialScope }: PlayerProfilePagePro
   const [tab, setTab] = useState<string>("overview")
   const query = usePlayerProfile(player, scope)
   const profile = query.data
+  const { entryFor } = useEquippedTitles()
 
   const changeScope = (next: ProfileScope) => {
     setScope(next)
@@ -203,7 +161,7 @@ export function PlayerProfilePage({ player, initialScope }: PlayerProfilePagePro
       <PageEmpty
         title="Not in the royal register"
         action={
-          <Link href="/stats" className={buttonVariants({ variant: "outline", size: "lg" })}>
+          <Link href="/players" className={buttonVariants({ variant: "outline", size: "lg" })}>
             Browse the players
           </Link>
         }
@@ -232,6 +190,7 @@ export function PlayerProfilePage({ player, initialScope }: PlayerProfilePagePro
           <IdentityBlock
             profile={profile}
             large
+            epithet={<TitleEpithet entry={entryFor(profile.player.id, profile.player.userId)} className="mt-0.5" />}
             heading={
               <h1 className="truncate font-display text-3xl leading-tight font-semibold text-[var(--color-gold-light)] sm:text-4xl">
                 {profile.player.name}
@@ -244,14 +203,19 @@ export function PlayerProfilePage({ player, initialScope }: PlayerProfilePagePro
           </div>
         </div>
         {profile.bounty ? (
-          <div className="relative px-4 pb-4 sm:px-6 sm:pb-6">
+          <div className="relative px-4 pb-4 sm:px-6">
             <BountyBanner bounty={profile.bounty} name={profile.player.name} />
           </div>
         ) : null}
+        <LoadoutPanel
+          userId={profile.player.userId}
+          name={profile.player.name}
+          className="relative border-t border-[var(--color-gold)]/12 bg-[var(--color-navy)]/30 p-4 sm:p-6"
+        />
       </section>
 
       <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
-        <TabsList className="grid h-11 w-full grid-cols-4 sm:inline-grid sm:w-auto">
+        <TabsList className="grid h-11 w-full grid-cols-3 sm:inline-grid sm:w-auto">
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger key={value} value={value} className="h-full min-w-0 px-2 sm:px-4">
               <Icon aria-hidden className="hidden sm:block" />
@@ -267,9 +231,6 @@ export function PlayerProfilePage({ player, initialScope }: PlayerProfilePagePro
         </TabsContent>
         <TabsContent value="rivals" className="pt-2">
           <Rivals profile={profile} />
-        </TabsContent>
-        <TabsContent value="titles" className="pt-2">
-          <Titles profile={profile} />
         </TabsContent>
       </Tabs>
     </div>

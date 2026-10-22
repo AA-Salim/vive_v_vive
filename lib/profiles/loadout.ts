@@ -11,8 +11,8 @@ export interface TierSpec {
 
 export const LOADOUT_TIERS: readonly TierSpec[] = [
   { tier: "super", label: "Super rare", rarities: "Legendary or Epic", slots: 2 },
-  { tier: "bronze", label: "Bronze", rarities: "Rare", slots: 3 },
-  { tier: "basic", label: "Basic", rarities: "Common", slots: 4 },
+  { tier: "bronze", label: "Rare", rarities: "Rare", slots: 3 },
+  { tier: "basic", label: "Common", rarities: "Common", slots: 4 },
 ]
 
 const RARITIES: readonly TitleRarity[] = ["common", "rare", "epic", "legendary", "cursed"]

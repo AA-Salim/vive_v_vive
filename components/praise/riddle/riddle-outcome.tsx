@@ -4,11 +4,12 @@ import { motion } from "motion/react"
 import { BrainIcon, CheckIcon, FeatherIcon, HourglassIcon, SparklesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { PraiseCountdown } from "@/components/praise/praise-countdown"
 import { Arrow } from "@/components/praise/riddle/arrow-puzzle"
 import { explainRiddle, riddleAnswerLabel } from "@/lib/praise/riddle"
 import { PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS } from "@/lib/praise/rules"
 import type { Riddle, RiddleSolution, RiddleView } from "@/lib/praise/types"
-import { RIDDLE_COPY, RIDDLE_CORRECT_LINES, seededPick } from "@/lib/praise/voice"
+import { COPY, RIDDLE_COPY, RIDDLE_CORRECT_LINES, seededPick } from "@/lib/praise/voice"
 
 const SPARKS = [0, 45, 90, 135, 180, 225, 270, 315]
 
@@ -125,13 +126,38 @@ export function RiddleSolved({
         </motion.div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Solved on riddle {view.number}. No Sharp Mind bonus today, the praise still pays +{reward}.
+          Solved on riddle {view.number}. No Sharp Mind bonus for this kiss, the praise still pays +{reward}.
         </p>
       )}
 
       <Button variant="royal" className="mt-1 h-12 w-full gap-2 text-base" onClick={onContinue}>
         <FeatherIcon aria-hidden />
         {RIDDLE_COPY.next}
+      </Button>
+    </div>
+  )
+}
+
+// Every kiss of the day is given: nothing left to riddle until midnight UTC.
+export function KissesSpent({ perDay, resetsAt, clockOffset, onClose }: { perDay: number; resetsAt: string | null; clockOffset: number; onClose: () => void }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-2 text-center">
+      <span className="mt-2 flex size-16 items-center justify-center rounded-full border border-[var(--color-gold)]/30 bg-[var(--color-navy)] text-[var(--color-gold)]">
+        <HourglassIcon className="size-7" aria-hidden />
+      </span>
+      <DialogTitle className="font-display text-xl leading-tight text-[var(--color-gold)]">{RIDDLE_COPY.spentTitle}</DialogTitle>
+      <DialogDescription className="text-sm leading-relaxed">
+        {COPY.allKissed(perDay)} {COPY.comeBack}
+        {resetsAt ? (
+          <>
+            {" "}
+            {COPY.nextSong}{" "}
+            <PraiseCountdown target={resetsAt} clockOffset={clockOffset} className="font-semibold tabular-nums text-foreground" />.
+          </>
+        ) : null}
+      </DialogDescription>
+      <Button variant="outline" className="mt-1 h-11 w-full" onClick={onClose}>
+        Until tomorrow
       </Button>
     </div>
   )

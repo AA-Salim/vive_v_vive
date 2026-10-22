@@ -18,6 +18,9 @@ export interface KissTally {
   scorns: number
   legacy: number
   today: boolean
+  todayCount: number
+  avgRiddleMs: number | null
+  riddleMisses: number
   lastAt: string | null
   recent: KissPraise[]
 }
@@ -38,6 +41,8 @@ interface RpcPraise {
   reward: number
   riddle: number
   favor: number
+  riddle_ms?: number | null
+  riddle_misses?: number | null
 }
 
 interface RpcPlayer {
@@ -50,6 +55,10 @@ interface RpcPlayer {
   scorns: number
   legacy: number
   today: boolean
+  // Missing before the daily kiss slots and riddle clock versions of phase10_praise-board.sql.
+  today_count?: number
+  avg_riddle_ms?: number | null
+  riddle_misses?: number
   last_at: string | null
   recent: RpcPraise[]
 }
@@ -64,6 +73,8 @@ interface PraiseRow {
   verdict_note: string | null
   praise_day: string
   created_at: string
+  riddle_ms?: number | null
+  riddle_misses?: number | null
 }
 
 interface LedgerRow {
@@ -75,7 +86,9 @@ interface LedgerRow {
   created_at: string
 }
 
-const toPraise = (row: { id: string; body: string; created_at: string; praise_day: string; verdict: KissPraise["verdict"]; verdict_note: string | null }, favor: number, points: number): KissPraise => ({
+type PraiseFields = Pick<PraiseRow, "id" | "body" | "created_at" | "praise_day" | "verdict" | "verdict_note" | "riddle_ms" | "riddle_misses">
+
+const toPraise = (row: PraiseFields, favor: number, points: number): KissPraise => ({
   id: row.id,
   body: row.body,
   createdAt: row.created_at,
@@ -84,15 +97,21 @@ const toPraise = (row: { id: string; body: string; created_at: string; praise_da
   verdictNote: row.verdict_note,
   favor,
   points,
+  riddleMs: row.riddle_ms ?? null,
+  riddleMisses: row.riddle_misses ?? null,
 })
+
+const average = (values: number[]) =>
+  values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null
 
 const utcDay = () => new Date().toISOString().slice(0, 10)
 
 // The migrated path: phase10_praise-board.sql sums the ledger rows tied to each praise in one call.
 function fromRpc(data: { today?: string; players?: RpcPlayer[] } | null): KissTallies {
+  const today = data?.today ?? utcDay()
   return {
     available: true,
-    today: data?.today ?? utcDay(),
+    today,
     tallies: (data?.players ?? []).map((p) => ({
       userId: p.user_id,
       kisses: Number(p.kisses),
@@ -103,28 +122,39 @@ function fromRpc(data: { today?: string; players?: RpcPlayer[] } | null): KissTa
       scorns: Number(p.scorns),
       legacy: Number(p.legacy),
       today: p.today,
+      todayCount: p.today_count != null ? Number(p.today_count) : (p.recent ?? []).filter((r) => r.praise_day === today).length,
+      avgRiddleMs: p.avg_riddle_ms != null ? Number(p.avg_riddle_ms) : null,
+      riddleMisses: Number(p.riddle_misses ?? 0),
       lastAt: p.last_at,
       recent: (p.recent ?? []).map((r) => toPraise(r, Number(r.favor), Number(r.reward) + Number(r.riddle) + Number(r.favor))),
     })),
   }
 }
 
+const PRAISE_FIELDS = "id, user_id, body, reward, favor, verdict, verdict_note, praise_day, created_at"
+
+
+function fetchPraises(supabase: SupabaseClient, window: PlayedWindow, fields: string) {
+  return fetchAllRows<PraiseRow>((from, to) =>
+    withinWindow(supabase.from("praises").select(fields), window, "created_at")
+      .order("created_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+      .overrideTypes<PraiseRow[], { merge: false }>()
+  )
+}
+
 // Before the migration: the praise row keeps what its reward and crown paid, the ledger adds the riddle bonus and
 // the Act I kisses. Ledger rows tied to a praise can land after the window closed (a late crown), so only the legacy
-// rows are bounded on both sides.
+// rows are bounded on both sides. The riddle time and misses columns come with the riddle clock: read without
+// them until it runs.
 async function fromTables(supabase: SupabaseClient, window: PlayedWindow): Promise<KissTallies> {
   let praises: PraiseRow[]
   try {
-    praises = await fetchAllRows<PraiseRow>((from, to) =>
-      withinWindow(
-        supabase.from("praises").select("id, user_id, body, reward, favor, verdict, verdict_note, praise_day, created_at"),
-        window,
-        "created_at"
-      )
-        .order("created_at", { ascending: false })
-        .order("id")
-        .range(from, to)
-    )
+    praises = await fetchPraises(supabase, window, `${PRAISE_FIELDS}, riddle_ms, riddle_misses`).catch((error) => {
+      if (error instanceof QueryError && isMissingSchema(error.cause)) return fetchPraises(supabase, window, PRAISE_FIELDS)
+      throw error
+    })
   } catch (error) {
     if (error instanceof QueryError && isMissingSchema(error.cause)) return { available: false, today: utcDay(), tallies: [] }
     throw error
@@ -168,9 +198,13 @@ async function fromTables(supabase: SupabaseClient, window: PlayedWindow): Promi
     scorns: 0,
     legacy: 0,
     today: false,
+    todayCount: 0,
+    avgRiddleMs: null,
+    riddleMisses: 0,
     lastAt: null,
     recent: [],
   })
+  const times = new Map<string, number[]>()
   for (const praise of uniqueBy(praises, (p) => p.id)) {
     const tally = byUser.get(praise.user_id) ?? blank(praise.user_id)
     const riddle = riddleOf.get(`${praise.user_id}:${praise.id}`) ?? 0
@@ -180,10 +214,19 @@ async function fromTables(supabase: SupabaseClient, window: PlayedWindow): Promi
     tally.favor += praise.favor
     if (praise.verdict === "crowned") tally.crowns++
     if (praise.verdict === "scorned") tally.scorns++
-    if (praise.praise_day === today) tally.today = true
+    if (praise.praise_day === today) {
+      tally.today = true
+      tally.todayCount++
+    }
+    if (praise.riddle_ms != null) times.set(praise.user_id, [...(times.get(praise.user_id) ?? []), praise.riddle_ms])
+    tally.riddleMisses += praise.riddle_misses ?? 0
     tally.lastAt ??= praise.created_at
     if (tally.recent.length < RECENT_PRAISES) tally.recent.push(toPraise(praise, praise.favor, praise.reward + riddle + praise.favor))
     byUser.set(praise.user_id, tally)
+  }
+  for (const [userId, values] of times) {
+    const tally = byUser.get(userId)
+    if (tally) tally.avgRiddleMs = average(values)
   }
   for (const [userId, legacy] of legacyOf) {
     const tally = byUser.get(userId) ?? blank(userId)
@@ -225,6 +268,9 @@ export function rankKisses(tallies: KissTally[], nobles: Map<string, Noble>): Ki
       scorns: t.scorns,
       legacy: t.legacy,
       today: t.today,
+      todayCount: t.todayCount,
+      avgRiddleMs: t.avgRiddleMs,
+      riddleMisses: t.riddleMisses,
       lastAt: t.lastAt,
       recent: t.recent,
     }

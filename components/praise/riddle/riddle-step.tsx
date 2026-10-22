@@ -1,13 +1,14 @@
 "use client"
 
-import { useCallback, useId, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { motion } from "motion/react"
-import { BrainIcon, RefreshCwIcon, XCircleIcon } from "lucide-react"
+import { BrainIcon, RefreshCwIcon, TimerOffIcon, XCircleIcon } from "lucide-react"
 import { DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { InfoTip } from "@/components/ui/info-tip"
 import { RIDDLE_HELP } from "@/components/praise/help"
 import { ArrowPuzzle } from "@/components/praise/riddle/arrow-puzzle"
 import { MazePuzzle } from "@/components/praise/riddle/maze-puzzle"
+import { RiddleClock } from "@/components/praise/riddle/riddle-clock"
 import { AnswerToken } from "@/components/praise/riddle/riddle-outcome"
 import { SequencePuzzle } from "@/components/praise/riddle/sequence-puzzle"
 import { useSolveRiddle } from "@/hooks/use-praise"
@@ -20,15 +21,19 @@ import {
   RIDDLE_MISS_LINES,
   RIDDLE_PROMPTS,
   RIDDLE_SKIP_LINES,
+  RIDDLE_TIMEOUT_LINES,
   seededPick,
 } from "@/lib/praise/voice"
 import { cn } from "@/lib/utils"
 
 interface Feedback {
-  tone: "miss" | "skip" | "error"
+  tone: "miss" | "skip" | "timeout" | "error"
   line: string
   previous: RetiredRiddle | null
 }
+
+const MISS_LINES = { wrong: RIDDLE_MISS_LINES, skipped: RIDDLE_SKIP_LINES, timeout: RIDDLE_TIMEOUT_LINES } as const
+const MISS_TONES = { wrong: "miss", skipped: "skip", timeout: "timeout" } as const
 
 function BonusChip({ bonus }: { bonus: number }) {
   const alive = bonus > 0
@@ -66,6 +71,8 @@ function FeedbackCard({ feedback }: { feedback: Feedback }) {
     >
       {feedback.tone === "skip" ? (
         <RefreshCwIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+      ) : feedback.tone === "timeout" ? (
+        <TimerOffIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
       ) : (
         <XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
       )}
@@ -86,32 +93,42 @@ function FeedbackCard({ feedback }: { feedback: Feedback }) {
 interface RiddleStepProps {
   view: RiddleView
   userId: string | null
+  // A riddle whose clock ran out while the dialog was closed, lost when this view was read.
+  timedOut?: RetiredRiddle | null
   onSolved: (view: RiddleView) => void
 }
 
-export function RiddleStep({ view, userId, onSolved }: RiddleStepProps) {
+export function RiddleStep({ view, userId, timedOut = null, onSolved }: RiddleStepProps) {
   const solve = useSolveRiddle(userId)
-  const [feedback, setFeedback] = useState<Feedback | null>(null)
+  const [feedback, setFeedback] = useState<Feedback | null>(() =>
+    timedOut ? { tone: "timeout", line: seededPick(RIDDLE_TIMEOUT_LINES, `${view.day}:${view.slot}:${view.number}`), previous: timedOut } : null
+  )
+  const [expiredKey, setExpiredKey] = useState<string | null>(null)
   const prompt = RIDDLE_PROMPTS[view.riddle.kind]
   const intro = seededPick(RIDDLE_INTROS, view.day)
   const pending = solve.isPending
-  const { day, number } = view
+  const { day, slot, number } = view
   const { mutate } = solve
   const questionId = useId()
+  const puzzleKey = `${day}:${slot}:${number}`
+  const expired = expiredKey === puzzleKey
+  const pendingRef = useRef(pending)
+  useEffect(() => {
+    pendingRef.current = pending
+  })
 
   const answer = useCallback(
     (given: RiddleAnswer) => {
       mutate(
-        { number, answer: given },
+        { number, slot, answer: given },
         {
           onSuccess: (result) => {
             if (result.outcome === "correct" || result.outcome === "already_solved") {
               onSolved(result.view)
-            } else if (result.outcome === "wrong" || result.outcome === "skipped") {
-              const lines = result.outcome === "wrong" ? RIDDLE_MISS_LINES : RIDDLE_SKIP_LINES
+            } else if (result.outcome === "wrong" || result.outcome === "skipped" || result.outcome === "timeout") {
               setFeedback({
-                tone: result.outcome === "wrong" ? "miss" : "skip",
-                line: seededPick(lines, `${day}:${number}`),
+                tone: MISS_TONES[result.outcome],
+                line: seededPick(MISS_LINES[result.outcome], `${day}:${slot}:${number}`),
                 previous: result.previous,
               })
             } else {
@@ -122,10 +139,14 @@ export function RiddleStep({ view, userId, onSolved }: RiddleStepProps) {
         }
       )
     },
-    [mutate, number, day, onSolved]
+    [mutate, number, slot, day, onSolved]
   )
 
-  const puzzleKey = `${view.day}:${view.number}`
+  // At zero the riddle is lost: answering stops and the server is told, unless an answer is already on its way.
+  const expire = useCallback(() => {
+    setExpiredKey(puzzleKey)
+    if (!pendingRef.current) answer({ timeout: true })
+  }, [answer, puzzleKey])
 
   return (
     <div className="space-y-4">
@@ -144,10 +165,19 @@ export function RiddleStep({ view, userId, onSolved }: RiddleStepProps) {
         </DialogDescription>
       </DialogHeader>
 
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span className="tabular-nums">
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span className="shrink-0 tabular-nums">
           Riddle <span className="font-semibold text-foreground">{view.number}</span> of {view.limit}
         </span>
+        {view.deadline && view.timeLimit ? (
+          <RiddleClock
+            key={puzzleKey}
+            deadline={view.deadline}
+            limit={view.timeLimit}
+            clockOffset={view.clockOffset}
+            onExpire={expire}
+          />
+        ) : null}
         <BonusChip bonus={view.bonus} />
       </div>
 
@@ -164,11 +194,11 @@ export function RiddleStep({ view, userId, onSolved }: RiddleStepProps) {
           transition={{ duration: 0.25, ease: "easeOut" }}
         >
           {view.riddle.kind === "sequence" ? (
-            <SequencePuzzle puzzle={view.riddle.puzzle} pending={pending} onAnswer={answer} />
+            <SequencePuzzle puzzle={view.riddle.puzzle} pending={pending || expired} onAnswer={answer} />
           ) : view.riddle.kind === "arrows" ? (
-            <ArrowPuzzle puzzle={view.riddle.puzzle} pending={pending} onAnswer={answer} />
+            <ArrowPuzzle puzzle={view.riddle.puzzle} pending={pending || expired} onAnswer={answer} />
           ) : (
-            <MazePuzzle puzzle={view.riddle.puzzle} pending={pending} onAnswer={answer} />
+            <MazePuzzle puzzle={view.riddle.puzzle} pending={pending || expired} onAnswer={answer} />
           )}
         </motion.div>
       </section>

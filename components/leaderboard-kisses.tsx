@@ -3,7 +3,7 @@
 import { useId, useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
-import { ChevronDownIcon, CoinsIcon, CrownIcon, FeatherIcon, HandHeartIcon, ScrollTextIcon } from "lucide-react"
+import { ChevronDownIcon, CoinsIcon, CrownIcon, FeatherIcon, HandHeartIcon, ScrollTextIcon, TimerIcon } from "lucide-react"
 import { useLiveSignal } from "@/components/live/live-context"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { formatNumber, formatShortDay, plural } from "@/components/pages/format"
@@ -21,20 +21,31 @@ import { PlayerName } from "@/components/titles/player-name"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/hooks/use-auth"
+import { usePraiseState } from "@/hooks/use-praise"
 import { domainOf } from "@/lib/live/events"
 import { KISS_BOARD_HELP } from "@/lib/pages/help"
 import type { KissBoardResponse, KissEntry, KissPraise } from "@/lib/pages/types"
+import { formatClock, formatMisses, riddleStat } from "@/lib/praise/format"
+import { COPY } from "@/lib/praise/voice"
 import { cn } from "@/lib/utils"
 
 const COLUMNS = "grid-cols-[2.5rem_minmax(0,1fr)_auto] md:grid-cols-[3rem_minmax(0,1fr)_5.5rem_5rem_7rem]"
 
 function PraiseLine({ praise, clamp }: { praise: KissPraise; clamp: boolean }) {
+  const stat = riddleStat(praise.riddleMs, praise.riddleMisses)
   return (
     <div className="min-w-0">
       <PraiseQuote body={praise.body} className={cn("text-sm", clamp && "line-clamp-2")} />
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
         <time dateTime={praise.createdAt}>{formatShortDay(praise.createdAt)}</time>
         <span className="font-semibold text-[var(--color-gold)] tabular-nums">+{formatNumber(praise.points)}</span>
+        {stat ? (
+          <span className="inline-flex items-center gap-1 tabular-nums" title="King's Riddle: time to solve and misses">
+            <TimerIcon className="size-3 text-[var(--color-hextech)]" aria-hidden />
+            <span className="sr-only">Riddle solved in </span>
+            {stat}
+          </span>
+        ) : null}
         {praise.verdict ? <VerdictChip verdict={praise.verdict} favor={praise.favor} className="h-5 text-[10px]" /> : null}
       </p>
       {praise.verdictNote ? (
@@ -90,8 +101,8 @@ function KissRow({ entry, mine, live }: { entry: KissEntry; mine: boolean; live:
                 </span>
               ) : null}
               {live && entry.today ? (
-                <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-300">
-                  TODAY
+                <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-emerald-300 tabular-nums">
+                  TODAY{entry.todayCount > 1 ? ` x${entry.todayCount}` : ""}
                 </span>
               ) : null}
             </span>
@@ -101,6 +112,11 @@ function KissRow({ entry, mine, live }: { entry: KissEntry; mine: boolean; live:
                 {entry.legacy > 0 ? " · " : null}
               </span>
               {entry.legacy > 0 ? <span>{plural(entry.legacy, "Act I kiss", "Act I kisses")}</span> : null}
+              {entry.avgRiddleMs != null ? (
+                <span className="block" title="King's Riddle: average time to solve and every riddle missed">
+                  Riddles: avg {formatClock(Math.floor(entry.avgRiddleMs / 1000) * 1000)} · {formatMisses(entry.riddleMisses)}
+                </span>
+              ) : null}
             </span>
           </span>
         </span>
@@ -143,7 +159,10 @@ function KissRow({ entry, mine, live }: { entry: KissEntry; mine: boolean; live:
 
 function KissedToday({ entries, viewerId }: { entries: KissEntry[]; viewerId: string | null }) {
   const kissed = entries.filter((e) => e.today)
+  const kisses = kissed.reduce((sum, e) => sum + e.todayCount, 0)
   const me = viewerId ? entries.find((e) => e.userId === viewerId) : undefined
+  const praise = usePraiseState(viewerId, !!viewerId)
+  const mine = praise.data?.state.available ? praise.data.state.me : null
   return (
     <section
       aria-labelledby="kissed-today-title"
@@ -157,23 +176,40 @@ function KissedToday({ entries, viewerId }: { entries: KissEntry[]; viewerId: st
           <InfoTip help={KISS_BOARD_HELP.today} className="size-4 [&_svg]:size-3.5" />
         </div>
         <p className="font-display text-base font-semibold text-[var(--color-gold-light)]">
-          {kissed.length === 0 ? "The royal hand is still dry today." : `${plural(kissed.length, "subject")} sang for the King today.`}
+          {kissed.length === 0
+            ? "The royal hand is still dry today."
+            : `${plural(kissed.length, "subject")} sang for the King today${kisses > kissed.length ? `, ${plural(kisses, "kiss", "kisses")} in all` : ""}.`}
         </p>
         {kissed.length > 0 ? (
           <ul className="flex flex-wrap gap-1.5" aria-label="Kissed the hand today">
             {kissed.map((e) => (
-              <li key={e.userId}>
+              <li key={e.userId} className="relative">
                 <ProfileTrigger playerId={e.playerId} name={e.name} className="rounded-full">
                   <PlayerAvatar name={e.name} src={e.avatarUrl} size="sm" ring={e.userId === viewerId ? "gold" : null} />
                 </ProfileTrigger>
+                {e.todayCount > 1 ? (
+                  <span className="pointer-events-none absolute -right-1 -bottom-1 rounded-full bg-[var(--color-gold)] px-1 text-[9px] leading-3.5 font-bold text-[var(--color-navy)] tabular-nums">
+                    x{e.todayCount}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
         ) : null}
       </div>
       {viewerId ? (
-        me?.today ? (
-          <p className="text-sm font-medium text-emerald-300">Your lips are on record for today.</p>
+        me?.today && !mine?.canSing ? (
+          <p className="text-sm font-medium text-emerald-300">
+            Your lips are on record for today{me.todayCount > 1 ? ` (x${me.todayCount})` : ""}.
+          </p>
+        ) : me?.today && mine ? (
+          <Link
+            href="/"
+            className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--color-gold)] px-4 text-sm font-semibold text-[var(--color-navy)] transition-colors outline-none hover:bg-[var(--color-gold-light)] focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <HandHeartIcon className="size-4" aria-hidden />
+            {COPY.kissAgainShort} · {mine.remainingToday} left
+          </Link>
         ) : (
           <Link
             href="/"

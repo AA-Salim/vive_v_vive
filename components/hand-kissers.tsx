@@ -7,6 +7,7 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { formatNumber } from "@/components/pages/format"
 import { useKissBoard } from "@/components/pages/queries"
 import { ComposerDialog } from "@/components/praise/composer-dialog"
+import { usePraiseTerms } from "@/components/praise/title-bonus"
 import { ProfileTrigger } from "@/components/profile/profile-provider"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 import { PlayerName } from "@/components/titles/player-name"
@@ -20,6 +21,8 @@ import { KISS_BOARD_HREF } from "@/lib/pages/constants"
 import { KISS_BOARD_HELP } from "@/lib/pages/help"
 import { seasonShort } from "@/lib/pages/season-calendar"
 import type { KissEntry } from "@/lib/pages/types"
+import { kissReward, PRAISE_RULES } from "@/lib/praise/rules"
+import { COPY } from "@/lib/praise/voice"
 import { cn } from "@/lib/utils"
 
 const LABEL = "text-[10px] font-semibold tracking-[0.18em] text-muted-foreground uppercase"
@@ -31,8 +34,9 @@ export function HandKissersShownAbove({ children }: { children: ReactNode }) {
   return <ShownAbove.Provider value={true}>{children}</ShownAbove.Provider>
 }
 
-function TodayRow({ entry, mine }: { entry: KissEntry; mine: boolean }) {
+function TodayRow({ entry, mine, day }: { entry: KissEntry; mine: boolean; day: string }) {
   const praise = entry.recent[0]
+  const todayPoints = entry.recent.filter((p) => p.praiseDay === day).reduce((sum, p) => sum + p.points, 0)
   return (
     <li className="flex min-w-0 items-start gap-2.5">
       <ProfileTrigger playerId={entry.playerId} name={entry.name} className="mt-0.5 shrink-0 rounded-full">
@@ -46,8 +50,15 @@ function TodayRow({ entry, mine }: { entry: KissEntry; mine: boolean }) {
           {praise?.verdict === "crowned" ? (
             <CrownIcon className="size-3.5 shrink-0 text-[var(--color-gold)]" aria-label="Crowned by Salaxe" />
           ) : null}
+          {entry.todayCount > 1 ? (
+            <span className="shrink-0 rounded-full bg-[var(--color-gold)]/15 px-1.5 text-[10px] font-semibold text-[var(--color-gold)] tabular-nums">
+              x{entry.todayCount} today
+            </span>
+          ) : null}
           {praise ? (
-            <span className="ml-auto shrink-0 text-xs font-semibold text-[var(--color-gold)] tabular-nums">+{formatNumber(praise.points)}</span>
+            <span className="ml-auto shrink-0 text-xs font-semibold text-[var(--color-gold)] tabular-nums">
+              +{formatNumber(todayPoints || praise.points)}
+            </span>
           ) : null}
         </p>
         {praise ? (
@@ -62,7 +73,13 @@ function TodayRow({ entry, mine }: { entry: KissEntry; mine: boolean }) {
   )
 }
 
-function KissersBody({ onSing }: { onSing: (() => void) | null }) {
+// The kiss button, or a note once every kiss of the day is given (no onClick).
+interface SingAction {
+  label: string
+  onClick?: () => void
+}
+
+function KissersBody({ sing }: { sing: SingAction | null }) {
   const query = useKissBoard("current")
   const { user } = useAuthUser()
   const viewerId = user?.id ?? null
@@ -92,17 +109,19 @@ function KissersBody({ onSing }: { onSing: (() => void) | null }) {
         {today.length > 0 ? (
           <ul className="space-y-2.5">
             {today.map((entry) => (
-              <TodayRow key={entry.userId} entry={entry} mine={entry.userId === viewerId} />
+              <TodayRow key={entry.userId} entry={entry} mine={entry.userId === viewerId} day={data.today} />
             ))}
           </ul>
         ) : (
           <p className="text-xs text-muted-foreground">The royal hand is still dry today.</p>
         )}
-        {onSing ? (
-          <Button variant="royal" className="h-10 w-full" onClick={onSing}>
+        {sing?.onClick ? (
+          <Button variant="royal" className="h-10 w-full" onClick={sing.onClick}>
             <HandHeartIcon aria-hidden />
-            Kiss the hand
+            {sing.label}
           </Button>
+        ) : sing ? (
+          <p className="text-xs text-muted-foreground">{sing.label}</p>
         ) : null}
       </div>
 
@@ -156,10 +175,19 @@ function Panel() {
   const userId = user?.id ?? null
   const praise = usePraiseState(userId, !!userId)
   const state = praise.data?.state
-  const canSing = !!state?.available && !!state.me?.canSing
+  const me = state?.available ? state.me : null
+  const rules = state?.available ? state.rules : PRAISE_RULES
+  const next = usePraiseTerms(me?.nextReward ?? kissReward(rules, me?.nextSlot ?? 1))
   const today = useKissBoard("current").data?.totals.today ?? null
   const [composer, setComposer] = useState<{ seed: number; open: boolean } | null>(null)
-  const onSing = canSing ? () => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true }) : null
+  const sing: SingAction | null = me?.canSing
+    ? {
+        label: me.sungToday > 0 ? `${COPY.kissAgain(next.reward)} · ${me.remainingToday} left` : `Kiss the hand (+${next.reward})`,
+        onClick: () => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true }),
+      }
+    : me && rules.perDay > 1
+      ? { label: `${COPY.allKissed(rules.perDay)} ${COPY.comeBack}` }
+      : null
 
   const shell = "rounded-xl border border-[var(--color-gold)]/20 bg-card"
   return (
@@ -170,7 +198,7 @@ function Panel() {
             <Title count={today} />
             <InfoTip help={KISS_BOARD_HELP.panel} align="end" />
           </h2>
-          <KissersBody onSing={onSing} />
+          <KissersBody sing={sing} />
         </section>
       ) : (
         <Collapsible className={shell}>
@@ -185,7 +213,7 @@ function Panel() {
             <InfoTip help={KISS_BOARD_HELP.panel} align="end" />
           </div>
           <CollapsibleContent className="px-4 pb-4">
-            <KissersBody onSing={onSing} />
+            <KissersBody sing={sing} />
           </CollapsibleContent>
         </Collapsible>
       )}

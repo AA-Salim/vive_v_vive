@@ -1,9 +1,12 @@
 import {
   deaccent,
+  PRAISE_DAILY_MAX,
+  PRAISE_PER_DAY,
   PRAISE_REWARD,
+  PRAISE_REWARDS,
   PRAISE_RULES,
-  RIDDLE_DAILY_LIMIT,
   RIDDLE_FIRST_TRY_BONUS,
+  RIDDLE_KISS_LIMIT,
   ROYAL_FAVOR,
   VERDICT_NOTE_MAX,
   type PraiseRules,
@@ -152,14 +155,22 @@ export function verdictLine(verdict: "crowned" | "scorned" | null, seed: string)
 }
 
 export const COOLDOWN_LINES = [
-  "The quill rests until tomorrow. One praise a day keeps the exile fed.",
-  "One song a day. Even a fallen king has standards. Low ones, but standards.",
+  "The quill rests until tomorrow. A few kisses a day keep the exile fed.",
+  "Enough songs for one day. Even a fallen king has standards. Low ones, but standards.",
   "He is still reading your last one. Lips moving.",
 ]
 
 export const COPY = {
   title: "Sing His Praises",
-  rewardBadge: (reward: number) => `+${reward} a day`,
+  rewardBadge: (rules: PraiseRules) =>
+    rules.perDay > 1 ? `${rules.perDay} kisses a day` : `+${rules.reward} a day`,
+  kissesLeft: (left: number, perDay: number) => `${left} of ${perDay} left`,
+  kissOf: (slot: number, perDay: number, reward: number) => `Kiss ${slot} of ${perDay} · +${reward}`,
+  kissAgain: (reward: number) => `Kiss again (+${reward})`,
+  kissAgainShort: "Kiss again",
+  leftToday: (left: number) => `${left} ${left === 1 ? "kiss" : "kisses"} left today`,
+  comeBack: "Come back tomorrow.",
+  allKissed: (perDay: number) => `All ${perDay} kisses given today.`,
   compose: "Compose your praise",
   composerTitle: "A praise for the exiled king",
   scrollLabel: "Your praise for Salaxe",
@@ -171,6 +182,7 @@ export const COPY = {
   successTitle: "The King has heard you",
   successHint: `Salaxe may still crown it (+${ROYAL_FAVOR} Royal Favor) or scorn it in public. Watch the Hall.`,
   todayLabel: "Your song for today",
+  latestLabel: "Your latest song today",
   nextSong: "Next song in",
   hallButton: "Open the Hall of Praise",
   hallTitle: "Hall of Praise",
@@ -178,7 +190,7 @@ export const COPY = {
   featuredCrowned: "Crowned by Salaxe",
   featuredLatest: "Latest song",
   loggedOutTitle: "Only sworn subjects may sing.",
-  loggedOutBody: `Log in with Discord and earn ${PRAISE_REWARD} points a day for one short line of worship.`,
+  loggedOutBody: `Log in with Discord and earn up to ${PRAISE_DAILY_MAX} points a day: ${PRAISE_PER_DAY} kisses (${PRAISE_REWARDS.join(", ")}), one short line of worship each.`,
   login: "Login with Discord",
   pendingTitle: "The court scribes are preparing the Hall of Praise.",
   pendingBody: "The quill returns shortly. No free kisses in the meantime.",
@@ -210,7 +222,7 @@ const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
   repetitive: "Filler and repeats do not count. Give him real, varied words.",
   too_many_symbols: "Too many symbols. He wants words, not hieroglyphs.",
   prompt_copy: "That is the prompt, not a praise. Write your own words.",
-  already_sung: "You already sang today. The quill rests until tomorrow.",
+  already_sung: "Every kiss of the day is given. The quill rests until tomorrow.",
   duplicate: `That exact song was already sung. Originality is the price of ${PRAISE_REWARD} points.`,
   too_similar: "Too close to a praise already in the Hall. Change it up.",
   not_authenticated: "Only sworn subjects may sing. Log in first.",
@@ -261,7 +273,8 @@ export const RIDDLE_COPY = {
   next: "Now, sing his praises",
   solvedTitle: "The King is impressed",
   lockedTitle: "The King has heard enough guesses",
-  lockedBody: `${RIDDLE_DAILY_LIMIT} riddles, ${RIDDLE_DAILY_LIMIT} misses. The quill stays dry until tomorrow. Salaxe is not angry, only disappointed.`,
+  lockedBody: `${RIDDLE_KISS_LIMIT} riddles, ${RIDDLE_KISS_LIMIT} misses for this kiss. The quill stays dry until tomorrow. Salaxe is not angry, only disappointed.`,
+  spentTitle: "The royal hand needs a rest",
   loading: "The King is thinking of a riddle...",
   connected: "Connected. The water reaches the throne.",
 }
@@ -305,6 +318,12 @@ export const RIDDLE_MISS_LINES = [
   "The court winces. Try this one instead.",
 ]
 
+export const RIDDLE_TIMEOUT_LINES = [
+  "Time's up. The King stopped waiting and wrote a new riddle.",
+  "Time's up. Salaxe taps the hourglass and poses another.",
+  "Too slow. Even his rotations are faster. Here is another.",
+]
+
 export const RIDDLE_SKIP_LINES = [
   "The King tears up the riddle and writes a new one. Easier, he claims.",
   "Fine, another riddle. He sighs loudly enough for the whole court.",
@@ -312,6 +331,7 @@ export const RIDDLE_SKIP_LINES = [
 
 const RIDDLE_MESSAGES: Record<RiddleErrorCode, string> = {
   not_authenticated: "Only sworn subjects may answer the King. Log in first.",
+  already_sung: "Every kiss of the day is given. Come back tomorrow.",
   no_riddle: "The riddle crumbled at midnight. Here is a fresh one.",
   riddle_limit: "No riddles left today. The quill rests until tomorrow.",
   invalid_answer: "The King could not read that answer. Try again.",

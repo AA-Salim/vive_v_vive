@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
-import { CROWNS_PER_DAY, praiseRulesFrom, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { CROWNS_PER_DAY, kissReward, praiseRulesFrom, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { PRAISE_COLUMNS, loadAuthors, toPraiseView, type PraiseRow, type PraiseStateRow } from "@/lib/praise/server"
 import type { PraiseState } from "@/lib/praise/types"
 
@@ -42,6 +42,11 @@ export async function GET() {
   const authors = await loadAuthors(supabase, [featuredRow?.user_id, todayRow?.user_id])
   const isSalaxe = !!userId && userId === state.salaxe_user_id
   const rules = praiseRulesFrom(state)
+  // Before the daily kiss slots migration: one praise a day, sung once today_id exists.
+  const sungToday = typeof state.sung_today === "number" ? state.sung_today : state.today_id ? 1 : 0
+  const remainingToday =
+    typeof state.remaining_today === "number" ? state.remaining_today : Math.max(0, rules.perDay - sungToday)
+  const nextSlot = remainingToday > 0 ? (state.next_slot ?? sungToday + 1) : null
 
   const body: PraiseState = {
     available: true,
@@ -56,8 +61,12 @@ export async function GET() {
     me: userId
       ? {
           userId,
-          canSing: !state.today_id,
+          canSing: remainingToday > 0,
           today: todayRow ? toPraiseView(todayRow, authors) : null,
+          sungToday,
+          remainingToday,
+          nextSlot,
+          nextReward: nextSlot ? (state.next_reward ?? kissReward(rules, nextSlot)) : null,
           total: state.my_total,
           crowned: state.my_crowned,
           favor: state.my_favor,

@@ -3,12 +3,13 @@
 import { useEffect, useMemo } from "react"
 import confetti from "canvas-confetti"
 import { MotionConfig, motion } from "motion/react"
-import { CrownIcon, LibraryIcon, SparklesIcon } from "lucide-react"
+import { CrownIcon, HandHeartIcon, HourglassIcon, LibraryIcon, SparklesIcon, TimerIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AnimatedNumber } from "@/components/praise/animated-number"
-import { submittedEffectLines } from "@/components/praise/title-bonus"
-import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { PraiseCountdown } from "@/components/praise/praise-countdown"
+import { submittedEffectLines, usePraiseTerms } from "@/components/praise/title-bonus"
+import { formatSolve } from "@/lib/praise/format"
 import type { SubmitResult } from "@/lib/praise/types"
 import { COPY, RIDDLE_COPY, sungResponse } from "@/lib/praise/voice"
 
@@ -32,19 +33,25 @@ function celebrate() {
 
 interface PraiseSuccessProps {
   result: SubmitResult
-  // The base reward the live rules pay, to tell the title bonus apart.
-  baseReward?: number
+  resetsAt: string
+  clockOffset: number
+  // Starts the next kiss of the day in the same dialog; absent once every kiss is given.
+  onKissAgain?: () => void
   onOpenHall: () => void
   onClose: () => void
 }
 
-export function PraiseSuccess({ result, baseReward = PRAISE_REWARD, onOpenHall, onClose }: PraiseSuccessProps) {
+export function PraiseSuccess({ result, resetsAt, clockOffset, onKissAgain, onOpenHall, onClose }: PraiseSuccessProps) {
   const response = useMemo(() => sungResponse(result.praise.body, result.praise.id), [result])
   const reward = result.praise.reward
+  const baseReward = result.baseReward
   const effectLines = useMemo(() => submittedEffectLines(result), [result])
   const titleBonus = reward - baseReward
   const bonus = result.riddleBonus ?? 0
   const total = reward + bonus
+  const next = usePraiseTerms(result.nextReward ?? baseReward)
+  const several = result.perDay > 1
+  const solve = formatSolve(result.riddleMs, result.riddleMisses)
 
   useEffect(() => {
     celebrate()
@@ -73,7 +80,7 @@ export function PraiseSuccess({ result, baseReward = PRAISE_REWARD, onOpenHall, 
 
         <div className="space-y-1">
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--color-gold)]/80">
-            Praise accepted
+            Praise accepted{several ? ` · kiss ${result.slot} of ${result.perDay}` : ""}
           </p>
           <DialogTitle className="font-display text-2xl leading-tight text-[var(--color-gold)]">
             {COPY.successTitle}
@@ -100,6 +107,12 @@ export function PraiseSuccess({ result, baseReward = PRAISE_REWARD, onOpenHall, 
                 + {bonus} {RIDDLE_COPY.sharpMind}
               </span>
             </motion.p>
+          )}
+          {solve && (
+            <p className="flex items-center justify-center gap-1 text-xs text-muted-foreground tabular-nums">
+              <TimerIcon className="size-3.5 text-[var(--color-hextech)]" aria-hidden />
+              {solve}
+            </p>
           )}
         </div>
 
@@ -146,12 +159,30 @@ export function PraiseSuccess({ result, baseReward = PRAISE_REWARD, onOpenHall, 
 
         <p className="text-xs text-muted-foreground">{COPY.successHint}</p>
 
+        {onKissAgain ? (
+          <div className="w-full space-y-1">
+            <Button variant="royal" className="h-12 w-full gap-2 text-base" onClick={onKissAgain}>
+              <HandHeartIcon aria-hidden />
+              {COPY.kissAgain(next.reward)}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">{COPY.leftToday(result.remainingToday)}</p>
+          </div>
+        ) : several ? (
+          <p className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-gold)]/5 px-3 py-2 text-xs text-muted-foreground">
+            <HourglassIcon className="size-4 shrink-0 text-[var(--color-gold)]" aria-hidden />
+            <span>
+              {COPY.allKissed(result.perDay)} {COPY.comeBack} {COPY.nextSong}{" "}
+              <PraiseCountdown target={resetsAt} clockOffset={clockOffset} className="font-semibold tabular-nums text-foreground" />
+            </span>
+          </p>
+        ) : null}
+
         <div className="grid w-full grid-cols-2 gap-2">
           <Button variant="outline" className="h-11" onClick={onOpenHall}>
             <LibraryIcon aria-hidden />
             See the Hall
           </Button>
-          <Button className="h-11 font-semibold" onClick={onClose}>
+          <Button variant={onKissAgain ? "outline" : "default"} className="h-11 font-semibold" onClick={onClose}>
             Long live the King
           </Button>
         </div>

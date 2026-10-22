@@ -1,4 +1,7 @@
--- Phase 10: Sing His Praises. One short line of worship for Salaxe is worth 300 points, once per day.
+-- Phase 10: Sing His Praises. One short line of worship for Salaxe, up to 4 times a day (praise_rules per_day).
+-- Each of those hand kisses fills one daily slot (praise_slot 1 to 4), needs its own King's Riddle
+-- (phase10_riddles.sql) and pays less than the one before: 200, 150, 100 then 50 points (praise_rules rewards),
+-- 500 a day before title effects. The praise keeps how long its riddle took and how many riddles were missed.
 -- Requires phase10_foundation.sql (free-form point reasons, vvv_add_to_realtime).
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Rules version 2 (praise_rules): 8 to 25 characters, 2+ words, his name, no insults, 300 points. Version 1 asked
@@ -25,6 +28,7 @@ CREATE TABLE IF NOT EXISTS praises (
   fingerprint TEXT NOT NULL,
   reward INTEGER NOT NULL DEFAULT 300 CHECK (reward >= 0),
   praise_day DATE NOT NULL DEFAULT CURRENT_DATE,
+  praise_slot SMALLINT NOT NULL DEFAULT 1 CONSTRAINT praises_slot_check CHECK (praise_slot >= 1),
   verdict TEXT CHECK (verdict IN ('crowned', 'scorned')),
   verdict_note TEXT CHECK (verdict_note IS NULL OR char_length(verdict_note) BETWEEN 1 AND 140),
   favor INTEGER NOT NULL DEFAULT 0 CHECK (favor >= 0),
@@ -34,6 +38,14 @@ CREATE TABLE IF NOT EXISTS praises (
   CONSTRAINT praises_verdict_complete CHECK ((verdict IS NULL) = (judged_at IS NULL))
 );
 ALTER TABLE praises ALTER COLUMN reward SET DEFAULT 300;
+-- Praises sung while the limit was one a day all took the day's first slot.
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS praise_slot SMALLINT NOT NULL DEFAULT 1
+  CONSTRAINT praises_slot_check CHECK (praise_slot >= 1);
+-- The King's Riddle that opened the praise: milliseconds from its first riddle posed to the solve, and the riddles
+-- missed, skipped or timed out before it. NULL when no riddle gated the praise.
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS riddle_ms INTEGER CONSTRAINT praises_riddle_ms_check CHECK (riddle_ms >= 0);
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS riddle_misses SMALLINT
+  CONSTRAINT praises_riddle_misses_check CHECK (riddle_misses >= 0);
 
 -- The first version created the length rule inline (40 to 280, auto-named). The table only bounds the body now,
 -- loosely enough for both versions; praise_rule_violation enforces the live limits.
@@ -58,8 +70,10 @@ BEGIN
 END
 $$;
 
--- One praise per user per day (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
-CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_day ON praises (user_id, praise_day);
+-- One praise per user per daily slot (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
+-- The slot index replaces the one-per-day index of the once-a-day version.
+CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_slot ON praises (user_id, praise_day, praise_slot);
+DROP INDEX IF EXISTS praises_one_per_day;
 CREATE UNIQUE INDEX IF NOT EXISTS praises_fingerprint_unique ON praises (fingerprint);
 CREATE INDEX IF NOT EXISTS praises_recent_idx ON praises (created_at DESC);
 CREATE INDEX IF NOT EXISTS praises_user_idx ON praises (user_id, created_at DESC);
@@ -72,10 +86,46 @@ CREATE POLICY "praises_read" ON praises FOR SELECT USING (true);
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON praises FROM anon, authenticated;
 
 -- The live rules, reported by praise_state() so the app can tell this version from the previous one
--- (lib/praise/rules.ts: PRAISE_RULES, LEGACY_PRAISE_RULES, praiseRulesFrom).
+-- (lib/praise/rules.ts: PRAISE_RULES, LEGACY_PRAISE_RULES, praiseRulesFrom). Without per_day the app counts one
+-- praise a day at reward, as the previous version enforced. rewards holds the base of each daily kiss in slot
+-- order; reward is the first one.
 CREATE OR REPLACE FUNCTION praise_rules() RETURNS JSONB
 LANGUAGE sql IMMUTABLE AS $$
-  SELECT jsonb_build_object('rules_version', 2, 'reward', 300, 'min_length', 8, 'max_length', 25, 'min_words', 2)
+  SELECT jsonb_build_object(
+    'rules_version', 2, 'reward', 200, 'min_length', 8, 'max_length', 25, 'min_words', 2,
+    'per_day', 4, 'rewards', jsonb_build_array(200, 150, 100, 50)
+  )
+$$;
+
+-- The base reward of the kiss in daily slot p_slot, before title effects.
+CREATE OR REPLACE FUNCTION praise_slot_reward(p_slot INTEGER) RETURNS INTEGER
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT coalesce((praise_rules()->'rewards'->>(p_slot - 1))::INTEGER, (praise_rules()->>'reward')::INTEGER)
+$$;
+
+-- The caller's slots still free today, lowest first: the next kiss takes the first one. Empty once every daily
+-- slot is sung. Praises are public, so this reveals nothing the praises table does not.
+CREATE OR REPLACE FUNCTION praise_free_slots(p_uid UUID) RETURNS INTEGER[]
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
+  SELECT coalesce(array_agg(s ORDER BY s), '{}')
+  FROM generate_series(1, (praise_rules()->>'per_day')::INTEGER) AS s
+  WHERE NOT EXISTS (
+    SELECT 1 FROM praises WHERE user_id = p_uid AND praise_day = CURRENT_DATE AND praise_slot = s
+  )
+$$;
+
+-- The slot the caller's next kiss takes today, NULL when all are sung. Read under praise_lock_user by
+-- submit_praise, get_my_riddle and solve_my_riddle, so all three agree on it.
+CREATE OR REPLACE FUNCTION praise_next_slot(p_uid UUID) RETURNS INTEGER
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
+  SELECT (praise_free_slots(p_uid))[1]
+$$;
+
+-- Serializes one user's kisses and riddles until the transaction ends: two tabs cannot take the same slot, sing a
+-- fifth praise or answer a riddle for a slot that was just sung.
+CREATE OR REPLACE FUNCTION praise_lock_user(p_uid UUID) RETURNS VOID
+LANGUAGE sql VOLATILE AS $$
+  SELECT pg_advisory_xact_lock(hashtext('vvv.praise_kiss'), hashtext(p_uid::TEXT))
 $$;
 
 -- Text rules. Mirrored in lib/praise/rules.ts, which only gives early feedback: these functions decide.
@@ -360,24 +410,38 @@ DECLARE
   v_constraint TEXT;
   v_reward INTEGER;
   v_riddle_bonus INTEGER;
+  v_riddle_ms INTEGER;
+  v_riddle_misses INTEGER;
+  v_per_day INTEGER := (praise_rules()->>'per_day')::INTEGER;
+  v_slot INTEGER;
+  v_base INTEGER;
+  v_left INTEGER[];
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
   END IF;
 
-  IF EXISTS (SELECT 1 FROM praises WHERE user_id = v_uid AND praise_day = CURRENT_DATE) THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'already_sung', 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ);
+  PERFORM praise_lock_user(v_uid);
+  v_slot := praise_next_slot(v_uid);
+  IF v_slot IS NULL THEN
+    RETURN jsonb_build_object(
+      'ok', false, 'error', 'already_sung', 'per_day', v_per_day, 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ
+    );
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM point_balances WHERE user_id = v_uid) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'no_balance');
   END IF;
 
-  -- King's Riddle (phase10_riddles.sql): today's riddle must be solved first. Skipped while that file is missing.
+  -- King's Riddle (phase10_riddles.sql): the riddle of this kiss's slot must be solved first. Skipped while that
+  -- file is missing.
   IF to_regprocedure('public.praise_riddle_bonus(uuid)') IS NOT NULL THEN
     v_riddle_bonus := praise_riddle_bonus(v_uid);
     IF v_riddle_bonus IS NULL THEN
       RETURN jsonb_build_object('ok', false, 'error', 'riddle_required');
+    END IF;
+    IF to_regprocedure('public.praise_riddle_stats(uuid)') IS NOT NULL THEN
+      SELECT r.ms, r.misses INTO v_riddle_ms, v_riddle_misses FROM praise_riddle_stats(v_uid) r;
     END IF;
   END IF;
 
@@ -402,32 +466,41 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'too_similar', 'match_user_id', v_match);
   END IF;
 
-  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', (praise_rules()->>'reward')::INTEGER); -- title effects: Last Loyalist, devotion honors
+  v_base := praise_slot_reward(v_slot);
+  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', v_base); -- title effects: Last Loyalist, devotion honors
 
   BEGIN
-    INSERT INTO praises (user_id, body, normalized, fingerprint, reward, praise_day)
-    VALUES (v_uid, v_body, v_norm, v_fp, v_reward, CURRENT_DATE)
+    INSERT INTO praises (
+      user_id, body, normalized, fingerprint, reward, praise_day, praise_slot, riddle_ms, riddle_misses
+    )
+    VALUES (v_uid, v_body, v_norm, v_fp, v_reward, CURRENT_DATE, v_slot, v_riddle_ms, v_riddle_misses)
     RETURNING * INTO v_row;
   EXCEPTION WHEN unique_violation THEN
     GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
     RETURN jsonb_build_object(
       'ok', false,
-      'error', CASE WHEN v_constraint = 'praises_one_per_day' THEN 'already_sung' ELSE 'duplicate' END
+      'error', CASE WHEN v_constraint IN ('praises_one_per_slot', 'praises_one_per_day') THEN 'already_sung' ELSE 'duplicate' END
     );
   END;
 
   v_balance := adjust_balance(v_uid, v_reward, 'sing_his_praises', v_row.id);
-  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per day like the praise itself. Titles never
+  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per kiss like the praise itself. Titles never
   -- scale it: only the praise reward above carries the title bonus.
   IF v_riddle_bonus > 0 THEN
     v_balance := adjust_balance(v_uid, v_riddle_bonus, 'riddle_bonus', v_row.id);
   END IF;
 
+  v_left := praise_free_slots(v_uid);
   RETURN jsonb_build_object(
     'ok', true,
     'praise', to_jsonb(v_row) - 'normalized' - 'fingerprint',
     'balance', v_balance,
     'riddle_bonus', coalesce(v_riddle_bonus, 0),
+    'slot', v_slot,
+    'per_day', v_per_day,
+    'base_reward', v_base,
+    'remaining_today', cardinality(v_left),
+    'next_reward', CASE WHEN cardinality(v_left) > 0 THEN praise_slot_reward(v_left[1]) END,
     'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ,
     'title_effects', vvv_title_fx_take()
   );
@@ -510,11 +583,14 @@ BEGIN
 END;
 $$;
 
--- Everything the praise panel needs about today, the caller and the court, in one call.
+-- Everything the praise panel needs about today, the caller and the court, in one call. today_id is the caller's
+-- latest praise of the day; sung_today, remaining_today, next_slot and next_reward (its base) count the daily
+-- kisses (per_day and the rewards schedule come with praise_rules()).
 CREATE OR REPLACE FUNCTION praise_state() RETURNS JSONB
 LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   WITH me AS (SELECT auth.uid() AS uid),
-       king AS (SELECT praise_salaxe_user_id() AS uid)
+       king AS (SELECT praise_salaxe_user_id() AS uid),
+       free AS (SELECT CASE WHEN uid IS NULL THEN '{}'::INTEGER[] ELSE praise_free_slots(uid) END AS slots FROM me)
   SELECT jsonb_build_object(
     'today', CURRENT_DATE,
     'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ,
@@ -535,8 +611,17 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
         AND judged_at < (CURRENT_DATE + 1)::TIMESTAMPTZ
     ),
     'today_id', (
-      SELECT id FROM praises WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+      SELECT id FROM praises
+      WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+      ORDER BY created_at DESC, praise_slot DESC
+      LIMIT 1
     ),
+    'sung_today', (
+      SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+    ),
+    'remaining_today', (SELECT cardinality(slots) FROM free),
+    'next_slot', (SELECT slots[1] FROM free),
+    'next_reward', (SELECT praise_slot_reward(slots[1]) FROM free WHERE cardinality(slots) > 0),
     'my_total', (SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me)),
     'my_crowned', (
       SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me) AND verdict = 'crowned'
@@ -551,6 +636,7 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   ) || praise_rules()
 $$;
 
+REVOKE EXECUTE ON FUNCTION praise_lock_user(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION submit_praise(TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION judge_praise(UUID, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION submit_praise(TEXT) TO authenticated;

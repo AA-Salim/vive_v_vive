@@ -12,7 +12,7 @@ import { usePraiseState } from "@/hooks/use-praise"
 import { useSession } from "@/hooks/use-session"
 import { TIMED_STATUSES } from "@/lib/live/events"
 import { WORSHIP_WORDS } from "@/lib/praise/prompts"
-import { PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS } from "@/lib/praise/rules"
+import { PRAISE_RULES, RIDDLE_FIRST_TRY_BONUS } from "@/lib/praise/rules"
 import { seededPick } from "@/lib/praise/voice"
 
 const SHOW_AFTER_MS = 75_000
@@ -41,8 +41,8 @@ function sampleWords(seed: string): string[] {
   return [0, 7, 15].map((step) => WORSHIP_WORDS[(first + step) % WORSHIP_WORDS.length])
 }
 
-// A once-a-day nudge to sing for Salaxe: only when the praise is available and not sung yet, never during a
-// timed game phase, never over another dialog or broadcast, and silenced for a week on request.
+// A once-a-day nudge to sing for Salaxe: only when the praise is available and no kiss was given yet today, never
+// during a timed game phase, never over another dialog or broadcast, and silenced for a week on request.
 export function PraisePrompt() {
   const { user } = useAuthUser()
   const userId = user?.id ?? null
@@ -54,9 +54,10 @@ export function PraisePrompt() {
   const [composer, setComposer] = useState<{ seed: number; open: boolean } | null>(null)
 
   const state = praise.data?.state
-  const ready = !!state?.available && !!state.me?.canSing
+  const ready = !!state?.available && !!state.me?.canSing && state.me.sungToday === 0
   const today = state?.available ? state.today : null
-  const terms = usePraiseTerms(state?.available ? state.reward : PRAISE_REWARD)
+  const rules = state?.available ? state.rules : PRAISE_RULES
+  const terms = usePraiseTerms(rules.reward)
   const reward = terms.reward
   const samples = sampleWords(today ?? "")
   const gameBusy = !!session && TIMED_STATUSES.includes(session.status)
@@ -115,8 +116,10 @@ export function PraisePrompt() {
               <div className="min-w-0 space-y-1">
                 <p className="font-display text-base text-[var(--color-gold-light)]">Salaxe awaits his song</p>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Solve his riddle, then sing him one short line a day: +{reward}, +{RIDDLE_FIRST_TRY_BONUS} more for a
-                  first-try solve. The exiled King is pretending not to check his inbox.
+                  {rules.perDay > 1
+                    ? `Solve his riddle, then sing him one short line. ${rules.perDay} kisses a day: ${rules.rewards.join(", ")}, +${RIDDLE_FIRST_TRY_BONUS} more for each first-try solve.`
+                    : `Solve his riddle, then sing him one short line a day: +${reward}, +${RIDDLE_FIRST_TRY_BONUS} more for a first-try solve.`}{" "}
+                  The exiled King is pretending not to check his inbox.
                 </p>
                 <p className="text-xs text-[var(--color-gold-light)]/90">
                   Try: <span className="font-serif italic">{samples.join(", ")}</span>

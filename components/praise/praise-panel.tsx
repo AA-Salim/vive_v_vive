@@ -23,7 +23,7 @@ import {
 } from "@/components/praise/panel-sections"
 import { useNow } from "@/components/praise/use-now"
 import { praiseKeys, usePraiseAuth, usePraiseLiveToasts, usePraiseState } from "@/hooks/use-praise"
-import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { PRAISE_RULES } from "@/lib/praise/rules"
 import type { HallView } from "@/lib/praise/types"
 import { COPY, PANEL_KICKERS, seededPick } from "@/lib/praise/voice"
 
@@ -67,10 +67,11 @@ export function PraisePanel() {
         {!me ? (
           <LoggedOutSection onLogin={auth.signIn} />
         ) : me.canSing ? (
-          <ReadySection me={me} rules={state.rules} onCompose={() => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true })} />
+          <ReadySection me={me} rules={state.rules} salaxeUserId={state.salaxeUserId} onCompose={() => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true })} />
         ) : (
           <CooldownSection
             me={me}
+            perDay={state.rules.perDay}
             today={state.today}
             resetsAt={state.resetsAt}
             clockOffset={data.clockOffset}
@@ -101,8 +102,10 @@ export function PraisePanel() {
             <InfoTip help={PRAISE_HELP} side="bottom" align="start" />
           </CardTitle>
           <CardAction>
-            <Badge variant="outline" className="border-[var(--color-gold)]/40 text-[var(--color-gold)]">
-              {COPY.rewardBadge(state?.reward ?? PRAISE_REWARD)}
+            <Badge variant="outline" className="border-[var(--color-gold)]/40 text-[var(--color-gold)] tabular-nums">
+              {me && state && state.rules.perDay > 1
+                ? COPY.kissesLeft(me.remainingToday, state.rules.perDay)
+                : COPY.rewardBadge(state?.rules ?? PRAISE_RULES)}
             </Badge>
           </CardAction>
           <CardDescription className="text-xs leading-relaxed">

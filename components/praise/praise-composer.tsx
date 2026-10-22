@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils"
 interface PraiseComposerProps {
   promptSeed: number
   rules: PraiseRules
+  // The base reward of the kiss being written, before title effects (rules.reward by default).
+  reward?: number
   knownFingerprints: ReadonlySet<string>
   bonus?: number
   pending: boolean
@@ -50,6 +52,7 @@ function insertWord(text: string, word: string, start: number, end: number) {
 export function PraiseComposer({
   promptSeed,
   rules,
+  reward,
   knownFingerprints,
   bonus = 0,
   pending,
@@ -59,7 +62,7 @@ export function PraiseComposer({
   onChange,
 }: PraiseComposerProps) {
   const [text, setText] = useState(readDraft)
-  const terms = usePraiseTerms(rules.reward)
+  const terms = usePraiseTerms(reward ?? rules.reward)
   const analysis = useMemo(() => analyzePraise(text, knownFingerprints, rules), [text, knownFingerprints, rules])
   const textareaId = useId()
   const checklistId = useId()

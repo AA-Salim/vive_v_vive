@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { AuthButton } from "@/components/auth-button"
 import { LiveIndicator } from "@/components/live/live-indicator"
 import { PointBadge } from "@/components/point-badge"
+import { HeaderKiss } from "@/components/praise/header-kiss"
 import { SalaxeDailyDialog } from "@/components/salaxe-daily-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
@@ -36,6 +37,7 @@ export function AuthNavSection() {
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
       <LiveIndicator compact />
+      {user && <HeaderKiss />}
       {user && (isLoading ? <Skeleton className="h-10 w-20 rounded-full" /> : <PointBadge balance={balance} />)}
       <AuthButton />
       {showSalaxe && (

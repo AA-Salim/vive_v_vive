@@ -4,7 +4,8 @@ import type { PraiseStateRow } from "@/lib/praise/server"
 
 const DEVOTION_REASONS = ["kiss_the_hand", "sing_his_praises"]
 
-// Legacy shape consumed by hooks/use-points.ts, now derived from written praises (one per day).
+// Legacy shape consumed by hooks/use-points.ts, now derived from written praises (up to per_day a day, one before
+// the daily kiss slots migration).
 export async function GET() {
   const supabase = await createClient()
   const {
@@ -25,11 +26,12 @@ export async function GET() {
   ])
 
   const state = stateResult.error ? null : (stateResult.data as PraiseStateRow)
-  const usedToday = state?.today_id ? 1 : 0
+  const usedToday = state ? (state.sung_today ?? (state.today_id ? 1 : 0)) : 0
+  const remainingToday = state ? (state.remaining_today ?? Math.max(0, (state.per_day ?? 1) - usedToday)) : 0
 
   return NextResponse.json({
     used_today: usedToday,
-    remaining_today: state ? 1 - usedToday : 0,
+    remaining_today: remainingToday,
     total_kisses: totalResult.count ?? 0,
   })
 }

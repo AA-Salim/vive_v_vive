@@ -49,6 +49,7 @@ export async function GET(request: Request) {
         crowns: entries.reduce((sum, e) => sum + e.crowns, 0),
         legacy: entries.reduce((sum, e) => sum + e.legacy, 0),
         today: entries.filter((e) => e.today).length,
+        todayKisses: entries.reduce((sum, e) => sum + e.todayCount, 0),
       },
       today: board.today,
       season: scope.season,

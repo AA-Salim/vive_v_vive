@@ -2,14 +2,19 @@
 -- from the ledger rows tied to each praise (reference_id = praise id): the praise reward as paid (title boosts
 -- included), the Sharp Mind riddle bonus and the Royal Favor of a crown. Legacy Act I kisses (kiss_the_hand, or
 -- sing_his_praises without a praise) are counted apart. p_from / p_to bound praises by created_at, [from, to).
+-- A subject sings up to 4 praises a day: today_count says how many of them fall on today. Each praise carries
+-- its King's Riddle time and misses (riddle_ms, riddle_misses); each subject gets the average solve time of their
+-- timed praises (avg_riddle_ms) and the misses summed over the window. Run after the current phase10_praise.sql.
 -- Additive and idempotent: one partial index and one SECURITY DEFINER read function. Works with and without
 -- phase11_lockdown.sql. Run after supabase/phase10_riddles.sql. Without this file the app computes the same board
 -- from the public praises table and ledger.
 
 DO $$
 BEGIN
-  IF to_regclass('public.praises') IS NULL THEN
-    RAISE EXCEPTION 'Run supabase/phase10_praise.sql before supabase/phase10_praise-board.sql';
+  IF to_regclass('public.praises') IS NULL OR NOT EXISTS (
+    SELECT 1 FROM pg_attribute WHERE attrelid = 'public.praises'::regclass AND attname = 'riddle_ms' AND NOT attisdropped
+  ) THEN
+    RAISE EXCEPTION 'Run the current supabase/phase10_praise.sql before supabase/phase10_praise-board.sql';
   END IF;
 END $$;
 
@@ -24,7 +29,7 @@ CREATE OR REPLACE FUNCTION praise_leaderboard(
 ) RETURNS JSONB
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timezone = 'UTC' AS $$
   WITH sung AS (
-    SELECT p.id, p.user_id, p.body, p.verdict, p.verdict_note, p.praise_day, p.created_at,
+    SELECT p.id, p.user_id, p.body, p.verdict, p.verdict_note, p.praise_day, p.created_at, p.riddle_ms, p.riddle_misses,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'sing_his_praises'), 0) AS reward,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'riddle_bonus'), 0) AS riddle,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'royal_favor'), 0) AS favor,
@@ -47,6 +52,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
       count(*) FILTER (WHERE verdict = 'crowned') AS crowns,
       count(*) FILTER (WHERE verdict = 'scorned') AS scorns,
       bool_or(praise_day = CURRENT_DATE) AS today,
+      count(*) FILTER (WHERE praise_day = CURRENT_DATE) AS today_count,
+      round(avg(riddle_ms))::INTEGER AS avg_riddle_ms,
+      coalesce(sum(riddle_misses), 0) AS riddle_misses,
       max(created_at) AS last_at,
       jsonb_agg(
         jsonb_build_object(
@@ -58,7 +66,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
           'verdict_note', verdict_note,
           'reward', reward,
           'riddle', riddle,
-          'favor', favor
+          'favor', favor,
+          'riddle_ms', riddle_ms,
+          'riddle_misses', riddle_misses
         ) ORDER BY created_at DESC, id
       ) FILTER (WHERE n <= least(greatest(coalesce(p_limit, 5), 1), 20)) AS recent
     FROM sung
@@ -84,6 +94,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
       'scorns', coalesce(b.scorns, 0),
       'legacy', coalesce(l.legacy, 0),
       'today', coalesce(b.today, false),
+      'today_count', coalesce(b.today_count, 0),
+      'avg_riddle_ms', b.avg_riddle_ms,
+      'riddle_misses', coalesce(b.riddle_misses, 0),
       'last_at', b.last_at,
       'recent', coalesce(b.recent, '[]'::jsonb)
     )), '[]'::jsonb)

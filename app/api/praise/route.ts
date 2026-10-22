@@ -113,10 +113,18 @@ export async function POST(request: Request) {
     },
   })
 
+  // Before the daily kiss slots migration submit_praise reports no slot: it was the one praise of the day.
   return NextResponse.json({
     praise,
     balance: result.balance,
     riddleBonus: result.riddle_bonus ?? 0,
+    slot: result.slot ?? 1,
+    perDay: result.per_day ?? 1,
+    baseReward: result.base_reward ?? praise.reward,
+    remainingToday: result.remaining_today ?? 0,
+    nextReward: result.next_reward ?? null,
+    riddleMs: result.praise.riddle_ms ?? null,
+    riddleMisses: result.praise.riddle_misses ?? null,
     resetsAt: result.resets_at,
     titleEffects,
   } satisfies SubmitResult)

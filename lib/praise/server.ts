@@ -30,6 +30,9 @@ export interface PraiseRow {
   judged_at: string | null
   created_at: string
   praise_day: string
+  // Only on rows returned by submit_praise once the daily kiss slots and riddle clock migrations ran.
+  riddle_ms?: number | null
+  riddle_misses?: number | null
 }
 
 export interface PraiseStateRow {
@@ -52,10 +55,29 @@ export interface PraiseStateRow {
   min_length?: number
   max_length?: number
   min_words?: number
+  // Missing before the daily kiss slots migration: one praise a day.
+  per_day?: number
+  rewards?: number[]
+  sung_today?: number
+  remaining_today?: number
+  next_slot?: number | null
+  next_reward?: number | null
 }
 
 export type SubmitRpcResult =
-  | { ok: true; praise: PraiseRow; balance: number; riddle_bonus?: number; resets_at: string; title_effects?: unknown }
+  | {
+      ok: true
+      praise: PraiseRow
+      balance: number
+      riddle_bonus?: number
+      slot?: number
+      per_day?: number
+      base_reward?: number
+      remaining_today?: number
+      next_reward?: number | null
+      resets_at: string
+      title_effects?: unknown
+    }
   | { ok: false; error: string; match_user_id?: string | null; resets_at?: string }
 
 export type JudgeRpcResult =
@@ -190,6 +212,7 @@ export function judgeFailure(code: JudgeErrorCode) {
 
 interface RiddleRpcView {
   day: string
+  slot?: number
   status: RiddleStatus
   number: number
   limit: number
@@ -201,6 +224,9 @@ interface RiddleRpcView {
   solution: RiddleSolution | null
   solved_at: string | null
   resets_at: string
+  time_limit?: number
+  deadline?: string | null
+  server_now?: string
 }
 
 export type RiddleRpcResult =
@@ -218,6 +244,7 @@ export function toRiddle(kind: Riddle["kind"], puzzle: Riddle["puzzle"]): Riddle
 export function toRiddleView(row: RiddleRpcView): RiddleView {
   return {
     day: row.day,
+    slot: row.slot ?? 1,
     status: row.status,
     number: row.number,
     limit: row.limit,
@@ -228,11 +255,16 @@ export function toRiddleView(row: RiddleRpcView): RiddleView {
     solution: row.solution ?? null,
     solvedAt: row.solved_at,
     resetsAt: row.resets_at,
+    timeLimit: row.time_limit ?? null,
+    deadline: row.deadline ?? null,
+    serverNow: row.server_now ?? null,
+    clockOffset: 0,
   }
 }
 
 const RIDDLE_STATUS: Record<RiddleErrorCode, number> = {
   not_authenticated: 401,
+  already_sung: 409,
   no_riddle: 409,
   riddle_limit: 409,
   invalid_answer: 422,

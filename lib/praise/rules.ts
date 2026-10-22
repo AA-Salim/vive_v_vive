@@ -2,19 +2,53 @@ import { findInsult } from "@/lib/praise/insults"
 
 // Every rule below is mirrored in supabase/phase10_praise.sql (praise_rules, praise_rule_violation), which is the
 // final authority. praise_state() reports the live rules: until version 2 of that file runs, production still
-// enforces the long written praise (LEGACY_PRAISE_RULES), so the client reads the rules from the state.
+// enforces the long written praise (LEGACY_PRAISE_RULES), so the client reads the rules from the state. Until the
+// daily kiss slots run, the state has no per_day: one praise a day at reward.
 export interface PraiseRules {
   version: number
+  // The first kiss of the day, and the only one without a schedule.
   reward: number
   minChars: number
   maxChars: number
   minWords: number
+  perDay: number
+  // The base of each daily kiss in order, before title effects.
+  rewards: number[]
 }
 
-export const PRAISE_RULES: PraiseRules = { version: 2, reward: 300, minChars: 8, maxChars: 25, minWords: 2 }
-export const LEGACY_PRAISE_RULES: PraiseRules = { version: 1, reward: 100, minChars: 40, maxChars: 280, minWords: 8 }
+export const PRAISE_RULES: PraiseRules = {
+  version: 2,
+  reward: 200,
+  minChars: 8,
+  maxChars: 25,
+  minWords: 2,
+  perDay: 4,
+  rewards: [200, 150, 100, 50],
+}
+export const LEGACY_PRAISE_RULES: PraiseRules = {
+  version: 1,
+  reward: 100,
+  minChars: 40,
+  maxChars: 280,
+  minWords: 8,
+  perDay: 1,
+  rewards: [100],
+}
 
 export const PRAISE_REWARD = PRAISE_RULES.reward
+export const PRAISE_PER_DAY = PRAISE_RULES.perDay
+export const PRAISE_REWARDS = PRAISE_RULES.rewards
+export const PRAISE_DAILY_MAX = PRAISE_REWARDS.reduce((sum, reward) => sum + reward, 0)
+
+// The base reward of the kiss in daily slot `slot` (1-based).
+export function kissReward(rules: PraiseRules, slot: number): number {
+  return rules.rewards[slot - 1] ?? rules.reward
+}
+
+// "4 kisses a day: 200, 150, 100, 50", or the single daily reward before the kiss slots migration.
+export function kissScheduleLine(rules: PraiseRules = PRAISE_RULES): string {
+  return rules.perDay > 1 ? `${rules.perDay} kisses a day: ${rules.rewards.join(", ")}` : `One kiss a day: ${rules.reward}`
+}
 export const PRAISE_MIN_WORDS = PRAISE_RULES.minWords
 export const PRAISE_MIN_CHARS = PRAISE_RULES.minChars
 export const PRAISE_MAX_CHARS = PRAISE_RULES.maxChars
@@ -24,9 +58,12 @@ export const COURT_WINDOW_DAYS = 7
 export const PRAISE_INPUT_MAX = 600
 export const VERDICT_NOTE_MAX = 140
 
-// The King's Riddle, mirrored in supabase/phase10_riddles.sql (riddle_first_try_bonus, riddle_daily_limit).
+// The King's Riddle, mirrored in supabase/phase10_riddles.sql (riddle_first_try_bonus, riddle_daily_limit,
+// riddle_time_limit). The riddle limit counts per kiss; the clock in seconds per riddle kind.
 export const RIDDLE_FIRST_TRY_BONUS = 20
-export const RIDDLE_DAILY_LIMIT = 10
+export const RIDDLE_KISS_LIMIT = 10
+export const RIDDLE_TIME_LIMITS = { sequence: 40, arrows: 30, maze: 90 } as const
+export const RIDDLE_CLOCK_LINE = `Beat the clock: ${RIDDLE_TIME_LIMITS.sequence} s for numbers, ${RIDDLE_TIME_LIMITS.arrows} s for arrows, ${RIDDLE_TIME_LIMITS.maze} s for the maze. Run out and the riddle is lost.`
 
 export const SALAXE_NAMES = ["Salaxe", "SLX", "Chklat", "Chalaksse", "Chklass", "Goblino", "Chalakssinoss", "Le Bon Salaxe"]
 
@@ -61,21 +98,29 @@ interface RulesFields {
   min_length?: unknown
   max_length?: unknown
   min_words?: unknown
+  per_day?: unknown
+  rewards?: unknown
 }
 
 const positive = (value: unknown, fallback: number) =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback
 
 // The rules praise_state() reports. An older praise_state() reports none: that database runs the legacy rules.
+// Without per_day (before the daily kiss slots) it is one praise a day at reward.
 export function praiseRulesFrom(row: RulesFields | null | undefined): PraiseRules {
   if (!row || typeof row.rules_version !== "number") return LEGACY_PRAISE_RULES
   const base = row.rules_version < 2 ? LEGACY_PRAISE_RULES : PRAISE_RULES
+  const reward = positive(row.reward, base.reward)
+  const perDay = Math.floor(positive(row.per_day, 1))
+  const schedule = Array.isArray(row.rewards) ? row.rewards.map((value) => positive(value, 0)) : []
   return {
     version: row.rules_version,
-    reward: positive(row.reward, base.reward),
+    reward,
     minChars: positive(row.min_length, base.minChars),
     maxChars: positive(row.max_length, base.maxChars),
     minWords: positive(row.min_words, base.minWords),
+    perDay,
+    rewards: Array.from({ length: perDay }, (_, index) => schedule[index] || reward),
   }
 }
 

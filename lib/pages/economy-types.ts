@@ -136,6 +136,9 @@ export interface KissPraise {
   verdictNote: string | null
   favor: number
   points: number
+  // Its King's Riddle: first riddle posed to solve, and the riddles missed before. Null before the riddle clock.
+  riddleMs: number | null
+  riddleMisses: number | null
 }
 
 export interface KissEntry {
@@ -155,6 +158,11 @@ export interface KissEntry {
   // Act I one-click kisses (and early praises whose text was never kept), counted apart from the points.
   legacy: number
   today: boolean
+  // Praises sung today (up to the daily kisses).
+  todayCount: number
+  // Average riddle solve time of the timed praises in the window, and every riddle missed before them.
+  avgRiddleMs: number | null
+  riddleMisses: number
   lastAt: string | null
   recent: KissPraise[]
 }
@@ -163,7 +171,8 @@ export interface KissBoardResponse {
   // false while the praises table itself is missing.
   available: boolean
   entries: KissEntry[]
-  totals: { kisses: number; points: number; crowns: number; legacy: number; today: number }
+  // today: subjects who kissed today; todayKisses: the kisses they gave.
+  totals: { kisses: number; points: number; crowns: number; legacy: number; today: number; todayKisses: number }
   // The UTC day the daily praise counts in ("YYYY-MM-DD").
   today: string
   season: Season | null

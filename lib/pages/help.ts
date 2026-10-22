@@ -11,13 +11,13 @@ import {
   RATE_MIN_GAMES,
   STREAK_MIN,
 } from "@/lib/pages/constants"
-import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { kissScheduleLine, PRAISE_PER_DAY, PRAISE_REWARD } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS } from "@/lib/prophecy/constants"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
 
 const READ_ONLY = "Free: reading the books costs nothing"
 const GAME_PAY = `Each game pays its players +${GAME_PARTICIPATION_POINTS}, and the winners +${GAME_WIN_POINTS} more`
-const DEVOTION_LINE = `praises sung for Salaxe (hands kissed, back in Act I). Each daily praise pays +${PRAISE_REWARD}`
+const DEVOTION_LINE = `praises sung for Salaxe (hands kissed, back in Act I). ${kissScheduleLine()}`
 
 export const LEADERBOARD_HELP: HelpEntry = {
   title: "The Treasury",
@@ -64,7 +64,7 @@ export const KISS_BOARD_HELP = {
   },
   kisses: {
     title: "Hands kissed",
-    does: "Every praise written for Salaxe in the season you picked, one per subject per day.",
+    does: `Every praise written for Salaxe in the season you picked, up to ${PRAISE_PER_DAY} per subject per day.`,
     cost: READ_ONLY,
   },
   points: {
@@ -79,7 +79,7 @@ export const KISS_BOARD_HELP = {
   },
   today: {
     title: "Kissed today",
-    does: "Who has already sung for the King today. The praise resets at midnight UTC, one per subject per day.",
+    does: `Who has already sung for the King today, and how many times. The kisses reset at midnight UTC, up to ${PRAISE_PER_DAY} per subject per day.`,
     cost: READ_ONLY,
   },
   panel: {
@@ -87,7 +87,7 @@ export const KISS_BOARD_HELP = {
     does: "Who already kissed the hand today, with the line they wrote and what it paid them, plus the three most devoted lips of the act. The full ranking lives in the Hall of Kisses on the leaderboard.",
     cost: READ_ONLY,
     reward: "Today's points: the praise reward as paid (title boosts included), the Sharp Mind riddle bonus and any Royal Favor from a crown",
-    limits: "One praise per subject per day, resets at midnight UTC. The top three counts the act being played.",
+    limits: `Up to ${PRAISE_PER_DAY} praises per subject per day, reset at midnight UTC. The top three counts the act being played.`,
   },
   legacy: {
     title: "Act I kisses",
@@ -116,8 +116,8 @@ export const PROFILE_HELP = {
     title: "Devotion",
     does: `How many ${DEVOTION_LINE}.`,
     cost: FREE,
-    reward: `${pts(PRAISE_REWARD)} per praise`,
-    limits: "One praise a day, written in the match room.",
+    reward: `${pts(PRAISE_REWARD)} for the first praise of the day, less for each of the next`,
+    limits: `Up to ${PRAISE_PER_DAY} praises a day, written in the match room.`,
   },
   curve: {
     title: "Treasury curve",

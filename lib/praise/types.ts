@@ -24,8 +24,15 @@ export interface PraiseView {
 
 export interface PraiseMe {
   userId: string
+  // True while a kiss is left today.
   canSing: boolean
+  // The latest praise of the day.
   today: PraiseView | null
+  sungToday: number
+  remainingToday: number
+  // The daily slot the next kiss takes and its base reward, null once all are sung.
+  nextSlot: number | null
+  nextReward: number | null
   total: number
   crowned: number
   favor: number
@@ -96,6 +103,15 @@ export interface SubmitResult {
   praise: PraiseView
   balance: number
   riddleBonus: number
+  // The daily slot this kiss took, the kisses a day and the ones left, with the next one's base reward.
+  slot: number
+  perDay: number
+  baseReward: number
+  remainingToday: number
+  nextReward: number | null
+  // How long the kiss's riddles took, first posed to solved, and how many were missed (null without a riddle).
+  riddleMs: number | null
+  riddleMisses: number | null
   resetsAt: string
   // The titles that raised this praise's reward.
   titleEffects?: EffectNote[]
@@ -146,6 +162,8 @@ export type RiddleStatus = "open" | "solved" | "locked"
 
 export interface RiddleView {
   day: string
+  // The daily kiss slot this riddle opens (1 before the daily kiss slots migration).
+  slot: number
   status: RiddleStatus
   number: number
   limit: number
@@ -156,13 +174,18 @@ export interface RiddleView {
   solution: RiddleSolution | null
   solvedAt: string | null
   resetsAt: string
+  // The clock of an open riddle: seconds for its kind and when it runs out. Null before the riddle clock migration.
+  timeLimit: number | null
+  deadline: string | null
+  serverNow: string | null
+  // Date.now() minus serverNow, measured by the browser when the view arrived (withClock in hooks/use-praise.ts).
+  clockOffset: number
 }
 
-export type RiddleState = { available: false } | ({ available: true } & RiddleView)
 
-export type RiddleAnswer = { value: number } | { rotations: number[] } | { skip: true }
+export type RiddleAnswer = { value: number } | { rotations: number[] } | { skip: true } | { timeout: true }
 
-export type RiddleOutcome = "correct" | "wrong" | "skipped" | "already_solved" | "stale"
+export type RiddleOutcome = "correct" | "wrong" | "skipped" | "timeout" | "already_solved" | "stale"
 
 export interface RetiredRiddle {
   riddle: Riddle
@@ -175,8 +198,14 @@ export interface RiddleSolveResult {
   previous: RetiredRiddle | null
 }
 
+export type RiddleState =
+  | { available: false }
+  // timedOut: the riddle on screen ran out while nobody watched; it was lost when this view was read.
+  | ({ available: true; timedOut?: RetiredRiddle | null } & RiddleView)
+
 export type RiddleErrorCode =
   | "not_authenticated"
+  | "already_sung"
   | "no_riddle"
   | "riddle_limit"
   | "invalid_answer"

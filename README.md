@@ -119,8 +119,8 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 | Win a game | +10 |
 | Play a game (loss) | +2 |
 | Daily stipend (open the app) | +5 per day |
-| **Sing His Praises** (solve the King's Riddle, then sing Salaxe one short line) | **+300 per day** |
-| Sharp Mind: the King's Riddle solved on the first try | +20 (paid with the praise) |
+| **Sing His Praises** (solve a King's Riddle, then sing Salaxe one short line), up to 4 kisses a day | **200, 150, 100, 50** (500 a day) |
+| Sharp Mind: a kiss's King's Riddle solved on the first try | +20 per kiss (paid with the praise) |
 | Salaxe crowns your praise | +50 |
 | Voted MVP by the Tribunal | +15 |
 | Winning bets, wagers, duels, prophecies, bounties | depends on the odds |
@@ -137,25 +137,27 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 
 ### Sing His Praises
 
-Once a day, sing Salaxe one short line of worship and get **300 points** (375 with Last Loyalist, at most +40% with
-titles). The rules: **8 to 25 characters**, at least 2 words, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass,
+Up to **4 times a day**, kiss the hand: sing Salaxe one short line of worship. **4 kisses a day: 200, 150, 100, 50**
+points in that order, 500 a day (title boosts such as Last Loyalist apply to each kiss, at most +40%). The rules: **8 to 25 characters**, at least 2 words, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass,
 Goblino...), no keyboard mash or repeated words, and a line nobody sang before. Tap **words of worship** to build it:
 Eternal King, GOAT, Lion of the Rift, Mon Roi, Sa Majeste, Sidna, Lmalik, Sba3, Ma3lem, Tbarkellah...
 
 **Insults are banned.** Darija, French or English, in Arabizi with digits, with accents, repeated letters (zaaaml),
 letters split by dots, dashes or spaces (z.a.m.l) or leetspeak (n1k, $alope): the King hears it and refuses the
 line. Salaxe can **Crown** a praise (+50 to the author) or **Scorn** it in public. The app reminds you once a day
-at most, never during a game.
+at most, never during a game, and the **Kiss the hand** button in the top bar shows the kisses left today.
 
-Before you can write, **the King tests your wit** with one small riddle (free):
+Before each kiss, **the King tests your wit** with one small riddle (free):
 
 - **The Royal Count**: a number sequence like 2, 4, 8, 16... pick the next number among four.
 - **The Weathervane**: a row of arrows turning by a rule. Pick where the next one points.
 - **The Royal Plumbing**: tap pipes to turn them until the water flows from the entry to the crown.
 
-Solve it on the **first try** for the **Sharp Mind** bonus: **+20**, paid with your praise (320 instead of 300). A
-wrong answer shows the solution and the King poses a new riddle, but the bonus is gone. Up to 10 riddles a day:
-miss them all and there is no praise until midnight UTC.
+**Beat the clock: 40 s for numbers, 30 s for arrows, 90 s for the maze. Run out and the riddle is lost.** Solve it on
+the **first try** for the **Sharp Mind** bonus: **+20** for that kiss, paid with its praise. A wrong answer, a skip or
+a timeout shows the solution and the King poses a new riddle, but the bonus is gone. Up to 10 riddles per kiss: miss
+them all and there are no more kisses until midnight UTC. Each praise keeps how long its riddle took and how many
+were missed; the Hall of Kisses shows both, for glory only.
 
 ---
 
@@ -236,8 +238,8 @@ The decree and devotion milestone titles also stack small bonuses (decrees -3/-5
   older acts or all time. Tap a game in a rivalry to see the full match.
 - **Leaderboard, Gamba hall, Archives**: who is rich, who is broke, who gambled it all, and how past acts ended.
 - **Hall of Kisses**: the leaderboard's second tab ranks who sang for Salaxe the most, with the points, crowns and
-  words of every praise, and who already kissed the hand today. It follows the season picker. The Play tab shows
-  today's hand kissers beside the game.
+  words of every praise, each player's riddle times and misses, and who already kissed the hand today (and how many
+  times). It follows the season picker. The Play tab shows today's hand kissers beside the game.
 - **Install it**: on your phone, use *Add to Home Screen* for a full-screen app.
 
 ---

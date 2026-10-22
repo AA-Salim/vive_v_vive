@@ -35,7 +35,7 @@ import { BOUNTY_RULES, PILLORY_RULES } from "@/lib/bounties/rules"
 import { WAGER_BASE_MULTIPLIER, WAGER_DEFIANCE_STEP, WAGER_MAX_DEFIANCE } from "@/lib/chaos/catalog"
 import { DUEL_RULES } from "@/lib/duels/rules"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
-import { CROWNS_PER_DAY, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { CROWNS_PER_DAY, PRAISE_PER_DAY, PRAISE_REWARDS, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
 import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
@@ -245,7 +245,7 @@ export const REASONS: Readonly<Record<string, Definition>> = {
   sing_his_praises: def(
     "Sang his praises",
     "A verse for the fallen king. He wrote it down.",
-    `+${PRAISE_REWARD} for one written praise of Salaxe, once a day.`,
+    `+${PRAISE_REWARDS.join(", +")} for the day's written praises of Salaxe, up to ${PRAISE_PER_DAY} a day.`,
     "devotion",
     "devotion",
     MicIcon

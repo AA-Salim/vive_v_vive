@@ -2895,7 +2895,10 @@ COMMIT;
 -- phase10_praise.sql
 -- ============================================================
 
--- Phase 10: Sing His Praises. One short line of worship for Salaxe is worth 300 points, once per day.
+-- Phase 10: Sing His Praises. One short line of worship for Salaxe, up to 4 times a day (praise_rules per_day).
+-- Each of those hand kisses fills one daily slot (praise_slot 1 to 4), needs its own King's Riddle
+-- (phase10_riddles.sql) and pays less than the one before: 200, 150, 100 then 50 points (praise_rules rewards),
+-- 500 a day before title effects. The praise keeps how long its riddle took and how many riddles were missed.
 -- Requires phase10_foundation.sql (free-form point reasons, vvv_add_to_realtime).
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Rules version 2 (praise_rules): 8 to 25 characters, 2+ words, his name, no insults, 300 points. Version 1 asked
@@ -2922,6 +2925,7 @@ CREATE TABLE IF NOT EXISTS praises (
   fingerprint TEXT NOT NULL,
   reward INTEGER NOT NULL DEFAULT 300 CHECK (reward >= 0),
   praise_day DATE NOT NULL DEFAULT CURRENT_DATE,
+  praise_slot SMALLINT NOT NULL DEFAULT 1 CONSTRAINT praises_slot_check CHECK (praise_slot >= 1),
   verdict TEXT CHECK (verdict IN ('crowned', 'scorned')),
   verdict_note TEXT CHECK (verdict_note IS NULL OR char_length(verdict_note) BETWEEN 1 AND 140),
   favor INTEGER NOT NULL DEFAULT 0 CHECK (favor >= 0),
@@ -2931,6 +2935,14 @@ CREATE TABLE IF NOT EXISTS praises (
   CONSTRAINT praises_verdict_complete CHECK ((verdict IS NULL) = (judged_at IS NULL))
 );
 ALTER TABLE praises ALTER COLUMN reward SET DEFAULT 300;
+-- Praises sung while the limit was one a day all took the day's first slot.
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS praise_slot SMALLINT NOT NULL DEFAULT 1
+  CONSTRAINT praises_slot_check CHECK (praise_slot >= 1);
+-- The King's Riddle that opened the praise: milliseconds from its first riddle posed to the solve, and the riddles
+-- missed, skipped or timed out before it. NULL when no riddle gated the praise.
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS riddle_ms INTEGER CONSTRAINT praises_riddle_ms_check CHECK (riddle_ms >= 0);
+ALTER TABLE praises ADD COLUMN IF NOT EXISTS riddle_misses SMALLINT
+  CONSTRAINT praises_riddle_misses_check CHECK (riddle_misses >= 0);
 
 -- The first version created the length rule inline (40 to 280, auto-named). The table only bounds the body now,
 -- loosely enough for both versions; praise_rule_violation enforces the live limits.
@@ -2955,8 +2967,10 @@ BEGIN
 END
 $$;
 
--- One praise per user per day (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
-CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_day ON praises (user_id, praise_day);
+-- One praise per user per daily slot (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
+-- The slot index replaces the one-per-day index of the once-a-day version.
+CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_slot ON praises (user_id, praise_day, praise_slot);
+DROP INDEX IF EXISTS praises_one_per_day;
 CREATE UNIQUE INDEX IF NOT EXISTS praises_fingerprint_unique ON praises (fingerprint);
 CREATE INDEX IF NOT EXISTS praises_recent_idx ON praises (created_at DESC);
 CREATE INDEX IF NOT EXISTS praises_user_idx ON praises (user_id, created_at DESC);
@@ -2969,10 +2983,46 @@ CREATE POLICY "praises_read" ON praises FOR SELECT USING (true);
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON praises FROM anon, authenticated;
 
 -- The live rules, reported by praise_state() so the app can tell this version from the previous one
--- (lib/praise/rules.ts: PRAISE_RULES, LEGACY_PRAISE_RULES, praiseRulesFrom).
+-- (lib/praise/rules.ts: PRAISE_RULES, LEGACY_PRAISE_RULES, praiseRulesFrom). Without per_day the app counts one
+-- praise a day at reward, as the previous version enforced. rewards holds the base of each daily kiss in slot
+-- order; reward is the first one.
 CREATE OR REPLACE FUNCTION praise_rules() RETURNS JSONB
 LANGUAGE sql IMMUTABLE AS $$
-  SELECT jsonb_build_object('rules_version', 2, 'reward', 300, 'min_length', 8, 'max_length', 25, 'min_words', 2)
+  SELECT jsonb_build_object(
+    'rules_version', 2, 'reward', 200, 'min_length', 8, 'max_length', 25, 'min_words', 2,
+    'per_day', 4, 'rewards', jsonb_build_array(200, 150, 100, 50)
+  )
+$$;
+
+-- The base reward of the kiss in daily slot p_slot, before title effects.
+CREATE OR REPLACE FUNCTION praise_slot_reward(p_slot INTEGER) RETURNS INTEGER
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT coalesce((praise_rules()->'rewards'->>(p_slot - 1))::INTEGER, (praise_rules()->>'reward')::INTEGER)
+$$;
+
+-- The caller's slots still free today, lowest first: the next kiss takes the first one. Empty once every daily
+-- slot is sung. Praises are public, so this reveals nothing the praises table does not.
+CREATE OR REPLACE FUNCTION praise_free_slots(p_uid UUID) RETURNS INTEGER[]
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
+  SELECT coalesce(array_agg(s ORDER BY s), '{}')
+  FROM generate_series(1, (praise_rules()->>'per_day')::INTEGER) AS s
+  WHERE NOT EXISTS (
+    SELECT 1 FROM praises WHERE user_id = p_uid AND praise_day = CURRENT_DATE AND praise_slot = s
+  )
+$$;
+
+-- The slot the caller's next kiss takes today, NULL when all are sung. Read under praise_lock_user by
+-- submit_praise, get_my_riddle and solve_my_riddle, so all three agree on it.
+CREATE OR REPLACE FUNCTION praise_next_slot(p_uid UUID) RETURNS INTEGER
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
+  SELECT (praise_free_slots(p_uid))[1]
+$$;
+
+-- Serializes one user's kisses and riddles until the transaction ends: two tabs cannot take the same slot, sing a
+-- fifth praise or answer a riddle for a slot that was just sung.
+CREATE OR REPLACE FUNCTION praise_lock_user(p_uid UUID) RETURNS VOID
+LANGUAGE sql VOLATILE AS $$
+  SELECT pg_advisory_xact_lock(hashtext('vvv.praise_kiss'), hashtext(p_uid::TEXT))
 $$;
 
 -- Text rules. Mirrored in lib/praise/rules.ts, which only gives early feedback: these functions decide.
@@ -3257,24 +3307,38 @@ DECLARE
   v_constraint TEXT;
   v_reward INTEGER;
   v_riddle_bonus INTEGER;
+  v_riddle_ms INTEGER;
+  v_riddle_misses INTEGER;
+  v_per_day INTEGER := (praise_rules()->>'per_day')::INTEGER;
+  v_slot INTEGER;
+  v_base INTEGER;
+  v_left INTEGER[];
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
   END IF;
 
-  IF EXISTS (SELECT 1 FROM praises WHERE user_id = v_uid AND praise_day = CURRENT_DATE) THEN
-    RETURN jsonb_build_object('ok', false, 'error', 'already_sung', 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ);
+  PERFORM praise_lock_user(v_uid);
+  v_slot := praise_next_slot(v_uid);
+  IF v_slot IS NULL THEN
+    RETURN jsonb_build_object(
+      'ok', false, 'error', 'already_sung', 'per_day', v_per_day, 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ
+    );
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM point_balances WHERE user_id = v_uid) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'no_balance');
   END IF;
 
-  -- King's Riddle (phase10_riddles.sql): today's riddle must be solved first. Skipped while that file is missing.
+  -- King's Riddle (phase10_riddles.sql): the riddle of this kiss's slot must be solved first. Skipped while that
+  -- file is missing.
   IF to_regprocedure('public.praise_riddle_bonus(uuid)') IS NOT NULL THEN
     v_riddle_bonus := praise_riddle_bonus(v_uid);
     IF v_riddle_bonus IS NULL THEN
       RETURN jsonb_build_object('ok', false, 'error', 'riddle_required');
+    END IF;
+    IF to_regprocedure('public.praise_riddle_stats(uuid)') IS NOT NULL THEN
+      SELECT r.ms, r.misses INTO v_riddle_ms, v_riddle_misses FROM praise_riddle_stats(v_uid) r;
     END IF;
   END IF;
 
@@ -3299,32 +3363,41 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'too_similar', 'match_user_id', v_match);
   END IF;
 
-  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', (praise_rules()->>'reward')::INTEGER); -- title effects: Last Loyalist, devotion honors
+  v_base := praise_slot_reward(v_slot);
+  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', v_base); -- title effects: Last Loyalist, devotion honors
 
   BEGIN
-    INSERT INTO praises (user_id, body, normalized, fingerprint, reward, praise_day)
-    VALUES (v_uid, v_body, v_norm, v_fp, v_reward, CURRENT_DATE)
+    INSERT INTO praises (
+      user_id, body, normalized, fingerprint, reward, praise_day, praise_slot, riddle_ms, riddle_misses
+    )
+    VALUES (v_uid, v_body, v_norm, v_fp, v_reward, CURRENT_DATE, v_slot, v_riddle_ms, v_riddle_misses)
     RETURNING * INTO v_row;
   EXCEPTION WHEN unique_violation THEN
     GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
     RETURN jsonb_build_object(
       'ok', false,
-      'error', CASE WHEN v_constraint = 'praises_one_per_day' THEN 'already_sung' ELSE 'duplicate' END
+      'error', CASE WHEN v_constraint IN ('praises_one_per_slot', 'praises_one_per_day') THEN 'already_sung' ELSE 'duplicate' END
     );
   END;
 
   v_balance := adjust_balance(v_uid, v_reward, 'sing_his_praises', v_row.id);
-  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per day like the praise itself. Titles never
+  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per kiss like the praise itself. Titles never
   -- scale it: only the praise reward above carries the title bonus.
   IF v_riddle_bonus > 0 THEN
     v_balance := adjust_balance(v_uid, v_riddle_bonus, 'riddle_bonus', v_row.id);
   END IF;
 
+  v_left := praise_free_slots(v_uid);
   RETURN jsonb_build_object(
     'ok', true,
     'praise', to_jsonb(v_row) - 'normalized' - 'fingerprint',
     'balance', v_balance,
     'riddle_bonus', coalesce(v_riddle_bonus, 0),
+    'slot', v_slot,
+    'per_day', v_per_day,
+    'base_reward', v_base,
+    'remaining_today', cardinality(v_left),
+    'next_reward', CASE WHEN cardinality(v_left) > 0 THEN praise_slot_reward(v_left[1]) END,
     'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ,
     'title_effects', vvv_title_fx_take()
   );
@@ -3407,11 +3480,14 @@ BEGIN
 END;
 $$;
 
--- Everything the praise panel needs about today, the caller and the court, in one call.
+-- Everything the praise panel needs about today, the caller and the court, in one call. today_id is the caller's
+-- latest praise of the day; sung_today, remaining_today, next_slot and next_reward (its base) count the daily
+-- kisses (per_day and the rewards schedule come with praise_rules()).
 CREATE OR REPLACE FUNCTION praise_state() RETURNS JSONB
 LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   WITH me AS (SELECT auth.uid() AS uid),
-       king AS (SELECT praise_salaxe_user_id() AS uid)
+       king AS (SELECT praise_salaxe_user_id() AS uid),
+       free AS (SELECT CASE WHEN uid IS NULL THEN '{}'::INTEGER[] ELSE praise_free_slots(uid) END AS slots FROM me)
   SELECT jsonb_build_object(
     'today', CURRENT_DATE,
     'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ,
@@ -3432,8 +3508,17 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
         AND judged_at < (CURRENT_DATE + 1)::TIMESTAMPTZ
     ),
     'today_id', (
-      SELECT id FROM praises WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+      SELECT id FROM praises
+      WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+      ORDER BY created_at DESC, praise_slot DESC
+      LIMIT 1
     ),
+    'sung_today', (
+      SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me) AND praise_day = CURRENT_DATE
+    ),
+    'remaining_today', (SELECT cardinality(slots) FROM free),
+    'next_slot', (SELECT slots[1] FROM free),
+    'next_reward', (SELECT praise_slot_reward(slots[1]) FROM free WHERE cardinality(slots) > 0),
     'my_total', (SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me)),
     'my_crowned', (
       SELECT count(*) FROM praises WHERE user_id = (SELECT uid FROM me) AND verdict = 'crowned'
@@ -3448,6 +3533,7 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   ) || praise_rules()
 $$;
 
+REVOKE EXECUTE ON FUNCTION praise_lock_user(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION submit_praise(TEXT) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION judge_praise(UUID, TEXT, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION submit_praise(TEXT) TO authenticated;
@@ -3463,10 +3549,16 @@ NOTIFY pgrst, 'reload schema';
 -- ============================================================
 
 -- Phase 10: The King's Riddle. Before a subject sings his praises, Salaxe tests their wit with one small
--- puzzle: a number sequence, an arrow sequence or a pipe maze. submit_praise (phase10_praise.sql) refuses a
--- praise until today's riddle is solved, and pays the Sharp Mind bonus (+20, ledger reason riddle_bonus)
--- with the praise reward when it was solved on the first try. A wrong answer retires the riddle and poses a
--- new one, up to 10 riddles a day.
+-- puzzle: a number sequence, an arrow sequence or a pipe maze. Every hand kiss of the day has its own riddle
+-- (riddle_slot, the praise_slot it opens): submit_praise (phase10_praise.sql) refuses a praise until the riddle
+-- of its slot is solved, and pays the Sharp Mind bonus (+20, ledger reason riddle_bonus) with the praise reward
+-- when that riddle was solved on the first try. A wrong answer retires the riddle and poses a new one, up to 10
+-- riddles per kiss. Kisses go in order, so missing all 10 of one kiss ends the day's kisses.
+-- Every riddle runs against the clock (riddle_time_limit: 40 s for numbers, 30 s for arrows, 90 s for the maze,
+-- plus riddle_time_grace for the network): an answer after the deadline is a miss (timeout), and so is an open
+-- riddle found past its deadline, so the clock never pauses. Each praise keeps how long its kiss's riddles took,
+-- from the first one posed to the solve, and how many were missed (praises.riddle_ms, riddle_misses).
+-- Riddle rows posed while the limit was one kiss a day become the riddle of slot 1, with a fresh clock.
 -- Requires phase10_praise.sql. Additive and idempotent, safe before and after phase11_lockdown.sql.
 -- Answers never leave the database before a riddle is solved: clients cannot read the table, and the two
 -- client functions only return the public half of a riddle. Days are UTC days, like praises.
@@ -3478,20 +3570,37 @@ BEGIN
   IF to_regprocedure('public.submit_praise(text)') IS NULL OR to_regclass('public.praises') IS NULL THEN
     RAISE EXCEPTION 'Run supabase/phase10_praise.sql before supabase/phase10_riddles.sql';
   END IF;
+  IF to_regprocedure('public.praise_next_slot(uuid)') IS NULL OR to_regprocedure('public.praise_lock_user(uuid)') IS NULL THEN
+    RAISE EXCEPTION 'Run the current supabase/phase10_praise.sql (daily kiss slots) before supabase/phase10_riddles.sql';
+  END IF;
 END
 $$;
 
 CREATE OR REPLACE FUNCTION riddle_first_try_bonus() RETURNS INTEGER
 LANGUAGE sql IMMUTABLE AS $$ SELECT 20 $$;
 
+-- Riddles per kiss (per row below), despite the name kept from the one-kiss-a-day version.
 CREATE OR REPLACE FUNCTION riddle_daily_limit() RETURNS INTEGER
 LANGUAGE sql IMMUTABLE AS $$ SELECT 10 $$;
 
--- One row per user per day, holding the riddle currently posed. attempts counts the answers given today
--- (misses, skips and the final solve), so the riddle on screen is number attempts + 1.
+-- Seconds on the clock for one riddle of each kind.
+CREATE OR REPLACE FUNCTION riddle_time_limit(p_kind TEXT) RETURNS INTEGER
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE p_kind WHEN 'sequence' THEN 40 WHEN 'arrows' THEN 30 WHEN 'maze' THEN 90 ELSE 60 END
+$$;
+
+-- Seconds an answer may arrive after the deadline shown on screen, for the round trip.
+CREATE OR REPLACE FUNCTION riddle_time_grace() RETURNS INTEGER
+LANGUAGE sql IMMUTABLE AS $$ SELECT 2 $$;
+
+-- One row per user, day and kiss slot, holding the riddle currently posed for that kiss. attempts counts the
+-- answers given to it (misses, skips, timeouts and the final solve), so the riddle on screen is number
+-- attempts + 1. created_at is when the kiss's first riddle was posed, posed_at when the current one was (its clock
+-- start).
 CREATE TABLE IF NOT EXISTS praise_riddles (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   riddle_day DATE NOT NULL DEFAULT CURRENT_DATE,
+  riddle_slot SMALLINT NOT NULL DEFAULT 1 CONSTRAINT praise_riddles_slot_check CHECK (riddle_slot >= 1),
   kind TEXT NOT NULL CHECK (kind IN ('sequence', 'arrows', 'maze')),
   puzzle JSONB NOT NULL,
   answer JSONB NOT NULL,
@@ -3500,9 +3609,34 @@ CREATE TABLE IF NOT EXISTS praise_riddles (
   first_try BOOLEAN,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, riddle_day),
+  posed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, riddle_day, riddle_slot),
   CONSTRAINT praise_riddles_solved_complete CHECK ((solved_at IS NULL) = (first_try IS NULL))
 );
+
+ALTER TABLE praise_riddles ADD COLUMN IF NOT EXISTS riddle_slot SMALLINT NOT NULL DEFAULT 1
+  CONSTRAINT praise_riddles_slot_check CHECK (riddle_slot >= 1);
+-- Rows posed before the clock existed start it when this runs.
+ALTER TABLE praise_riddles ADD COLUMN IF NOT EXISTS posed_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
+DO $$
+DECLARE
+  v_pk TEXT;
+BEGIN
+  SELECT conname INTO v_pk FROM pg_constraint
+  WHERE conrelid = 'public.praise_riddles'::regclass AND contype = 'p';
+  IF v_pk IS NULL OR NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+    WHERE c.conrelid = 'public.praise_riddles'::regclass AND c.contype = 'p' AND a.attname = 'riddle_slot'
+  ) THEN
+    IF v_pk IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.praise_riddles DROP CONSTRAINT %I', v_pk);
+    END IF;
+    ALTER TABLE public.praise_riddles ADD CONSTRAINT praise_riddles_pkey PRIMARY KEY (user_id, riddle_day, riddle_slot);
+  END IF;
+END
+$$;
 
 ALTER TABLE praise_riddles ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON praise_riddles FROM PUBLIC, anon, authenticated;
@@ -3894,7 +4028,8 @@ LANGUAGE sql VOLATILE SET search_path = public AS $$
   END
 $$;
 
--- The kind rotates every day for each user, and again after every miss.
+-- The kind rotates every day for each user, and again after every miss and every kiss: callers pass the riddle
+-- number plus the kiss slot minus one, so slot 1 keeps the one-kiss-a-day rotation.
 CREATE OR REPLACE FUNCTION riddle_kind_for(p_uid UUID, p_day DATE, p_number INTEGER) RETURNS TEXT
 LANGUAGE sql IMMUTABLE AS $$
   SELECT (ARRAY['sequence', 'arrows', 'maze'])[
@@ -3942,10 +4077,13 @@ END;
 $$;
 
 -- The client's view of a riddle row. The solution only appears once the riddle is over (solved or locked).
+-- deadline is when the open riddle's clock reaches zero (the server allows riddle_time_grace() more), server_now
+-- lets the client count down on server time, started_at is when the kiss's first riddle was posed.
 CREATE OR REPLACE FUNCTION riddle_view(p_row praise_riddles) RETURNS JSONB
 LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   SELECT jsonb_build_object(
     'day', p_row.riddle_day,
+    'slot', p_row.riddle_slot,
     'status', CASE
       WHEN p_row.solved_at IS NOT NULL THEN 'solved'
       WHEN p_row.attempts >= riddle_daily_limit() THEN 'locked'
@@ -3964,52 +4102,114 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
     'solution', CASE
       WHEN p_row.solved_at IS NOT NULL OR p_row.attempts >= riddle_daily_limit() THEN p_row.answer
     END,
+    'time_limit', riddle_time_limit(p_row.kind),
+    'posed_at', p_row.posed_at,
+    'deadline', CASE
+      WHEN p_row.solved_at IS NULL AND p_row.attempts < riddle_daily_limit()
+        THEN p_row.posed_at + make_interval(secs => riddle_time_limit(p_row.kind))
+    END,
+    'started_at', p_row.created_at,
+    'server_now', now(),
     'solved_at', p_row.solved_at,
     'resets_at', (p_row.riddle_day + 1)::TIMESTAMPTZ
   )
 $$;
 
--- Today's riddle for the caller, posed on first call. Only the public half is returned.
+-- True once an open riddle's clock ran out, grace included: any answer to it is too late.
+CREATE OR REPLACE FUNCTION riddle_expired(p_row praise_riddles) RETURNS BOOLEAN
+LANGUAGE sql STABLE SET search_path = public AS $$
+  SELECT p_row.solved_at IS NULL
+    AND p_row.attempts < riddle_daily_limit()
+    AND now() > p_row.posed_at + make_interval(secs => riddle_time_limit(p_row.kind) + riddle_time_grace())
+$$;
+
+-- Retires the open riddle of one kiss as a miss (wrong answer, skip or timeout): it poses the next riddle with a
+-- fresh clock, or locks the kiss at its limit. Returns the retired riddle with its solution.
+CREATE OR REPLACE FUNCTION riddle_retire(p_uid UUID, p_slot INTEGER) RETURNS JSONB
+LANGUAGE plpgsql VOLATILE SET search_path = public SET timezone = 'UTC' AS $$
+DECLARE
+  v_row praise_riddles%ROWTYPE;
+  v_kind TEXT;
+  v_next JSONB;
+BEGIN
+  SELECT * INTO v_row FROM praise_riddles
+  WHERE user_id = p_uid AND riddle_day = CURRENT_DATE AND riddle_slot = p_slot
+  FOR UPDATE;
+
+  IF v_row.attempts + 1 >= riddle_daily_limit() THEN
+    UPDATE praise_riddles SET attempts = attempts + 1, updated_at = now()
+    WHERE user_id = p_uid AND riddle_day = CURRENT_DATE AND riddle_slot = p_slot;
+  ELSE
+    v_kind := riddle_kind_for(p_uid, CURRENT_DATE, v_row.attempts + 2 + p_slot - 1);
+    v_next := riddle_make(v_kind);
+    UPDATE praise_riddles
+    SET attempts = attempts + 1, kind = v_kind, puzzle = v_next->'puzzle', answer = v_next->'answer',
+        posed_at = now(), updated_at = now()
+    WHERE user_id = p_uid AND riddle_day = CURRENT_DATE AND riddle_slot = p_slot;
+  END IF;
+
+  RETURN jsonb_build_object('kind', v_row.kind, 'puzzle', v_row.puzzle, 'solution', v_row.answer);
+END;
+$$;
+
+-- The riddle of the caller's next kiss today, posed on first call. Only the public half is returned. Once every
+-- daily kiss is sung there is no riddle to pose: already_sung. An open riddle whose clock ran out is lost here
+-- too (result timeout, with its solution), so reloading the page never resets or pauses the clock.
 CREATE OR REPLACE FUNCTION get_my_riddle() RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET timezone = 'UTC' AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_row praise_riddles%ROWTYPE;
+  v_slot INTEGER;
   v_kind TEXT;
   v_new JSONB;
+  v_previous JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
   END IF;
 
-  SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE;
+  PERFORM praise_lock_user(v_uid);
+  v_slot := praise_next_slot(v_uid);
+  IF v_slot IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'already_sung', 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ);
+  END IF;
+
+  SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot;
   IF NOT FOUND THEN
-    v_kind := riddle_kind_for(v_uid, CURRENT_DATE, 1);
+    v_kind := riddle_kind_for(v_uid, CURRENT_DATE, v_slot);
     v_new := riddle_make(v_kind);
-    INSERT INTO praise_riddles (user_id, riddle_day, kind, puzzle, answer)
-    VALUES (v_uid, CURRENT_DATE, v_kind, v_new->'puzzle', v_new->'answer')
-    ON CONFLICT (user_id, riddle_day) DO NOTHING;
-    SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE;
+    INSERT INTO praise_riddles (user_id, riddle_day, riddle_slot, kind, puzzle, answer)
+    VALUES (v_uid, CURRENT_DATE, v_slot, v_kind, v_new->'puzzle', v_new->'answer')
+    ON CONFLICT (user_id, riddle_day, riddle_slot) DO NOTHING;
+    SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot;
+  ELSIF riddle_expired(v_row) THEN
+    v_previous := riddle_retire(v_uid, v_slot);
+    SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot;
+    RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'timeout', 'previous', v_previous);
   END IF;
 
   RETURN riddle_view(v_row) || jsonb_build_object('ok', true);
 END;
 $$;
 
--- Answers today's riddle. p_answer: {"number": n, "value": x} for sequences and arrows, {"number": n,
--- "rotations": [...]} for mazes, or {"number": n, "skip": true} to ask for another riddle (counts as a miss).
--- number is the riddle being answered: a double tap that reaches an already replaced riddle is ignored.
--- A miss retires the riddle, reveals its solution and poses a new one until the daily limit.
+-- Answers the riddle of the caller's next kiss. p_answer: {"number": n, "value": x} for sequences and arrows,
+-- {"number": n, "rotations": [...]} for mazes, {"number": n, "skip": true} to ask for another riddle or
+-- {"number": n, "timeout": true} when the clock ran out on screen (both count as a miss), each with an optional
+-- "slot". number and slot name the riddle being answered: a double tap that reaches an already replaced riddle, or
+-- an answer to the riddle of a kiss already sung, is ignored (stale). Any answer after the riddle's deadline (plus
+-- grace) is a timeout. A miss retires the riddle, reveals its solution and poses a new one until the limit of
+-- that kiss.
 CREATE OR REPLACE FUNCTION solve_my_riddle(p_answer JSONB) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public SET timezone = 'UTC' AS $$
 DECLARE
   v_uid UUID := auth.uid();
   v_row praise_riddles%ROWTYPE;
+  v_slot INTEGER;
   v_skip BOOLEAN;
+  v_timeout BOOLEAN;
   v_correct BOOLEAN := false;
   v_previous JSONB;
-  v_kind TEXT;
-  v_next JSONB;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
@@ -4017,11 +4217,23 @@ BEGIN
   IF jsonb_typeof(p_answer) IS DISTINCT FROM 'object' THEN
     RETURN jsonb_build_object('ok', false, 'error', 'invalid_answer');
   END IF;
-  v_skip := p_answer->'skip' = 'true'::JSONB;
+  v_skip := coalesce(p_answer->'skip' = 'true'::JSONB, false);
+  v_timeout := coalesce(p_answer->'timeout' = 'true'::JSONB, false);
 
-  SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE FOR UPDATE;
+  PERFORM praise_lock_user(v_uid);
+  v_slot := praise_next_slot(v_uid);
+  IF v_slot IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'error', 'already_sung', 'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ);
+  END IF;
+
+  SELECT * INTO v_row FROM praise_riddles
+  WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot
+  FOR UPDATE;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'error', 'no_riddle');
+  END IF;
+  IF p_answer ? 'slot' AND p_answer->'slot' IS DISTINCT FROM to_jsonb(v_slot) THEN
+    RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'stale');
   END IF;
   IF v_row.solved_at IS NOT NULL THEN
     RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'already_solved');
@@ -4029,67 +4241,80 @@ BEGIN
   IF v_row.attempts >= riddle_daily_limit() THEN
     RETURN riddle_view(v_row) || jsonb_build_object('ok', false, 'error', 'riddle_limit');
   END IF;
-  IF p_answer ? 'number' AND p_answer->'number' IS DISTINCT FROM to_jsonb(v_row.attempts + 1) THEN
-    RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'stale');
-  END IF;
 
-  IF NOT coalesce(v_skip, false) THEN
-    v_correct := riddle_check(v_row.kind, v_row.puzzle, v_row.answer, p_answer);
-    IF v_correct IS NULL THEN
-      RETURN jsonb_build_object('ok', false, 'error', 'invalid_answer');
+  IF NOT riddle_expired(v_row) THEN
+    IF p_answer ? 'number' AND p_answer->'number' IS DISTINCT FROM to_jsonb(v_row.attempts + 1) THEN
+      RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'stale');
     END IF;
-  END IF;
 
-  IF v_correct THEN
-    UPDATE praise_riddles
-    SET attempts = attempts + 1,
-        solved_at = now(),
-        first_try = (attempts = 0),
-        puzzle = CASE
-          WHEN kind = 'maze' THEN jsonb_set(puzzle, '{rotations}', to_jsonb(ARRAY(
-            SELECT x::INTEGER FROM jsonb_array_elements_text(p_answer->'rotations') WITH ORDINALITY AS e(x, i) ORDER BY i
-          )))
-          ELSE puzzle
-        END,
-        updated_at = now()
-    WHERE user_id = v_uid AND riddle_day = CURRENT_DATE
-    RETURNING * INTO v_row;
-    RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'correct');
-  END IF;
+    IF NOT v_skip AND NOT v_timeout THEN
+      v_correct := riddle_check(v_row.kind, v_row.puzzle, v_row.answer, p_answer);
+      IF v_correct IS NULL THEN
+        RETURN jsonb_build_object('ok', false, 'error', 'invalid_answer');
+      END IF;
+    END IF;
 
-  v_previous := jsonb_build_object('kind', v_row.kind, 'puzzle', v_row.puzzle, 'solution', v_row.answer);
-  IF v_row.attempts + 1 >= riddle_daily_limit() THEN
-    UPDATE praise_riddles SET attempts = attempts + 1, updated_at = now()
-    WHERE user_id = v_uid AND riddle_day = CURRENT_DATE
-    RETURNING * INTO v_row;
+    IF v_correct THEN
+      UPDATE praise_riddles
+      SET attempts = attempts + 1,
+          solved_at = now(),
+          first_try = (attempts = 0),
+          puzzle = CASE
+            WHEN kind = 'maze' THEN jsonb_set(puzzle, '{rotations}', to_jsonb(ARRAY(
+              SELECT x::INTEGER FROM jsonb_array_elements_text(p_answer->'rotations') WITH ORDINALITY AS e(x, i) ORDER BY i
+            )))
+            ELSE puzzle
+          END,
+          updated_at = now()
+      WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot
+      RETURNING * INTO v_row;
+      RETURN riddle_view(v_row) || jsonb_build_object('ok', true, 'result', 'correct');
+    END IF;
   ELSE
-    v_kind := riddle_kind_for(v_uid, CURRENT_DATE, v_row.attempts + 2);
-    v_next := riddle_make(v_kind);
-    UPDATE praise_riddles
-    SET attempts = attempts + 1, kind = v_kind, puzzle = v_next->'puzzle', answer = v_next->'answer', updated_at = now()
-    WHERE user_id = v_uid AND riddle_day = CURRENT_DATE
-    RETURNING * INTO v_row;
+    v_timeout := true;
   END IF;
+
+  v_previous := riddle_retire(v_uid, v_slot);
+  SELECT * INTO v_row FROM praise_riddles WHERE user_id = v_uid AND riddle_day = CURRENT_DATE AND riddle_slot = v_slot;
 
   RETURN riddle_view(v_row) || jsonb_build_object(
     'ok', true,
-    'result', CASE WHEN v_skip THEN 'skipped' ELSE 'wrong' END,
+    'result', CASE WHEN v_timeout THEN 'timeout' WHEN v_skip THEN 'skipped' ELSE 'wrong' END,
     'previous', v_previous
   );
 END;
 $$;
 
--- Read by submit_praise: NULL while the user's riddle for today is unsolved, otherwise the Sharp Mind bonus
--- owed with the praise (riddle_first_try_bonus() for a first-try solve, else 0).
+-- Read by submit_praise (under praise_lock_user): NULL while the riddle of the kiss being sung (the user's next
+-- slot today) is unsolved, otherwise the Sharp Mind bonus owed with that praise (riddle_first_try_bonus() for a
+-- first-try solve, else 0). A riddle solved for an earlier, already sung slot never opens the next one.
 CREATE OR REPLACE FUNCTION praise_riddle_bonus(p_uid UUID) RETURNS INTEGER
 LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
   SELECT CASE WHEN first_try THEN riddle_first_try_bonus() ELSE 0 END
   FROM praise_riddles
-  WHERE user_id = p_uid AND riddle_day = CURRENT_DATE AND solved_at IS NOT NULL
+  WHERE user_id = p_uid
+    AND riddle_day = CURRENT_DATE
+    AND riddle_slot = praise_next_slot(p_uid)
+    AND solved_at IS NOT NULL
+$$;
+
+-- Read by submit_praise next to praise_riddle_bonus, and kept on the praise: how long the solved riddle of the
+-- kiss being sung took, from its first riddle posed to the solve (across misses), and the riddles missed, skipped
+-- or timed out before it.
+CREATE OR REPLACE FUNCTION praise_riddle_stats(p_uid UUID, OUT ms INTEGER, OUT misses INTEGER)
+LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
+  SELECT greatest(0, round(extract(epoch FROM solved_at - created_at) * 1000))::INTEGER, attempts - 1
+  FROM praise_riddles
+  WHERE user_id = p_uid
+    AND riddle_day = CURRENT_DATE
+    AND riddle_slot = praise_next_slot(p_uid)
+    AND solved_at IS NOT NULL
 $$;
 
 REVOKE EXECUTE ON FUNCTION riddle_first_try_bonus() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_daily_limit() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION riddle_time_limit(TEXT) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION riddle_time_grace() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_rand(INTEGER, INTEGER) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_shuffle(INTEGER[]) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_sequence_predictions(INTEGER[]) FROM PUBLIC, anon, authenticated;
@@ -4102,7 +4327,10 @@ REVOKE EXECUTE ON FUNCTION riddle_make(TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_kind_for(UUID, DATE, INTEGER) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_check(TEXT, JSONB, JSONB, JSONB) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION riddle_view(praise_riddles) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION riddle_expired(praise_riddles) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION riddle_retire(UUID, INTEGER) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION praise_riddle_bonus(UUID) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION praise_riddle_stats(UUID) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION get_my_riddle() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION solve_my_riddle(JSONB) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION get_my_riddle() TO authenticated;
@@ -4128,14 +4356,19 @@ NOTIFY pgrst, 'reload schema';
 -- from the ledger rows tied to each praise (reference_id = praise id): the praise reward as paid (title boosts
 -- included), the Sharp Mind riddle bonus and the Royal Favor of a crown. Legacy Act I kisses (kiss_the_hand, or
 -- sing_his_praises without a praise) are counted apart. p_from / p_to bound praises by created_at, [from, to).
+-- A subject sings up to 4 praises a day: today_count says how many of them fall on today. Each praise carries
+-- its King's Riddle time and misses (riddle_ms, riddle_misses); each subject gets the average solve time of their
+-- timed praises (avg_riddle_ms) and the misses summed over the window. Run after the current phase10_praise.sql.
 -- Additive and idempotent: one partial index and one SECURITY DEFINER read function. Works with and without
 -- phase11_lockdown.sql. Run after supabase/phase10_riddles.sql. Without this file the app computes the same board
 -- from the public praises table and ledger.
 
 DO $$
 BEGIN
-  IF to_regclass('public.praises') IS NULL THEN
-    RAISE EXCEPTION 'Run supabase/phase10_praise.sql before supabase/phase10_praise-board.sql';
+  IF to_regclass('public.praises') IS NULL OR NOT EXISTS (
+    SELECT 1 FROM pg_attribute WHERE attrelid = 'public.praises'::regclass AND attname = 'riddle_ms' AND NOT attisdropped
+  ) THEN
+    RAISE EXCEPTION 'Run the current supabase/phase10_praise.sql before supabase/phase10_praise-board.sql';
   END IF;
 END $$;
 
@@ -4150,7 +4383,7 @@ CREATE OR REPLACE FUNCTION praise_leaderboard(
 ) RETURNS JSONB
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timezone = 'UTC' AS $$
   WITH sung AS (
-    SELECT p.id, p.user_id, p.body, p.verdict, p.verdict_note, p.praise_day, p.created_at,
+    SELECT p.id, p.user_id, p.body, p.verdict, p.verdict_note, p.praise_day, p.created_at, p.riddle_ms, p.riddle_misses,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'sing_his_praises'), 0) AS reward,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'riddle_bonus'), 0) AS riddle,
       coalesce(sum(t.amount) FILTER (WHERE t.reason = 'royal_favor'), 0) AS favor,
@@ -4173,6 +4406,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
       count(*) FILTER (WHERE verdict = 'crowned') AS crowns,
       count(*) FILTER (WHERE verdict = 'scorned') AS scorns,
       bool_or(praise_day = CURRENT_DATE) AS today,
+      count(*) FILTER (WHERE praise_day = CURRENT_DATE) AS today_count,
+      round(avg(riddle_ms))::INTEGER AS avg_riddle_ms,
+      coalesce(sum(riddle_misses), 0) AS riddle_misses,
       max(created_at) AS last_at,
       jsonb_agg(
         jsonb_build_object(
@@ -4184,7 +4420,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
           'verdict_note', verdict_note,
           'reward', reward,
           'riddle', riddle,
-          'favor', favor
+          'favor', favor,
+          'riddle_ms', riddle_ms,
+          'riddle_misses', riddle_misses
         ) ORDER BY created_at DESC, id
       ) FILTER (WHERE n <= least(greatest(coalesce(p_limit, 5), 1), 20)) AS recent
     FROM sung
@@ -4210,6 +4448,9 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp SET timez
       'scorns', coalesce(b.scorns, 0),
       'legacy', coalesce(l.legacy, 0),
       'today', coalesce(b.today, false),
+      'today_count', coalesce(b.today_count, 0),
+      'avg_riddle_ms', b.avg_riddle_ms,
+      'riddle_misses', coalesce(b.riddle_misses, 0),
       'last_at', b.last_at,
       'recent', coalesce(b.recent, '[]'::jsonb)
     )), '[]'::jsonb)

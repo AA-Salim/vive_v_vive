@@ -346,8 +346,9 @@ END;
 $$;
 
 -- Lays a path first (column by column: in from the west, slide up to two rows, out to the east; the exit is
--- where it ends), fills the other cells with decoys, then scrambles the path until the maze is broken again.
--- Always solvable: the laid path is the solution.
+-- where it ends), fills the other cells with decoys (few tees, they leak water everywhere), then turns three or
+-- four path pipes out of place until the maze is broken. Never the first one, so water already shows where it
+-- comes in and following it to the break is the whole puzzle. Always solvable: the laid path is the solution.
 CREATE OR REPLACE FUNCTION riddle_make_maze(p_size INTEGER DEFAULT 5) RETURNS JSONB
 LANGUAGE plpgsql VOLATILE SET search_path = public AS $$
 DECLARE
@@ -364,7 +365,7 @@ DECLARE
   v_target INTEGER;
   v_step INTEGER;
   v_cell INTEGER;
-  v_wrong INTEGER;
+  v_breaks INTEGER;
   v_try INTEGER := 0;
 BEGIN
   FOR v_col IN 0..n - 1 LOOP
@@ -386,7 +387,7 @@ BEGIN
 
   FOR i IN 1..n * n LOOP
     IF v_masks[i] = 0 THEN
-      v_type := (ARRAY['L', 'L', 'I', 'T', 'T'])[riddle_rand(1, 5)];
+      v_type := (ARRAY['L', 'L', 'I', 'I', 'T'])[riddle_rand(1, 5)];
       v_solution := v_solution || riddle_rand(0, 3);
     ELSE
       v_type := CASE WHEN v_masks[i] IN (5, 10) THEN 'I' ELSE 'L' END;
@@ -395,16 +396,15 @@ BEGIN
     v_tiles := v_tiles || v_type;
   END LOOP;
 
+  v_breaks := least(cardinality(v_path) - 1, riddle_rand(3, 4));
   LOOP
     v_try := v_try + 1;
     v_rot := v_solution;
-    FOREACH v_cell IN ARRAY v_path LOOP
-      v_rot[v_cell] := riddle_rand(0, 3);
+    -- A straight pipe has two looks, a corner four: any other look than the solution's is out of place.
+    FOREACH v_cell IN ARRAY (riddle_shuffle(v_path[2:]))[1:v_breaks] LOOP
+      v_rot[v_cell] := (v_solution[v_cell] + riddle_rand(1, CASE WHEN substr(v_tiles, v_cell, 1) = 'I' THEN 1 ELSE 3 END)) % 4;
     END LOOP;
-    SELECT count(*) INTO v_wrong FROM unnest(v_path) AS c
-    WHERE riddle_tile_mask(substr(v_tiles, c, 1), v_rot[c]) <> v_masks[c];
-    EXIT WHEN (v_wrong >= least(3, cardinality(v_path)) AND NOT riddle_maze_connected(n, v_tiles, v_rot, v_entry, v_exit))
-      OR v_try >= 60;
+    EXIT WHEN NOT riddle_maze_connected(n, v_tiles, v_rot, v_entry, v_exit) OR v_try >= 60;
   END LOOP;
 
   RETURN jsonb_build_object(

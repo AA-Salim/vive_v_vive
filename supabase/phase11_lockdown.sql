@@ -31,7 +31,8 @@
 -- Not locked, because the app still writes them directly as the user and a lockdown would break it:
 --   game_sessions phase moves and the declare claim, games inserts   the session lifecycle (guarded above)
 --   session_assignments during the draft, titles / user_titles honors   lobby draft, award and milestone engraving
---   daily_fearless, player_queue, vainqueur_state, coach_draft_picks, prophecies (legacy), champion_roles
+--   daily_fearless, player_queue (narrow guard in phase10_lobby.sql), vainqueur_state, coach_draft_picks,
+--   prophecies (legacy), champion_roles
 --
 -- Privileges are revoked, not only policies, so re-running any phase10 file afterwards does not reopen a door.
 -- If the old app version must come back after this file ran, expect it to break: it moves points through

@@ -55,8 +55,15 @@ export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
       })
       return new Set(plan.comingIn)
     }
-    return new Set(entries.slice(0, LOBBY_SIZE - TEAM_SIZE).map((e) => e.player_id))
-  }, [rotation, entries])
+    // Players of the game in progress who queued again are skipped by the rotation: they are already on the Rift.
+    const playing = new Set(gameRunning ? (session?.session_assignments ?? []).map((a) => a.player_id) : [])
+    return new Set(
+      entries
+        .filter((e) => !playing.has(e.player_id))
+        .slice(0, LOBBY_SIZE - TEAM_SIZE)
+        .map((e) => e.player_id)
+    )
+  }, [rotation, entries, gameRunning, session])
 
   const line =
     entries.length === 0
@@ -66,8 +73,10 @@ export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
           ? `The next rotation calls up the first ${called.size}.`
           : "Nobody here gets called this rotation."
         : rotation
-          ? `Winners stay. The first ${Math.min(entries.length, TEAM_SIZE)} here take the losers' seats.`
-          : `${entries.length} waiting. The host can seat them from the roster in one tap.`
+          ? called.size > 0
+            ? `Winners stay. The first ${called.size} here take the losers' seats.`
+            : "Winners stay. Everyone here is already on the Rift."
+          : `${entries.length} waiting. The host can seat the first ${Math.min(entries.length, LOBBY_SIZE)} from the roster in one tap.`
 
   const busy = action.isPending
   const myButton = authLoading ? (

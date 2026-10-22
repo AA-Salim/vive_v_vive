@@ -36,7 +36,12 @@ Lobby  ->  Draft  ->  Royal Decrees  ->  Bets  ->  Live  ->  Result + Tribunal
 
 The host picks the ten players.
 
-- **The Roster**: tap ten names. *Seat the queue* adds everyone waiting. *Same ten as last game* does what it says.
+- **The Queue**: first come, first served. Join at the back, leave any time, even during a game. You leave the line
+  when you are dealt into a game (a canceled game does not give the spot back), when you are benched, or after 12
+  hours. With winner stays on, the winners keep their seats, the front of the line takes the losers' places, and
+  losers who rotate out go to the back.
+- **The Roster**: tap ten names. *Seat the queue* seats the first ten in line (your own picks fill any empty seats).
+  *Same ten as last game* does what it says.
 - **Roll the teams**: splits the ten into Blue and Red, deals each player a lane and a random champion.
 - **Coach draft** (optional): two coaches pick their players one by one instead of random teams.
 

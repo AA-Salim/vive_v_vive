@@ -9,15 +9,15 @@ const LANE_LIST = LANES.map((lane) => ROLE_LABELS[lane]).join(", ")
 export const QUEUE_HELP = {
   queue: {
     title: "The Queue",
-    does: "The line for the next game. The roster seats it in one tap, and winner stays calls it up in order.",
+    does: `The line for the next game, first come, first served. Join at the back, leave any time, even mid-game. Seat the queue on the roster seats the first ${LOBBY_SIZE} in line. With winner stays on, the winners keep their seats, the front of the line takes the losers' places, and losers who rotate out go to the back.`,
     cost: FREE,
-    limits: `One spot per player, kept for ${QUEUE_HOURS} hours. Being dealt into a game takes you out of the line. Admins can reorder, remove or clear it.`,
+    limits: `One spot per claimed player. You lose it when you are dealt into a game (a canceled game does not give it back), when you are benched, or after ${QUEUE_HOURS} hours. You get an alert when someone else adds, moves or removes you, or when winner stays calls you up. Admins can reorder, remove or clear the line.`,
   },
   join: {
     title: "Join or leave the queue",
-    does: "Takes a spot at the back of the line, or gives yours up. Leaving is instant.",
+    does: "Takes a spot at the back of the line, or gives yours up. You can queue during a game for the next one.",
     cost: FREE,
-    limits: `You need a claimed player. Your spot lasts ${QUEUE_HOURS} hours.`,
+    limits: `Sign in and claim your player first. Benched players cannot join. Your spot lasts ${QUEUE_HOURS} hours.`,
   },
   clear: {
     title: "Clear the queue",
@@ -37,7 +37,7 @@ export function rosterHelp(maxSelection: number) {
     },
     quickSeats: {
       title: "Quick seats",
-      does: `Seat the queue puts the first ${LOBBY_SIZE} in line in the seats and keeps your other picks after them. Same ten replays last game's lineup.`,
+      does: `Seat the queue puts the first ${LOBBY_SIZE} in line in the seats. With fewer waiting, your own picks fill the empty seats. Same ten replays last game's lineup.`,
       cost: FREE,
       limits: "Only changes your selection. Nothing is dealt until you roll.",
     },
@@ -158,7 +158,7 @@ export const COACH_HELP = {
   },
   lockPick: {
     title: "Lock the teams",
-    does: "Locks both teams and opens champion select: the coaches pick every champion for their own players in draft order, fearless bans included. Drafted players leave the queue.",
+    does: "Locks both teams and opens champion select: the coaches pick every champion for their own players in draft order, fearless bans included. Drafted players leave the queue once the last champion is in.",
     cost: FREE,
     limits: `Either coach or an admin, once all ${LOBBY_SIZE} have a lane. Each pick has a timer; a coach who stalls gets a random champion from that lane.`,
   },

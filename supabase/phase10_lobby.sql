@@ -139,3 +139,85 @@ REVOKE EXECUTE ON FUNCTION coach_draft_pick(UUID, UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION coach_draft_pick(UUID, UUID) TO authenticated;
 REVOKE EXECUTE ON FUNCTION coach_draft_undo(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION coach_draft_undo(UUID) TO authenticated;
+
+-- The queue is written directly by the app as the signed-in user, and had no row security: anyone holding the
+-- public key could empty it, reorder it, or slot anyone in at the front with a spot that never expires. Only the
+-- writes the app makes pass:
+--   insert   your own player, any player for an admin, or the losers of the last decided game for its host (the
+--            winner-stays rotation sends them to the back). A new spot always lands at the back, stamped now.
+--   update   admins, position only (reordering).
+--   delete   your own spot; any spot for an admin; spots that expired (12 hours, QUEUE_TTL_MS in
+--            lib/lobby/constants.ts) or belong to benched players; players seated in a game still in its draft
+--            (a roll, a coach confirm or a rotation just dealt them in); and the losers of the last decided game
+--            for its host.
+-- Functions run as the owner and are never affected.
+CREATE OR REPLACE FUNCTION vvv_player_queue_guard() RETURNS TRIGGER
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_uid UUID := auth.uid();
+  v_player UUID := CASE WHEN TG_OP = 'DELETE' THEN OLD.player_id ELSE NEW.player_id END;
+  v_admin BOOLEAN;
+  v_ok BOOLEAN;
+BEGIN
+  IF current_user NOT IN ('anon', 'authenticated') THEN
+    RETURN COALESCE(NEW, OLD);
+  END IF;
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'queue:locked' USING ERRCODE = '42501';
+  END IF;
+
+  v_admin := EXISTS (SELECT 1 FROM players WHERE auth_user_id = v_uid AND is_admin);
+
+  IF TG_OP = 'UPDATE' THEN
+    IF NOT v_admin OR NEW.id IS DISTINCT FROM OLD.id OR NEW.player_id IS DISTINCT FROM OLD.player_id
+       OR NEW.joined_at IS DISTINCT FROM OLD.joined_at THEN
+      RAISE EXCEPTION 'queue:locked' USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+  END IF;
+
+  v_ok := v_admin
+    OR EXISTS (SELECT 1 FROM players WHERE id = v_player AND auth_user_id = v_uid)
+    OR EXISTS (
+      SELECT 1
+      FROM (
+        SELECT id, status, created_by FROM game_sessions
+        WHERE status IN ('blue_win', 'red_win')
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) s
+      JOIN session_assignments sa ON sa.session_id = s.id
+      WHERE s.created_by = v_uid AND sa.player_id = v_player AND sa.side || '_win' <> s.status
+    );
+
+  IF TG_OP = 'DELETE' THEN
+    v_ok := v_ok
+      OR OLD.joined_at < now() - interval '12 hours' + interval '1 minute'
+      OR NOT EXISTS (SELECT 1 FROM players WHERE id = v_player AND is_active)
+      OR EXISTS (
+        SELECT 1 FROM session_assignments sa
+        JOIN game_sessions s ON s.id = sa.session_id
+        WHERE sa.player_id = v_player AND s.status = 'draft'
+      );
+    IF NOT v_ok THEN
+      RAISE EXCEPTION 'queue:locked' USING ERRCODE = '42501';
+    END IF;
+    RETURN OLD;
+  END IF;
+
+  IF NOT v_ok THEN
+    RAISE EXCEPTION 'queue:locked' USING ERRCODE = '42501';
+  END IF;
+  -- Rows inserted earlier by the same statement are visible here, so a batch keeps its order at the back.
+  NEW.position := GREATEST(NEW.position, COALESCE((SELECT max(position) FROM player_queue), 0) + 1);
+  NEW.joined_at := now();
+  RETURN NEW;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION vvv_player_queue_guard() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS vvv_player_queue_guard ON player_queue;
+CREATE TRIGGER vvv_player_queue_guard
+  BEFORE INSERT OR UPDATE OR DELETE ON player_queue
+  FOR EACH ROW EXECUTE FUNCTION vvv_player_queue_guard();

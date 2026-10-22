@@ -49,7 +49,7 @@ export function useRosterSelection(players: RosterPlayer[], queue: QueueEntryVie
       remove: (player: RosterPlayer) => write(selected.filter((p) => p.id !== player.id).map((p) => p.id)),
       clear: () => write([]),
       seatQueue,
-      queueReady: queued.filter((id) => !selectedIds.has(id)).length > 0 ? Math.min(queued.length, LOBBY_SIZE) : 0,
+      queueReady: queued.slice(0, LOBBY_SIZE).some((id) => !selectedIds.has(id)) ? Math.min(queued.length, LOBBY_SIZE) : 0,
       canRematch: rematch.length === LOBBY_SIZE && rematch.some((id) => !selectedIds.has(id)),
       rematch: () => write(rematch),
     }

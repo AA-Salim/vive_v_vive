@@ -11,6 +11,7 @@ import { VERDICT_HELP } from "@/lib/pages/help"
 import type { HistoryGame, HistoryPlayer } from "@/lib/pages/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 const SIDE_LABEL: Record<Side, string> = { blue: "Blue", red: "Red" }
 const SIDE_TEXT: Record<Side, string> = { blue: "text-[var(--color-blue-team)]", red: "text-[var(--color-red-team)]" }
@@ -93,7 +94,7 @@ function Matchups({ game, highlight }: { game: HistoryGame; highlight: ReadonlyS
                   <>
                     <div className={cn("min-w-0", i === 0 ? "order-1" : "order-2")}>
                       <p className={cn("truncate text-sm font-medium", highlight.has(p.playerId) ? "text-[var(--color-gold)]" : "text-[var(--color-gold-light)]")}>
-                        {p.name}
+                        <ProfileTrigger playerId={p.playerId} name={p.name}>{p.name}</ProfileTrigger>
                       </p>
                       <p className="truncate text-[11px] text-muted-foreground">{p.champion}</p>
                     </div>

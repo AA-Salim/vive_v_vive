@@ -13,6 +13,7 @@ import { WARRANT_HELP, warrantHelp } from "@/lib/bounties/help"
 import { minHuntShare } from "@/lib/bounties/rules"
 import type { WarrantView } from "@/lib/bounties/types"
 import { cn } from "@/lib/utils"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 interface WantedPosterProps {
   id?: string
@@ -79,7 +80,7 @@ export function WantedPoster({ id, warrant, viewerPlayerId, canPledge, live = fa
           </span>
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-xl font-semibold text-[var(--color-gold-light)]">{warrant.target.name}</h3>
+          <h3 className="truncate font-display text-xl font-semibold text-[var(--color-gold-light)]"><ProfileTrigger playerId={warrant.target.playerId} name={warrant.target.name}>{warrant.target.name}</ProfileTrigger></h3>
           <p className="truncate text-xs italic text-muted-foreground">{posterLine(warrant.id)}</p>
         </div>
       </div>

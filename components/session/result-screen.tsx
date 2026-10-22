@@ -20,6 +20,7 @@ import { winnerOf } from "@/lib/session/constants"
 import type { RoomSession } from "@/lib/session/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 // canvas-confetti only understands hex colors.
 function cssColor(name: string): string | null {
@@ -151,7 +152,9 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
                 transition={{ delay: 0.25 + i * 0.07 }}
                 className="flex w-[58px] flex-col items-center gap-1.5 sm:w-20"
               >
-                <ChampionAvatar assignment={a} size={48} rounded="full" className="ring-[3px]" />
+                <ProfileTrigger playerId={a.player_id} name={a.players.name} className="rounded-full">
+                  <ChampionAvatar assignment={a} size={48} rounded="full" className="ring-[3px]" />
+                </ProfileTrigger>
                 <PlayerName
                   name={a.players.name}
                   title={byPlayerId.get(a.player_id) ?? null}

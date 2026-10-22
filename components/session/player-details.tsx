@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import { SIDE_NAME } from "@/components/session/copy"
 import { LOCK_HELP } from "@/components/session/help"
 import { useMediaQuery } from "@/components/session/use-browser-state"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 export interface PlayerDetailsProps {
   assignment: RoomAssignment
@@ -82,6 +83,13 @@ export function PlayerDetails({
             <PlayerName name={assignment.players.name} title={title ?? null} epithet className="font-semibold text-foreground" />
             {outcome === "won" && <CrownIcon className="size-4 shrink-0 text-[var(--color-gold)]" aria-label="Winner" />}
           </p>
+          <ProfileTrigger
+            playerId={assignment.player_id}
+            name={assignment.players.name}
+            className="text-xs font-semibold text-[var(--color-gold-light)] underline-offset-4 hover:underline"
+          >
+            Open {assignment.players.name}&apos;s court file
+          </ProfileTrigger>
           {title ? (
             <div className="rounded-md border border-border bg-muted/40 p-2">
               <TitleCard name={assignment.players.name} entry={title} showName={false} />

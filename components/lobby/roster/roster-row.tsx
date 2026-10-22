@@ -1,10 +1,11 @@
 "use client"
 
-import { CheckIcon } from "lucide-react"
+import { CheckIcon, IdCardIcon } from "lucide-react"
 import { FormDots, WinRate, relativeDays } from "@/components/lobby/player-stats"
 import { PlayerAdminMenu, type PlayerIntent } from "@/components/lobby/roster/player-admin-menu"
 import type { RosterPlayer } from "@/lib/lobby/types"
 import { cn } from "@/lib/utils"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 interface RosterRowProps {
   player: RosterPlayer
@@ -26,7 +27,7 @@ export function RosterRow({ player, selected, full, isMe, queuePosition, isAdmin
     return (
       <li className="flex items-center gap-2 rounded-xl border border-dashed border-border px-3 py-1.5 opacity-70">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm text-muted-foreground">{player.name}</span>
+          <span className="block truncate text-sm text-muted-foreground"><ProfileTrigger playerId={player.id} name={player.name}>{player.name}</ProfileTrigger></span>
           <span className="block text-[11px] text-muted-foreground/80">Benched · {meta}</span>
         </span>
         {isAdmin && <PlayerAdminMenu player={player} queued={false} onIntent={onIntent} />}
@@ -85,6 +86,9 @@ export function RosterRow({ player, selected, full, isMe, queuePosition, isAdmin
           <FormDots form={player.form} />
         </span>
       </button>
+      <ProfileTrigger playerId={player.id} name={player.name} className="size-10 shrink-0 justify-center text-muted-foreground hover:text-[var(--color-gold-light)]">
+        <IdCardIcon className="size-4" aria-hidden />
+      </ProfileTrigger>
       {isAdmin && (
         <span className="pr-1">
           <PlayerAdminMenu player={player} queued={queuePosition !== null} onIntent={onIntent} />

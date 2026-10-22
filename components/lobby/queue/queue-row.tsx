@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { QueueEntryView } from "@/lib/lobby/types"
 import { cn } from "@/lib/utils"
+import { ProfileTrigger } from "@/components/profile/profile-provider"
 
 interface QueueRowProps {
   entry: QueueEntryView
@@ -60,7 +61,7 @@ export function QueueRow({ entry, index, total, called, isMe, isAdmin, now, onMo
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-[var(--color-gold-light)]">{entry.name}</span>
+          <ProfileTrigger playerId={entry.player_id} name={entry.name} className="truncate text-sm font-medium text-[var(--color-gold-light)]">{entry.name}</ProfileTrigger>
           {isMe && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-gold)]">You</span>}
         </span>
         {index === 0 && <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--color-gold)]">Next up</span>}

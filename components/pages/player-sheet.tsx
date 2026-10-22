@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { HistoryIcon } from "lucide-react"
+import { HistoryIcon, IdCardIcon } from "lucide-react"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { PlayerRecord } from "@/components/pages/player-record"
 import { PageApiError, usePlayerDetail } from "@/components/pages/queries"
@@ -77,6 +77,13 @@ export function PlayerSheet({ player: requested, onClose, season = "current" }: 
                 <HistoryIcon className="size-4" aria-hidden />
                 Every game of {player.name}
                 {season === "all" ? null : <span className="text-muted-foreground">· {served !== undefined ? seasonShort(served) : "this act"}</span>}
+              </Link>
+              <Link
+                href={withSeason(`/players/${player.id}`, season)}
+                className="mt-2 inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[var(--color-gold-light)] underline-offset-4 transition-colors outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <IdCardIcon className="size-4" aria-hidden />
+                Full profile: titles, rivals and form
               </Link>
             </div>
           </>

@@ -173,7 +173,12 @@ bigger praise...) plus a small **perk** after each game. Open a title's bubble t
 ## Everything else
 
 - **Live updates**: toasts tell you what other people just did (bets, decrees, duels...). The dot in the top bar shows
-  you are live. Quiet mode is in its menu.
+  you are live. Its menu holds notifications and sound (both on by default), quiet mode and vibration.
+- **Notifications**: tap *Turn on notifications* once and your phone or computer tells you when a game is launched,
+  decrees or bets open, the game goes live, the result lands or a game is canceled, plus anything aimed at you (a duel,
+  a bounty, a curse, the pillory, your praise verdict, your pick as a coach). It works with the app minimized, and
+  with it closed when you are signed in. On iPhone, install the app first (Share, then *Add to Home Screen*), open it
+  from the Home Screen, then allow notifications.
 - **Profiles**: tap any name to see that player's season, titles, recent games, best duo and arch-nemesis.
 - **Stats by season**: stats, rivalries, duos and history show the current act by default. Use the season picker for
   older acts or all time. Tap a game in a rivalry to see the full match.
@@ -207,4 +212,9 @@ If *Declare winner* says the settlement is incomplete, press it again: nothing i
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
 - Database changes live in `supabase/`. After a deploy, run `supabase/phase10_all.sql` in the Supabase SQL editor
   (safe to run again), check the site, then run `supabase/phase11_lockdown.sql` last.
+- Web Push (notifications with the app closed): run `supabase/phase10_push.sql` (any time, before or after the
+  lockdown) and set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (`mailto:...`) in Vercel,
+  then redeploy. Generate a pair with `npx web-push generate-vapid-keys`. Without them push is off and everything
+  else works. Optional `SUPABASE_SERVICE_ROLE_KEY` (server only) also covers phase changes that a signed-out visitor
+  happens to trigger.
 - Pushing to `main` deploys to Vercel.

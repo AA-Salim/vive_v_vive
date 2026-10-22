@@ -1,13 +1,15 @@
 "use client"
 
-import { HistoryIcon, ZapIcon } from "lucide-react"
+import { BellRingIcon, HistoryIcon, ZapIcon } from "lucide-react"
 import { toast } from "sonner"
 import { LiveToast } from "@/components/live/live-toast"
 import { metaFor, type DomainMeta } from "@/components/live/domain-meta"
+import { notifyFromTab } from "@/components/live/notifier"
 import { safeNarrate, summarize } from "@/lib/live/coalesce"
-import { buzz, playChime } from "@/lib/live/cues"
+import { buzz, playCue, type CueSize } from "@/lib/live/cues"
 import type { LiveEvent } from "@/lib/live/events"
 import type { Narration } from "@/lib/live/narration"
+import { notifyPlan, sentConfirmation } from "@/lib/live/notify"
 import { coalesceKey, toastDecision, type LivePhase, type Viewer } from "@/lib/live/policy"
 import { TONE_RANK, liveTone, type LiveTone } from "@/lib/live/tone"
 import type { LivePrefs } from "@/hooks/use-live-prefs"
@@ -67,6 +69,8 @@ const DURATION: Record<LiveTone, number> = {
 
 const DIGEST_META: DomainMeta = { icon: HistoryIcon, label: "Catch up" }
 const SPILL_META: DomainMeta = { icon: ZapIcon, label: "Rapid fire" }
+const SENT_META: DomainMeta = { icon: BellRingIcon, label: "Announced" }
+const SENT_DURATION = 3_500
 
 function digest(items: Announced[], title: string): Narration {
   const recent = items.slice(-2).reverse().map((m) => m.line.title)
@@ -86,15 +90,28 @@ export class LiveAnnouncer {
   private away: Announced[] = []
 
   announce(event: LiveEvent, ctx: AnnounceContext): void {
+    const plan = notifyPlan(event)
+    const mine = !!ctx.viewer.userId && event.actor?.userId === ctx.viewer.userId
+    if (mine) {
+      // Never a toast or a sound for your own action, only a word that the announcement went out.
+      const sent = plan ? sentConfirmation(plan) : null
+      if (sent) this.confirmSent(event, sent)
+      return
+    }
+    // The OS notification brings its own sound: the tab stays silent when one went out.
+    const notified = plan ? notifyFromTab(event, plan, ctx.viewer, ctx.prefs) : false
+
     const decision = toastDecision(event, { phase: ctx.phase, viewer: ctx.viewer, quiet: ctx.prefs.quiet })
     if (!decision.show) return
     const line = safeNarrate(event, decision.personal ? ctx.viewer : undefined)
     if (!line) return
+    const tone = liveTone(line.tone)
+    const size: CueSize | null = decision.personal ? "personal" : decision.big ? "big" : null
 
     // A hidden tab would stack stale toasts for later: keep a digest instead (personal alerts still wait in place).
     if (!decision.personal && document.visibilityState === "hidden") {
       this.away = [...this.away, { event, line }].slice(-AWAY_LIMIT)
-      if (decision.big) this.cue(liveTone(line.tone), ctx.prefs)
+      if (size && !notified) this.cue(tone, size, ctx.prefs)
       return
     }
 
@@ -112,14 +129,33 @@ export class LiveAnnouncer {
 
     if (!decision.personal && !this.takeBudget(now)) {
       this.spillOver({ event, line }, now)
-      if (decision.big) this.cue(liveTone(line.tone), ctx.prefs)
+      if (size && !notified) this.cue(tone, size, ctx.prefs)
       return
     }
     const toastId = `live-${event.id}`
     if (key) this.bursts.set(key, { toastId, events: [event], startedAt: now, lastAt: now, version: 0 })
     this.prune(now)
     this.render(toastId, line, event, { count: 1, version: 0, personal: decision.personal })
-    if (decision.big) this.cue(liveTone(line.tone), ctx.prefs)
+    if (!notified) this.cue(tone, size ?? "small", ctx.prefs)
+  }
+
+  private confirmSent(event: LiveEvent, title: string) {
+    toast.custom(
+      (id) => (
+        <LiveToast
+          toastId={id}
+          tone="info"
+          kicker={SENT_META.label}
+          title={title}
+          icon={SENT_META.icon}
+          duration={SENT_DURATION}
+          version={0}
+          count={1}
+          personal={false}
+        />
+      ),
+      { id: `live-sent-${event.id}`, duration: SENT_DURATION }
+    )
   }
 
   // Called when the tab becomes visible again: one digest toast for everything missed meanwhile.
@@ -182,9 +218,9 @@ export class LiveAnnouncer {
     if (this.spill && now - this.spill.lastAt > BURST_MAX_MS) this.spill = null
   }
 
-  private cue(tone: LiveTone, prefs: LivePrefs) {
-    if (prefs.sound) playChime(tone)
-    if (prefs.vibrate) buzz(tone)
+  private cue(tone: LiveTone, size: CueSize, prefs: LivePrefs) {
+    if (prefs.sound) playCue(tone, size)
+    if (prefs.vibrate && size !== "small") buzz(tone)
   }
 
   private render(toastId: string, line: Narration, event: LiveEvent, opts: RenderOptions) {

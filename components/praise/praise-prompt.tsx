@@ -55,7 +55,7 @@ export function PraisePrompt() {
     if (!ready || !today || gameBusy || introPending) return
     if (readStorage(seenKey(today)) || isMuted()) return
     const timer = setTimeout(() => {
-      const busyScreen = document.querySelector('[role="dialog"], [aria-label="Dismiss broadcast"]')
+      const busyScreen = document.querySelector('[role="dialog"], [aria-label="Dismiss broadcast"], [data-floating-prompt]')
       if (busyScreen) return
       writeStorage(seenKey(today), "1")
       setVisible(true)
@@ -83,6 +83,7 @@ export function PraisePrompt() {
             key="praise-prompt"
             role="status"
             aria-label="Sing for Salaxe"
+            data-floating-prompt=""
             initial={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduced ? { opacity: 0 } : { opacity: 0, y: 24 }}

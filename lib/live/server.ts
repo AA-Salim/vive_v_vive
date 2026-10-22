@@ -10,6 +10,7 @@ import {
   type LiveEventPayloads,
   type LiveEventType,
 } from "@/lib/live/events"
+import { deliverPush, preparePush } from "@/lib/live/server-push"
 
 let channel: RealtimeChannel | null = null
 
@@ -61,16 +62,20 @@ async function broadcastLive(event: LiveEvent): Promise<boolean> {
   }
 }
 
-function historyClient(persist: EmitInit<LiveEventType>["persist"], type: LiveEventType): Promise<SupabaseClient | null> | null {
+function historyClient(
+  persist: EmitInit<LiveEventType>["persist"],
+  type: LiveEventType,
+  callerClient: () => Promise<SupabaseClient | null>
+): Promise<SupabaseClient | null> | null {
   if (persist === false) return null
   if (persist && typeof persist === "object") return Promise.resolve(persist)
   if (persist !== true && !isPersistedType(type)) return null
-  // Resolved now, while the request scope is guaranteed: the client reads the caller's auth cookies.
-  return createRequestClient().catch(() => null)
+  return callerClient()
 }
 
 // Fire-and-forget broadcast to every connected client, sent after the response is flushed, plus a
-// best-effort write to the activity history. Must be called inside a route handler or server action.
+// best-effort write to the activity history and, for major events, a Web Push to devices with the app closed.
+// Must be called inside a route handler or server action.
 export function emitLive<T extends LiveEventType>(type: T, init: EmitInit<T>): void {
   const event: LiveEvent<T> = {
     id: crypto.randomUUID(),
@@ -80,10 +85,14 @@ export function emitLive<T extends LiveEventType>(type: T, init: EmitInit<T>): v
     actor: init.actor ?? null,
     data: init.data,
   }
-  const history = historyClient(init.persist, type)
+  // Resolved now, while the request scope is guaranteed: the client reads the caller's auth cookies.
+  let caller: Promise<SupabaseClient | null> | null = null
+  const callerClient = () => (caller ??= createRequestClient().catch(() => null))
+  const history = historyClient(init.persist, type, callerClient)
+  const push = preparePush(event, callerClient)
   after(async () => {
     const persisted = history?.then((client) => (client ? recordLive(client, event) : false))
-    await Promise.all([broadcastLive(event), persisted])
+    await Promise.all([broadcastLive(event), persisted, push ? deliverPush(event, push) : null])
   })
 }
 

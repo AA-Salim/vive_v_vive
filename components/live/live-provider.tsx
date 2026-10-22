@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { createClient } from "@/lib/supabase-client"
 import {
@@ -19,8 +20,9 @@ import {
   type LiveEventPayloads,
 } from "@/lib/live/events"
 import { livePhase, type Viewer } from "@/lib/live/policy"
-import { primeAudio } from "@/lib/live/cues"
+import { audioReady, primeAudio } from "@/lib/live/cues"
 import { LiveAnnouncer } from "@/components/live/live-announcer"
+import { registerServiceWorker, syncPush, useNotifyState } from "@/components/live/notifier"
 import {
   LiveBusContext,
   LiveContext,
@@ -60,6 +62,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const { user, profile } = useAuth()
   const { session, serverTimeDelta } = useSession()
   const [prefs] = useLivePrefs()
+  const notifyState = useNotifyState()
+  const router = useRouter()
   const [status, setStatus] = useState<LiveStatus>("connecting")
   const [feed, setFeed] = useState<LiveEvent[]>([])
   const [lastEventAt, setLastEventAt] = useState<number | null>(null)
@@ -238,14 +242,33 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!prefs.sound) return
-    const prime = () => primeAudio()
-    window.addEventListener("pointerdown", prime, { once: true })
-    window.addEventListener("keydown", prime, { once: true })
-    return () => {
-      window.removeEventListener("pointerdown", prime)
-      window.removeEventListener("keydown", prime)
+    // Touch only counts as a gesture on release; iOS can also suspend the audio again in the background.
+    const prime = () => {
+      if (!audioReady()) void primeAudio()
     }
+    const gestures = ["pointerdown", "pointerup", "touchend", "keydown"] as const
+    gestures.forEach((type) => window.addEventListener(type, prime, { passive: true }))
+    return () => gestures.forEach((type) => window.removeEventListener(type, prime))
   }, [prefs.sound])
+
+  const permission = notifyState.permission
+  useEffect(() => {
+    void registerServiceWorker()
+  }, [])
+
+  useEffect(() => {
+    void syncPush({ userId, notify: prefs.notify, quiet: prefs.quiet })
+  }, [userId, prefs.notify, prefs.quiet, permission])
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: unknown; url?: unknown } | null
+      if (data?.type === "vvv:navigate" && typeof data.url === "string" && data.url.startsWith("/")) router.push(data.url)
+    }
+    navigator.serviceWorker.addEventListener("message", onMessage)
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage)
+  }, [router])
 
   const value = useMemo<LiveContextValue>(
     () => ({ status, feed, userId, subscribe, lastEventAt, clockOffset, resync }),

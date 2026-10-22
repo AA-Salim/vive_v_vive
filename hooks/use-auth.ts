@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import type { User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase-client"
+import { forgetPushDevice } from "@/components/live/notifier"
 import { PROFILE_ROOT } from "@/lib/live/events"
 import type { UserProfile } from "@/lib/types"
 
@@ -84,6 +85,7 @@ export function useAuth() {
   }, [])
 
   const signOut = useCallback(async () => {
+    await forgetPushDevice()
     await createClient().auth.signOut()
     queryClient.setQueryData(AUTH_USER_KEY, null)
     if (userId) {

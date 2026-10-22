@@ -7,7 +7,8 @@ import { RelativeTime } from "@/components/live/relative-time"
 import { LIVE_LABELS, StatusDot, type LiveDisplayState } from "@/components/live/status-dot"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { buzz, canVibrate, playChime, primeAudio } from "@/lib/live/cues"
+import { NotifySettings } from "@/components/live/notify-settings"
+import { buzz, canVibrate, playCue, primeAudio } from "@/lib/live/cues"
 import { useLivePrefs } from "@/hooks/use-live-prefs"
 
 const EXPLAIN: Record<LiveDisplayState, string> = {
@@ -81,6 +82,7 @@ export function LiveSettings({ state }: { state: LiveDisplayState }) {
       </div>
 
       <div className="border-t border-border/70 py-1">
+        <NotifySettings />
         <PrefRow
           icon={BellOffIcon}
           label="Quiet mode"
@@ -91,14 +93,11 @@ export function LiveSettings({ state }: { state: LiveDisplayState }) {
         <PrefRow
           icon={Volume2Icon}
           label="Sound"
-          hint="A short fanfare for big moments."
+          hint="A fanfare for big moments, a bell when it is about you, a soft tick for the rest."
           checked={prefs.sound}
           onChange={(sound) => {
             setPrefs({ sound })
-            if (sound) {
-              primeAudio()
-              playChime("royal")
-            }
+            if (sound) void primeAudio().then((ready) => ready && playCue("royal", "big"))
           }}
         />
         {vibrationSupported && (

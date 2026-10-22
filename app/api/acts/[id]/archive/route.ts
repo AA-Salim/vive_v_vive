@@ -30,7 +30,6 @@ export async function GET(
     .eq("act_id", act.id)
     .order("rank", { ascending: true })
 
-  // Chart data: daily balance timeline per user
   const { data: transactions } = await supabase
     .from("point_transactions")
     .select("user_id, amount, created_at")
@@ -38,7 +37,6 @@ export async function GET(
     .lte("created_at", act.ended_at ?? new Date().toISOString())
     .order("created_at", { ascending: true })
 
-  // Build cumulative balance per user per day
   const userDailyBalance = new Map<string, Map<string, number>>()
   const userRunning = new Map<string, number>()
 
@@ -53,7 +51,6 @@ export async function GET(
     userDailyBalance.get(tx.user_id)!.set(day, running)
   }
 
-  // Flatten into chart-ready format
   const allDays = new Set<string>()
   for (const dailyMap of userDailyBalance.values()) {
     for (const day of dailyMap.keys()) allDays.add(day)
@@ -78,7 +75,6 @@ export async function GET(
     return entry
   })
 
-  // Bet outcomes by user
   const { data: bets } = await supabase
     .from("bets")
     .select("user_id, status, amount")
@@ -108,33 +104,6 @@ export async function GET(
     })
   )
 
-  // Economy breakdown (where points went)
-  const reasonTotals = new Map<string, number>()
-  for (const tx of transactions ?? []) {
-    if (tx.amount < 0) {
-      const current = reasonTotals.get(tx.user_id + ":" + "spent") ?? 0
-      reasonTotals.set(tx.user_id + ":" + "spent", current + Math.abs(tx.amount))
-    }
-  }
-
-  const spendingByReason = new Map<string, number>()
-  for (const tx of transactions ?? []) {
-    if (tx.amount < 0) {
-      const current = spendingByReason.get(tx.amount < 0 ? tx.created_at : "") ?? 0
-      spendingByReason.set(tx.created_at, current)
-    }
-  }
-
-  // Simpler: aggregate spending by reason
-  const reasonSpending = new Map<string, number>()
-  for (const tx of transactions ?? []) {
-    if (tx.amount < 0) {
-      const reason = tx.amount < 0 ? "spent" : "earned"
-      // We need reason field - let's use a different approach
-    }
-  }
-
-  // Fetch transactions with reason for spending breakdown
   const { data: reasonTxns } = await supabase
     .from("point_transactions")
     .select("reason, amount")

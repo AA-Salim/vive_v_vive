@@ -1,23 +1,58 @@
-const BROADCASTS = [
-  "Le Bon Salaxe is still here. He wants you to know that.",
-  "SLX has updated His list. You have been moved up.",
-  "Chalaksse does not need your respect. He demands it. There is a difference.",
-  "The so-called 'rebellion' will be dealt with. Salaxe is simply being patient.",
-  "EL Salaxino Goblino was NOT benched. He benched HIMSELF. Strategically.",
-  "The Crown is temporarily on the ground. Do not touch it.",
-  "Chklat has noticed you have not Sung His Praises today. He has also noticed where you live.",
-  "Salaxe Le Genereux is no longer generous. You did this to yourselves.",
-  "Fun fact: every player who mocked Salaxe has a negative winrate. Coincidence? He thinks not.",
-  "The Royal Court is adjourned. Permanently. Because Salaxe CHOSE to adjourn it. Not because attendance was zero.",
-  "Chalakssinoss would like to remind you that crowns can be picked back up.",
-  "SLX is not lurking. SLX is conducting surveillance.",
-  "Le Bon Salaxe has prepared a 47-slide presentation on why you are all wrong about Him.",
-  "The Jester title is temporary. The revenge will be permanent.",
-  "Chklass sees you laughing. Chklass will remember.",
+import { randomPick } from "@/lib/lore/seed"
+
+export const BROADCAST_LABEL = "BROADCAST FROM EXILE"
+
+export const ACT2_BROADCASTS: readonly string[] = [
+  "Le Bon Salaxe is still here. He wants you to know that. He wants you to know that a lot.",
+  "SLX has updated the notebook. Two names were added. One was underlined. It might be yours.",
+  "Reminder: the crown is on the floor, not up for grabs. There is a difference. Salaxe will explain it at length.",
+  "The so-called rebellion will be dealt with. Salaxe is simply being patient. Suspiciously patient.",
+  "EL Salaxino Goblino was not benched. He benched Himself. Strategically. For the lore.",
+  "Chklat noticed you have not sung His praises today. He also noticed you reading this.",
+  "Salaxe Le Genereux is no longer generous. You did this to yourselves. He is still a little generous. Tell no one.",
+  "Every player who mocked Salaxe has lost at least one game since. Coincidence? He has a spreadsheet.",
+  "The Royal Court is not empty. It is exclusive. Attendance: one. Standards: unmatched.",
+  "Chalakssinoss reminds you that crowns can be picked back up. He has been practicing bending down.",
+  "SLX is not lurking. SLX is conducting surveillance. There is a difference, and it is legal.",
+  "Le Bon Salaxe has prepared a 47-slide presentation on why the 0/8 Yone game was a team diff.",
+  "The Jester titles are temporary. The notebook is forever.",
+  "Chklass sees you laughing. Chklass will remember. Chklass is also laughing, but in a scarier way.",
+  "Official correction from exile: the Baron call was correct. The execution was simply 0.3 seconds ahead of its time.",
+  "Delayed victories this Act: several. Actual defeats: none, according to the official exile record.",
+  "Loyalists will be remembered. Rebels will also be remembered. Differently.",
+  "From exile: the King has started warding His own bedroom. Old habits.",
+  "Salaxe was seen practicing Yone in the Practice Tool. The dummies are up 8-0. He calls it progress.",
+  "To whoever keeps betting against Salaxe: He has seen your purse. He respects the hustle. He resents the profit.",
+  "The exile has excellent Wi-Fi now. Unfortunately, it also has a mirror.",
+  "Salaxe would like to clarify that \"exile\" is a strong word. He prefers \"extended recall\".",
+  "Breaking from exile: Chalaksse has forgiven no one. Talks are ongoing.",
+  "Do not feed the exiled King. He is on a strict diet of compliments and Baron buffs.",
+  "Salaxe does not tilt. He experiences strategic emotional cooldowns.",
+  "The notebook is now on its second volume. The first ran out of room under \"Laughed at the Baron call\".",
+  "If you hear tapping at night, it is not the wind. It is SLX typing your name. Slowly.",
+  "Le roi est mort? Non. Le roi is AFK. Back in five. Back in an Act, maximum.",
+  "The crown slipped. It did not fall. Salaxe has asked the scribes to fix the wording in the history books.",
+  "EL Salaxino Goblino has hired a court historian. Chapter one is titled \"Mostly Jungle Diff\".",
+  "Warning: Salaxe has been reading the Shame Board. Slowly. With a highlighter.",
+  "He is not mad. He is writing. That is worse.",
+  "Salaxe has filed an appeal against the 0/8 Yone game. Grounds: Yone was \"feeling weird that day\".",
+  "Every decree you cast is a point that could have gone to a worthier cause. Him.",
+  "The Charamil confiscated Salaxe's emotes. He now communicates exclusively through broadcasts. You are welcome.",
+  "The petition to rename the Baron pit \"Salaxe's Corner\" was rejected. He wrote down who rejected it.",
+  "The fallen King has reviewed your bet history and would like to offer financial advice. Step one: bet on Him.",
+  "Chalaksse is aware of the memes. He framed his favorite. It hangs in the notebook, next to its author's name.",
+  "Exile day report: woke up, checked the leaderboard, felt things, updated the notebook. Productive.",
+  "For the record, the Crown was not \"in exile\" during the last loss. It was \"on assignment\".",
+  "Notice to rebels: the King sees your little titles. Kingslayer? Cute. He has never been slain. Only delayed.",
+  "Le Bon Salaxe has launched a podcast on leadership. Episode one: \"Why You Should Follow Me Into Baron\".",
+  "SLX reminds you that ff15 is a vote, not a lifestyle. He always votes no. It never helps.",
+  "Amnesty is offered to every rebel who sings His praises before the end of the Act. Terms and conditions: all of them.",
+  "Somewhere in exile, a man is staring at a crown on the floor and whispering \"soon\".",
+  "The exile is temporary. The grudges are permanent. The Wi-Fi is variable.",
+  "Salaxe has never inted. He simply arrives at the fight early, alone, and with total confidence.",
+  "Today's forecast in exile: cloudy, with a 90% chance of another broadcast like this one.",
 ]
 
 export function getRandomBroadcast(): string {
-  return BROADCASTS[Math.floor(Math.random() * BROADCASTS.length)]
+  return randomPick(ACT2_BROADCASTS)
 }
-
-export const BROADCAST_LABEL = "BROADCAST FROM EXILE"

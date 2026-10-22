@@ -1,5 +1,7 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase"
+import { emitLive } from "@/lib/live/server"
+import { DAILY_STIPEND } from "@/lib/lore/daily"
 
 export async function POST() {
   const supabase = await createClient()
@@ -22,6 +24,12 @@ export async function POST() {
   if (newBalance === -1) {
     return NextResponse.json({ already_claimed: true })
   }
+
+  emitLive("points.changed", {
+    actor: null,
+    data: { userId: user.id, delta: DAILY_STIPEND, reason: "daily_bonus" },
+    persist: false,
+  })
 
   return NextResponse.json({ claimed: true, balance: newBalance })
 }

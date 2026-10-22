@@ -1,15 +1,20 @@
 "use client"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Fragment, useRef, useState } from "react"
+import { motion, useReducedMotion } from "motion/react"
+import { CoinsIcon, NewspaperIcon, ScrollTextIcon } from "lucide-react"
+import { useActIntroPending } from "@/components/act-intro-modal"
+import { LoreText } from "@/components/lore/lore-text"
+import { useVisibleViewport } from "@/components/lore/use-visible-viewport"
 import { Button } from "@/components/ui/button"
-import { useState, useMemo } from "react"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { useAct } from "@/hooks/use-act"
+import { useChronicle } from "@/hooks/use-chronicle"
+import { useSession } from "@/hooks/use-session"
 import { getActContent } from "@/lib/act-content"
+import { TIMED_STATUSES } from "@/lib/live/events"
+import { DAILY_STIPEND } from "@/lib/lore/daily"
+import { pick } from "@/lib/lore/seed"
 
 interface SalaxeDailyDialogProps {
   open: boolean
@@ -17,47 +22,97 @@ interface SalaxeDailyDialogProps {
   username: string
 }
 
-export function SalaxeDailyDialog({
-  open,
-  onDismiss,
-  username,
-}: SalaxeDailyDialogProps) {
-  const { act } = useAct()
-  const [dismissed, setDismissed] = useState(false)
-  const quote = useMemo(
-    () => getActContent(act?.act_number ?? 2).getRandomQuote(),
-    [act]
-  )
+const NAME_TOKEN = "\u0000"
 
-  const handleDismiss = () => {
-    setDismissed(true)
+export function SalaxeDailyDialog({ open, onDismiss, username }: SalaxeDailyDialogProps) {
+  const { act, isLoading: actLoading } = useAct()
+  const { session, isLoading: sessionLoading } = useSession()
+  const introPending = useActIntroPending()
+  const reduceMotion = useReducedMotion() ?? false
+  const pinned = useVisibleViewport(448)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [closed, setClosed] = useState(false)
+  const [day] = useState(() => new Date().toISOString().slice(0, 10))
+  const busy = sessionLoading || (!!session && TIMED_STATUSES.includes(session.status))
+  const visible = open && !closed && !actLoading && !introPending && !busy
+  const chronicle = useChronicle(visible)
+
+  const content = getActContent(act?.act_number ?? 2)
+  const quote = content.getDailyQuote(`${day}:${username}`)
+  const parts = quote.body(NAME_TOKEN).split(NAME_TOKEN)
+  const gazette = chronicle.data?.gazette ?? []
+  const intel = gazette.length > 0 ? pick(gazette, `${day}:intel:${username}`) : null
+
+  const dismiss = () => {
+    setClosed(true)
     onDismiss()
   }
 
-  if (dismissed) return null
-
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && handleDismiss()}>
-      <DialogContent className="border-2 border-[var(--color-gold)] bg-[var(--color-navy)] shadow-[0_0_40px_rgba(200,155,60,0.3)]">
-        <DialogHeader>
-          <DialogTitle className="text-center text-xl font-black tracking-wider text-[var(--color-gold)]">
+    <Dialog open={visible} onOpenChange={(next) => !next && dismiss()}>
+      <DialogContent
+        showCloseButton={false}
+        initialFocus={buttonRef}
+        style={pinned}
+        className="max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-md gap-0 overflow-x-hidden overflow-y-auto border border-[var(--color-gold)]/35 bg-[var(--color-navy)] p-0 shadow-2xl shadow-black/60 sm:max-w-md"
+      >
+        <div className="relative px-5 pt-7 pb-5 text-center sm:px-7">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)] to-transparent" />
+          <div aria-hidden className="pointer-events-none absolute -top-24 left-1/2 h-48 w-80 -translate-x-1/2 rounded-full bg-[var(--color-gold)]/12 blur-3xl" />
+
+          <motion.span
+            initial={reduceMotion ? false : { scale: 0.6, rotate: -25, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 16 }}
+            className="relative mx-auto grid size-14 place-items-center rounded-full border border-[var(--color-gold)]/40 bg-linear-to-b from-[var(--color-gold-dark)]/70 to-[var(--color-navy-light)] shadow-lg shadow-black/40"
+          >
+            <ScrollTextIcon className="size-6 text-[var(--color-gold)]" aria-hidden />
+          </motion.span>
+
+          <p className="relative mt-4 text-[11px] font-semibold tracking-[0.22em] text-[var(--color-gold)]/80 uppercase">
+            {content.dailyKicker}
+          </p>
+          <DialogTitle className="relative mt-1.5 font-display text-2xl leading-tight font-semibold text-balance text-[var(--color-gold-light)]">
             {quote.title}
           </DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4 py-2">
-          <p className="text-center text-sm leading-relaxed text-[var(--color-gold-light)]">
-            {quote.body(username)}
-          </p>
-          <div className="flex justify-center">
-            <div className="rounded-full bg-[var(--color-gold)]/10 px-4 py-1 text-lg font-bold text-[var(--color-gold)]">
-              +5 points
+          <DialogDescription className="relative mt-3 text-sm leading-relaxed text-pretty text-[var(--color-gold-light)]/80">
+            {parts.map((part, i) => (
+              <Fragment key={i}>
+                {i > 0 && <strong className="font-semibold text-[var(--color-gold)]">{username}</strong>}
+                {part}
+              </Fragment>
+            ))}
+          </DialogDescription>
+
+          <motion.div
+            initial={reduceMotion ? false : { y: 10, opacity: 0, scale: 0.9 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            transition={{ delay: reduceMotion ? 0 : 0.3, type: "spring", stiffness: 300, damping: 20 }}
+            className="relative mx-auto mt-5 inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)]/35 bg-[var(--color-gold)]/10 px-4 py-1.5"
+          >
+            <CoinsIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+            <span className="font-display text-lg font-semibold text-[var(--color-gold)] tabular-nums">+{DAILY_STIPEND}</span>
+            <span className="text-xs text-[var(--color-gold-light)]/70">points to your purse</span>
+          </motion.div>
+
+          {intel && (
+            <div className="relative mt-5 rounded-lg border border-border bg-[var(--color-navy-light)]/70 px-3 py-2.5 text-left">
+              <p className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)]/70 uppercase">
+                <NewspaperIcon className="size-3" aria-hidden />
+                Court intelligence
+              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                <LoreText segments={intel.segments} />
+              </p>
             </div>
-          </div>
+          )}
         </div>
-        <div className="flex justify-center pt-2">
+
+        <div className="border-t border-[var(--color-gold)]/15 bg-[var(--color-navy-light)]/70 p-4">
           <Button
-            onClick={handleDismiss}
-            className="bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
+            ref={buttonRef}
+            onClick={dismiss}
+            className="h-11 w-full bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
           >
             {quote.dismiss}
           </Button>

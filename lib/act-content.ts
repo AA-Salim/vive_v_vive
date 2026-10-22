@@ -1,15 +1,19 @@
 import {
+  ACT1_BROADCASTS,
   getRandomBroadcast as act1Broadcast,
 } from "@/lib/salaxe-broadcasts"
 import {
+  ACT2_BROADCASTS,
   getRandomBroadcast as act2Broadcast,
   BROADCAST_LABEL as act2BroadcastLabel,
 } from "@/lib/act2/broadcasts"
 
 import {
+  getDailyQuote as act1DailyQuote,
   getRandomQuote as act1Quote,
 } from "@/lib/salaxe-quotes"
 import {
+  getDailyQuote as act2DailyQuote,
   getRandomQuote as act2Quote,
 } from "@/lib/act2/quotes"
 
@@ -31,30 +35,38 @@ export function getActContent(actNumber: number) {
     default:
       return {
         getRandomBroadcast: act2Broadcast,
+        broadcasts: ACT2_BROADCASTS,
         broadcastLabel: act2BroadcastLabel,
+        broadcastSignature: "From exile, with a grudge",
         getRandomQuote: act2Quote,
+        getDailyQuote: act2DailyQuote,
+        dailyKicker: "Daily stipend from exile",
         getRandomPraiseResponse: act2SingResponse,
         getRandomPraiseDescription: act2SingDescription,
         getRandomPhrase: act2Phrase,
         praiseTitle: "Sing His Praises",
         praiseAction: "Sing",
         praiseSinging: "Singing...",
-        praiseExhausted: "You have sung enough for today.",
-        praiseExhaustedButton: "Voice Tired",
+        praiseExhausted: "You have sung enough for today. Salaxe is replaying the recordings.",
+        praiseExhaustedButton: "Voice Spent",
         praiseReason: "sing_his_praises" as const,
       }
     case 1:
       return {
         getRandomBroadcast: act1Broadcast,
+        broadcasts: ACT1_BROADCASTS,
         broadcastLabel: "ROYAL BROADCAST",
+        broadcastSignature: "By order of the Crown",
         getRandomQuote: act1Quote,
+        getDailyQuote: act1DailyQuote,
+        dailyKicker: "The King's daily alms",
         getRandomPraiseResponse: act1KissResponse,
         getRandomPraiseDescription: act1KissDescription,
         getRandomPhrase: act1Phrase,
         praiseTitle: "Kiss the Royal Hand",
         praiseAction: "Kiss the Hand",
         praiseSinging: "Kissing...",
-        praiseExhausted: "You have shown sufficient devotion for today.",
+        praiseExhausted: "The royal hand needs its rest. Return tomorrow, lips ready.",
         praiseExhaustedButton: "Hand Weary",
         praiseReason: "kiss_the_hand" as const,
       }

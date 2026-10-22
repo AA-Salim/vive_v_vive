@@ -1,4 +1,25 @@
-import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
+import type { LiveEvent } from "@/lib/live/events"
+import { narrateDecree, narratePraise, narrateShame, narrateVote } from "@/lib/lore/herald/court"
+import {
+  narrateBetInsured,
+  narrateBetPlaced,
+  narrateBetResolved,
+  narratePoints,
+  narrateProphecyPlaced,
+  narrateProphecyResolved,
+} from "@/lib/lore/herald/money"
+import { narrateBounty, narrateDuel } from "@/lib/lore/herald/rivals"
+import {
+  narrateAct,
+  narrateCoachPick,
+  narrateCreated,
+  narrateFearless,
+  narrateQueue,
+  narrateRerolled,
+  narrateStatus,
+  narrateVainqueur,
+} from "@/lib/lore/herald/session"
+import { narrateTitleEvent } from "@/lib/titles/narration"
 
 export type NarrationTone = "info" | "hype" | "royal" | "roast" | "danger"
 
@@ -8,99 +29,75 @@ export interface Narration {
   tone: NarrationTone
 }
 
-const STATUS_LINES: Record<string, Narration> = {
-  coach_draft: { title: "The coaches take their seats", tone: "info" },
-  draft: { title: "The teams have been drawn", tone: "info" },
-  chaos: { title: "Royal Decrees are open", description: "Spend points to bend the draft.", tone: "royal" },
-  betting: { title: "Betting is open", description: "Place your bets before the timer runs out.", tone: "hype" },
-  in_game: { title: "Bets are locked", description: "The game is live. Pray.", tone: "hype" },
-  blue_win: { title: "Blue side wins", tone: "hype" },
-  red_win: { title: "Red side wins", tone: "hype" },
-  canceled: { title: "Game canceled", description: "All wagers refunded.", tone: "info" },
-  expired: { title: "Session expired", tone: "info" },
+function wellFormedTitle(event: LiveEvent): boolean {
+  const data = event.data as Record<string, unknown>
+  if (event.type === "title.claimed") return Array.isArray(data.titles) && data.titles.every((t) => typeof t === "string")
+  return event.type === "title.settled" || typeof data.title === "string"
 }
 
+// One line per event for toasts and the Herald feed. Variants are seeded by event.id so every client
+// tells the same story. Null means the event is too granular or private to announce.
 export function narrate(event: LiveEvent): Narration | null {
-  const who = event.actor?.name ?? "Someone"
   switch (event.type) {
     case "session.created":
-      return { title: `${who} started a new game`, tone: "info" }
-    case "session.status": {
-      const d = event.data as LiveEventPayloads["session.status"]
-      return STATUS_LINES[d.to] ?? null
-    }
+      return narrateCreated(event)
+    case "session.status":
+      return narrateStatus(event)
     case "session.rerolled":
-      return { title: `${who} re-rolled the draft`, tone: "info" }
+      return narrateRerolled(event)
     case "session.lock":
       return null
-    case "coachdraft.pick": {
-      const d = event.data as LiveEventPayloads["coachdraft.pick"]
-      return { title: `${d.coachName} drafted ${d.playerName}`, tone: "info" }
-    }
-    case "bet.placed": {
-      const d = event.data as LiveEventPayloads["bet.placed"]
-      return { title: `${who} bet ${d.amount} on ${d.side === "blue" ? "Blue" : "Red"}`, tone: d.amount >= 150 ? "hype" : "info" }
-    }
-    case "bet.insured": {
-      const d = event.data as LiveEventPayloads["bet.insured"]
-      return { title: `${who} insured their ${d.amount} point bet`, tone: "info" }
-    }
-    case "bet.resolved": {
-      const d = event.data as LiveEventPayloads["bet.resolved"]
-      return d.topWinner
-        ? { title: `${d.topWinner.name} cashed out ${d.topWinner.payout} points`, tone: "hype" }
-        : null
-    }
-    case "chaos.decree": {
-      const d = event.data as LiveEventPayloads["chaos.decree"]
-      return { title: `${who} decreed: ${d.label}`, description: d.targetName ? `Target: ${d.targetName}` : undefined, tone: "royal" }
-    }
-    case "praise.sung": {
-      const d = event.data as LiveEventPayloads["praise.sung"]
-      return { title: `${who} sang for Salaxe`, description: `"${d.excerpt}"`, tone: "royal" }
-    }
-    case "praise.judged": {
-      const d = event.data as LiveEventPayloads["praise.judged"]
-      return { title: `Salaxe judged ${d.authorName}'s praise: ${d.verdict}`, tone: "royal" }
-    }
-    case "sidebet.placed": {
-      const d = event.data as LiveEventPayloads["sidebet.placed"]
-      return { title: `${who} backed "${d.label}"`, description: `${d.amount} points`, tone: "info" }
-    }
-    case "sidebet.resolved": {
-      const d = event.data as LiveEventPayloads["sidebet.resolved"]
-      return { title: `"${d.label}" settled`, description: `${d.winners} winner(s)`, tone: "hype" }
-    }
-    case "bounty.placed": {
-      const d = event.data as LiveEventPayloads["bounty.placed"]
-      return { title: `${who} put a ${d.amount} point bounty on ${d.targetName}`, tone: "danger" }
-    }
-    case "bounty.claimed": {
-      const d = event.data as LiveEventPayloads["bounty.claimed"]
-      return { title: `The bounty on ${d.targetName} was claimed`, tone: "danger" }
-    }
-    case "shame.posted": {
-      const d = event.data as LiveEventPayloads["shame.posted"]
-      return { title: `${who} nailed ${d.targetName} to the Shame Board`, tone: "roast" }
-    }
-    case "title.equipped": {
-      const d = event.data as LiveEventPayloads["title.equipped"]
-      return { title: `${who} is now known as ${d.title}`, tone: "royal" }
-    }
-    case "title.bestowed": {
-      const d = event.data as LiveEventPayloads["title.bestowed"]
-      return { title: `${who} branded ${d.targetName} "${d.title}"`, tone: "roast" }
-    }
-    case "title.perk": {
-      const d = event.data as LiveEventPayloads["title.perk"]
-      return { title: `${who}'s title "${d.title}" triggered`, description: d.perk, tone: "royal" }
-    }
-    case "queue.changed": {
-      const d = event.data as LiveEventPayloads["queue.changed"]
-      if (d.action === "joined" && d.playerName) return { title: `${d.playerName} joined the queue`, tone: "info" }
-      if (d.action === "left" && d.playerName) return { title: `${d.playerName} left the queue`, tone: "info" }
+    case "coachdraft.pick":
+      return narrateCoachPick(event)
+    case "bet.placed":
+      return narrateBetPlaced(event)
+    case "bet.insured":
+      return narrateBetInsured(event)
+    case "bet.resolved":
+      return narrateBetResolved(event)
+    case "chaos.decree":
+      return narrateDecree(event)
+    case "praise.sung":
+    case "praise.judged":
+      return narratePraise(event)
+    case "sidebet.placed":
+      return narrateProphecyPlaced(event)
+    case "sidebet.resolved":
+      return narrateProphecyResolved(event)
+    case "bounty.placed":
+    case "bounty.claimed":
+      return narrateBounty(event)
+    case "shame.posted":
+      return narrateShame(event)
+    case "title.equipped":
+    case "title.bestowed":
+    case "title.perk":
+    case "title.unequipped":
+    case "title.bought":
+    case "title.claimed":
+    case "title.dignity":
+    case "title.settled":
+      return wellFormedTitle(event) ? narrateTitleEvent(event) : null
+    case "queue.changed":
+      return narrateQueue(event)
+    case "vainqueur.changed":
+      return narrateVainqueur(event)
+    case "fearless.changed":
+      return narrateFearless(event)
+    case "points.changed":
+      return narratePoints(event)
+    case "act.changed":
+      return narrateAct(event)
+    case "duel.challenged":
+    case "duel.accepted":
+    case "duel.declined":
+    case "duel.resolved":
+      return narrateDuel(event)
+    case "vote.opened":
+    case "vote.closed":
+      return narrateVote(event)
+    case "vote.cast":
       return null
-    }
     default:
       return null
   }

@@ -10,13 +10,13 @@ export const ACT_CATEGORIES: {
   {
     category: "treasury",
     label: "The Treasury",
-    description: "Highest point balance",
+    description: "Richest purse when the curtain falls",
     titleName: "Grand Champion",
   },
   {
     category: "warrior",
     label: "The Warrior",
-    description: "Best win rate (min 5 games)",
+    description: "Best win rate of the Act (5 games minimum)",
     titleName: "Warrior",
   },
   {
@@ -34,13 +34,13 @@ export const ACT_CATEGORIES: {
   {
     category: "devotee",
     label: "The Devotee",
-    description: "Most kisses given",
+    description: "Most devotion shown to the crown",
     titleName: "Devotee",
   },
   {
     category: "punching_bag",
     label: "The Punching Bag",
-    description: "Most times shamed",
+    description: "Most times nailed to the Shame Board",
     titleName: "Punching Bag",
   },
 ]

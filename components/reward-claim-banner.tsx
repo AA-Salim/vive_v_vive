@@ -1,271 +1,225 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { usePoints } from "@/hooks/use-points"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
+import { useMemo, useState } from "react"
+import { motion, useReducedMotion } from "motion/react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { ChevronRightIcon, SkullIcon, TrophyIcon } from "lucide-react"
 import { toast } from "sonner"
-import { TrophyIcon, SkullIcon } from "lucide-react"
+import { fireWinConfetti } from "@/components/betting/confetti"
+import { useLiveSignal } from "@/components/live/live-context"
+import { RewardCard, groupAwards, type AwardGroup, type UnclaimedAward } from "@/components/lore/reward-card"
+import { useVisibleViewport } from "@/components/lore/use-visible-viewport"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { useAuth } from "@/hooks/use-auth"
+import { pointsKey } from "@/hooks/use-points"
+import { useSession } from "@/hooks/use-session"
+import { TIMED_STATUSES } from "@/lib/live/events"
+import { roman } from "@/lib/lore/herald/kit"
+import { ceremonyLine, consolationAside, consolationRoast, rewardCopy } from "@/lib/lore/rewards"
+import { cn } from "@/lib/utils"
 
-interface UnclaimedAward {
-  id: string
-  category: string
-  title: string
-  carry_over_bonus: number
-  final_value: string | null
-  perks: Record<string, unknown>
-  acts: { act_number: number; name: string } | null
-  is_consolation?: boolean
+export function claimRewardsKey(userId: string | null | undefined) {
+  return ["acts", "claim-rewards", userId ?? "anonymous"] as const
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  treasury: "Treasury Champion",
-  grand_champion: "Grand Champion",
-  warrior: "Warrior",
-  iron_man: "Iron Man",
-  degenerate: "Degenerate",
-  devotee: "Devotee",
-  punching_bag: "Punching Bag",
-  consolation: "Participation Trophy",
+async function fetchAwards(signal: AbortSignal): Promise<UnclaimedAward[]> {
+  const res = await fetch("/api/acts/claim-rewards", { signal, cache: "no-store" })
+  if (!res.ok) throw new Error(`GET /api/acts/claim-rewards failed with ${res.status}`)
+  const data = (await res.json()) as { awards?: unknown }
+  return Array.isArray(data.awards) ? (data.awards as UnclaimedAward[]) : []
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  treasury: "text-yellow-400",
-  grand_champion: "text-yellow-400",
-  warrior: "text-red-400",
-  iron_man: "text-blue-400",
-  degenerate: "text-green-400",
-  devotee: "text-pink-400",
-  punching_bag: "text-orange-400",
-  consolation: "text-purple-400",
+// Points paid by this request: 0 when another tab or device already claimed it (409).
+async function claimOne(awardId: string): Promise<number> {
+  const res = await fetch("/api/acts/claim-rewards", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ award_id: awardId }),
+  })
+  if (res.status === 409) return 0
+  const data = (await res.json().catch(() => null)) as { bonus?: unknown; error?: string } | null
+  if (res.ok) return typeof data?.bonus === "number" ? data.bonus : 0
+  throw new Error(data?.error ?? "The archivist dropped the scroll. Try again.")
 }
-
-const ROAST_MESSAGES = [
-  "No real rewards for you. Act I saw what you did and chose violence.",
-  "You went through all of Act I and won... absolutely nothing. Impressive, honestly.",
-  "The Charamil voted. You got zero awards. Democracy is brutal.",
-  "Salaxe himself checked the stats and said 'even I would not give this one anything.'",
-  "Act I rewards have been distributed. You were not on the list. Or any list. Ever.",
-  "Everyone else is claiming titles and bonus points. You are claiming emotional damage.",
-  "No bonus. No glory. No sympathy. But hey, at least you showed up.",
-  "The crown fell and somehow still didn't land anywhere near you.",
-]
 
 export function RewardClaimBanner() {
   const { user } = useAuth()
-  const { refetch: refetchPoints } = usePoints(user?.id ?? null)
-  const [awards, setAwards] = useState<UnclaimedAward[]>([])
-  const [loaded, setLoaded] = useState(false)
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [claiming, setClaiming] = useState<string | null>(null)
-  const [roast] = useState(() =>
-    ROAST_MESSAGES[Math.floor(Math.random() * ROAST_MESSAGES.length)]
-  )
+  const { session } = useSession()
+  const queryClient = useQueryClient()
+  const reduceMotion = useReducedMotion() ?? false
+  const pinned = useVisibleViewport(512)
+  const userId = user?.id ?? null
+  const key = claimRewardsKey(userId)
+  const [open, setOpen] = useState(false)
+  const [engraved, setEngraved] = useState<AwardGroup[]>([])
 
-  useEffect(() => {
-    if (!user) return
-    fetch("/api/acts/claim-rewards")
-      .then((r) => r.json())
-      .then((data) => {
-        setAwards(data.awards ?? [])
-        setLoaded(true)
-      })
-      .catch(() => setLoaded(true))
-  }, [user])
+  const { data: awards = [] } = useQuery({
+    queryKey: key,
+    queryFn: ({ signal }) => fetchAwards(signal),
+    enabled: !!userId,
+    staleTime: 5 * 60_000,
+  })
+  const groups = useMemo(() => groupAwards(awards), [awards])
 
-  const handleClaim = async (awardId: string) => {
-    setClaiming(awardId)
-    try {
-      const res = await fetch("/api/acts/claim-rewards", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ award_id: awardId }),
-      })
-      const data = await res.json()
-      if (data.claimed) {
-        toast.success(`Claimed "${data.title}"!`)
-        setAwards((prev) => prev.filter((a) => a.id !== awardId))
-        await refetchPoints()
+  const claim = useMutation({
+    mutationFn: async (group: AwardGroup) => {
+      let paid = 0
+      for (const id of group.ids) paid += await claimOne(id)
+      return { group, paid }
+    },
+    onSuccess: ({ group, paid }) => {
+      setEngraved((prev) => [...prev.filter((g) => g.key !== group.key), group])
+      queryClient.setQueryData<UnclaimedAward[]>(key, (old) => (old ?? []).filter((a) => !group.ids.includes(a.id)))
+      void queryClient.invalidateQueries({ queryKey: pointsKey(userId) })
+      void queryClient.invalidateQueries({ queryKey: ["titles"] })
+      const copy = rewardCopy(group.categories[0] ?? "consolation")
+      if (group.consolation) {
+        toast(`Engraved: "${group.title}"`, { description: copy.engraved })
       } else {
-        toast.error(data.error ?? "Failed to claim")
+        fireWinConfetti(null)
+        toast.success(`Engraved: ${group.title}`, {
+          description: paid > 0 ? `+${paid} to your purse. ${copy.engraved}` : copy.engraved,
+        })
       }
-    } catch {
-      toast.error("Failed to claim reward")
-    } finally {
-      setClaiming(null)
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "The archivist dropped the scroll."),
+  })
+
+  // Claimed from another tab or device: drop it here too. Our own claims already updated the cache.
+  useLiveSignal((signal) => {
+    if (signal.kind !== "event" || signal.event.type !== "title.claimed") return
+    if (userId && signal.event.actor?.userId === userId && !claim.isPending) {
+      void queryClient.invalidateQueries({ queryKey: claimRewardsKey(userId) })
+    }
+  })
+
+  const claimAll = async () => {
+    for (const group of groups) {
+      try {
+        await claim.mutateAsync(group)
+      } catch {
+        return
+      }
     }
   }
 
-  const handleClaimAll = async () => {
-    for (const award of awards) {
-      await handleClaim(award.id)
-    }
-    setDialogOpen(false)
+  const close = (next: boolean) => {
+    setOpen(next)
+    if (!next) setEngraved([])
   }
 
-  if (!user || !loaded) return null
-  if (awards.length === 0) return null
+  const busy = !!session && TIMED_STATUSES.includes(session.status)
+  if (!userId || (groups.length === 0 && !open) || (busy && !open)) return null
 
-  const isConsolation = awards.every((a) => a.is_consolation)
-  const hasRealAwards = awards.some((a) => !a.is_consolation)
-
-  if (isConsolation) {
-    return (
-      <>
-        <button
-          onClick={() => setDialogOpen(true)}
-          className="w-full rounded-lg border border-purple-500/30 bg-gradient-to-r from-purple-500/5 via-red-500/5 to-purple-500/5 p-4 text-center transition-all hover:border-purple-500/50 hover:shadow-[0_0_20px_rgba(168,85,247,0.1)]"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <SkullIcon className="h-4 w-4 text-purple-400/70" />
-            <span className="text-sm font-bold tracking-wider text-purple-400">
-              ACT {awards[0]?.acts?.act_number ?? "I"} LEFT YOU SOMETHING
-            </span>
-            <SkullIcon className="h-4 w-4 text-purple-400/70" />
-          </div>
-          <div className="mt-1 text-xs text-[var(--color-gold-light)]/40">
-            It's not much, but it's yours
-          </div>
-        </button>
-
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="max-w-lg border-purple-500/30 bg-[var(--color-navy)]">
-            <DialogHeader>
-              <DialogTitle className="text-center text-purple-400">
-                Your Participation Trophy
-              </DialogTitle>
-            </DialogHeader>
-
-            <p className="text-center text-xs text-red-400/60">
-              {roast}
-            </p>
-
-            <div className="mt-1 text-center text-[10px] text-[var(--color-gold-light)]/30">
-              But since you bothered showing up...
-            </div>
-
-            <div className="space-y-3 py-2">
-              {awards.map((award) => (
-                <div
-                  key={award.id}
-                  className="rounded-lg border border-purple-500/20 bg-[var(--color-navy-light)] p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-xs font-bold uppercase tracking-wider text-purple-400">
-                        Consolation Title
-                      </div>
-                      <div className="mt-1 text-sm font-semibold text-[var(--color-gold-light)]">
-                        &ldquo;{award.title}&rdquo;
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={() => handleClaim(award.id)}
-                      disabled={claiming === award.id}
-                      className="bg-purple-500 text-xs font-bold text-white hover:bg-purple-600"
-                    >
-                      {claiming === award.id ? "Claiming..." : "Claim"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
-      </>
-    )
-  }
+  const shown = [...groups, ...engraved.filter((e) => !groups.some((g) => g.key === e.key))]
+  const consolationOnly = shown.length > 0 && shown.every((g) => g.consolation)
+  const actNumber = shown[0]?.actNumber ?? 1
+  const actName = awards[0]?.acts?.name ?? null
+  const seed = `${userId}:${actNumber}`
+  const totalBonus = groups.reduce((sum, g) => sum + g.bonus, 0)
+  const done = groups.length === 0 && engraved.length > 0
 
   return (
     <>
-      <button
-        onClick={() => setDialogOpen(true)}
-        className="w-full animate-pulse rounded-lg border border-[var(--color-gold)]/40 bg-gradient-to-r from-[var(--color-gold)]/10 via-yellow-500/10 to-[var(--color-gold)]/10 p-4 text-center transition-all hover:border-[var(--color-gold)]/60 hover:shadow-[0_0_20px_rgba(200,155,60,0.15)]"
-      >
-        <div className="flex items-center justify-center gap-3">
-          <TrophyIcon className="h-5 w-5 text-[var(--color-gold)]" />
-          <span className="text-sm font-bold tracking-wider text-[var(--color-gold)]">
-            YOU HAVE UNCLAIMED REWARDS FROM ACT {awards[0]?.acts?.act_number ?? "I"}
+      {groups.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={cn(
+            "group relative w-full overflow-hidden rounded-2xl border bg-card px-4 py-3.5 text-left shadow-lg shadow-black/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            consolationOnly ? "border-border hover:border-[var(--color-gold)]/30" : "border-[var(--color-gold)]/40 hover:border-[var(--color-gold)]/70"
+          )}
+        >
+          {!consolationOnly && !reduceMotion && (
+            <motion.span
+              aria-hidden
+              className="pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 bg-linear-to-r from-transparent via-[var(--color-gold)]/12 to-transparent"
+              initial={{ x: "0%" }}
+              animate={{ x: "420%" }}
+              transition={{ duration: 2.2, ease: "easeInOut", repeat: Infinity, repeatDelay: 5 }}
+            />
+          )}
+          <span className="relative flex items-center gap-3">
+            <span
+              className={cn(
+                "grid size-11 shrink-0 place-items-center rounded-xl ring-1",
+                consolationOnly ? "bg-muted ring-border" : "bg-[var(--color-gold)]/12 ring-[var(--color-gold)]/35"
+              )}
+            >
+              {consolationOnly ? (
+                <SkullIcon className="size-5 text-muted-foreground" aria-hidden />
+              ) : (
+                <TrophyIcon className="size-5 text-[var(--color-gold)]" aria-hidden />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold tracking-[0.2em] text-[var(--color-gold)]/85 uppercase">
+                {consolationOnly ? `Act ${roman(actNumber)} left you something` : `Act ${roman(actNumber)} spoils await`}
+              </span>
+              <span className="mt-0.5 block font-display text-base leading-snug font-semibold text-foreground">
+                {consolationOnly
+                  ? "It is not much. It is yours."
+                  : `${groups.length === 1 ? "An honor" : `${groups.length} honors`}${totalBonus > 0 ? ` and +${totalBonus} points` : ""} in your name`}
+              </span>
+            </span>
+            <span className="hidden shrink-0 items-center gap-1 text-sm font-semibold text-[var(--color-gold)] sm:inline-flex">
+              {consolationOnly ? "Accept your fate" : "Open the vault"}
+            </span>
+            <ChevronRightIcon className="size-5 shrink-0 text-[var(--color-gold)] transition-transform group-hover:translate-x-0.5" aria-hidden />
           </span>
-          <TrophyIcon className="h-5 w-5 text-[var(--color-gold)]" />
-        </div>
-        <div className="mt-1 text-xs text-[var(--color-gold-light)]/60">
-          Click to claim your titles and bonus points
-        </div>
-      </button>
+        </button>
+      )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg border-[var(--color-gold)]/30 bg-[var(--color-navy)]">
-          <DialogHeader>
-            <DialogTitle className="text-center text-[var(--color-gold)]">
-              Claim Your Rewards
+      <Dialog open={open} onOpenChange={close}>
+        <DialogContent
+          style={pinned}
+          className="flex max-h-[calc(100dvh-1.5rem)] w-[calc(100vw-1.5rem)] max-w-lg flex-col gap-0 overflow-hidden border border-[var(--color-gold)]/30 bg-[var(--color-navy)] p-0 sm:max-w-lg"
+        >
+          <div className="relative px-5 pt-6 pb-4 sm:px-6">
+            <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)] to-transparent" />
+            <p className="pr-10 text-[11px] font-semibold tracking-[0.2em] text-[var(--color-gold)]/80 uppercase">
+              {actName ?? `Act ${roman(actNumber)}`}
+            </p>
+            <DialogTitle className="mt-1 pr-10 font-display text-2xl leading-tight font-semibold text-[var(--color-gold-light)]">
+              {done ? "The vault is empty" : consolationOnly ? "Your participation trophy" : "Claim your spoils"}
             </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 py-4">
-            {awards.map((award) => (
-              <div
-                key={award.id}
-                className={`rounded-lg border p-4 ${
-                  award.is_consolation
-                    ? "border-purple-500/20 bg-[var(--color-navy-light)]"
-                    : "border-[var(--color-gold)]/20 bg-[var(--color-navy-light)]"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className={`text-xs font-bold uppercase tracking-wider ${CATEGORY_COLORS[award.category] ?? "text-[var(--color-gold)]"}`}>
-                      {CATEGORY_LABELS[award.category] ?? award.category}
-                    </div>
-                    <div className="mt-1 text-sm font-semibold text-[var(--color-gold-light)]">
-                      {award.is_consolation ? `"${award.title}"` : award.title}
-                    </div>
-                    {award.final_value && (
-                      <div className="mt-0.5 text-xs text-[var(--color-gold-light)]/50">
-                        {award.final_value}
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {award.carry_over_bonus > 0 && (
-                      <div className="text-lg font-bold text-green-400">
-                        +{award.carry_over_bonus}
-                      </div>
-                    )}
-                    <Button
-                      size="sm"
-                      onClick={() => handleClaim(award.id)}
-                      disabled={claiming === award.id}
-                      className={`mt-1 text-xs font-bold ${
-                        award.is_consolation
-                          ? "bg-purple-500 text-white hover:bg-purple-600"
-                          : "bg-[var(--color-gold)] text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
-                      }`}
-                    >
-                      {claiming === award.id ? "Claiming..." : "Claim"}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+            <DialogDescription className="mt-2 text-sm leading-relaxed text-pretty text-muted-foreground">
+              {done
+                ? "Everything is engraved. Spend it badly, wear it loudly."
+                : consolationOnly
+                  ? `${consolationRoast(seed, actNumber)} ${consolationAside(seed)}`
+                  : ceremonyLine(seed, actNumber)}
+            </DialogDescription>
           </div>
 
-          {awards.length > 1 && hasRealAwards && (
-            <Button
-              onClick={handleClaimAll}
-              disabled={claiming !== null}
-              className="w-full bg-[var(--color-gold)] font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-dark)]"
-            >
-              Claim All
+          <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-5 pb-4 sm:px-6">
+            {shown.map((group) => (
+              <RewardCard
+                key={group.key}
+                group={group}
+                engraved={engraved.some((e) => e.key === group.key)}
+                claiming={claim.isPending && claim.variables?.key === group.key}
+                disabled={claim.isPending}
+                onClaim={() => claim.mutate(group)}
+              />
+            ))}
+          </ul>
+
+          <div className="flex gap-2 border-t border-[var(--color-gold)]/15 bg-[var(--color-navy-light)]/70 p-4">
+            {groups.length > 1 && !consolationOnly ? (
+              <Button
+                onClick={claimAll}
+                disabled={claim.isPending}
+                className="h-11 flex-1 bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
+              >
+                Claim everything
+              </Button>
+            ) : null}
+            <Button variant="outline" className={cn("h-11", groups.length > 1 && !consolationOnly ? "" : "flex-1")} onClick={() => close(false)}>
+              {done ? "Close the vault" : "Later"}
             </Button>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
     </>

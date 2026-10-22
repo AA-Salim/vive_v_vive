@@ -1,136 +1,147 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
-import { useAuth } from "@/hooks/use-auth"
-import { usePoints } from "@/hooks/use-points"
+import { useState } from "react"
+import { AnimatePresence } from "motion/react"
+import { ChevronRightIcon, MegaphoneIcon, RotateCcwIcon } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ShameDialog } from "@/components/shame-dialog"
-import type { ShameEntry } from "@/lib/types"
+import { isMigrationPending } from "@/components/bounties/request"
+import { formatTimeLeft, useMsLeft } from "@/components/bounties/time-left"
+import { PilloryCard } from "@/components/shame/pillory-card"
+import { PillorySheet } from "@/components/shame/pillory-sheet"
+import { useEgg, usePilloryWall } from "@/components/shame/use-pillory"
+import { useAuth } from "@/hooks/use-auth"
+import { PILLORY_COPY } from "@/lib/bounties/copy"
+import { PILLORY_RULES } from "@/lib/bounties/rules"
+import type { PilloryEntryView } from "@/lib/bounties/types"
 
 interface ShameBoardProps {
   userId: string | null
 }
 
-function timeRemaining(expiresAt: string): string {
-  const diff = new Date(expiresAt).getTime() - Date.now()
-  if (diff <= 0) return "expired"
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-  if (hours > 0) return `${hours}h ${minutes}m left`
-  return `${minutes}m left`
-}
-
-function relativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const days = Math.floor(hours / 24)
-  if (days > 0) return `${days}d ago`
-  if (hours > 0) return `${hours}h ago`
-  return "just now"
-}
+const PREVIEW = 2
 
 export function ShameBoard({ userId }: ShameBoardProps) {
-  const { user } = useAuth()
-  const { balance, refetch: refetchPoints } = usePoints(userId)
-  const [entries, setEntries] = useState<ShameEntry[]>([])
-  const [loading, setLoading] = useState(true)
+  const { signIn } = useAuth()
+  const wall = usePilloryWall(userId)
+  const egg = useEgg(userId)
+  const [sheetOpen, setSheetOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const cooldown = useMsLeft(wall.data?.viewer.nextPostAt ?? null)
 
-  const fetchEntries = useCallback(async () => {
-    try {
-      const res = await fetch("/api/shame")
-      const data = await res.json()
-      if (Array.isArray(data)) setEntries(data)
-    } catch {
-      // silent
-    } finally {
-      setLoading(false)
+  const data = wall.data
+  const entries = data?.entries ?? []
+  const available = data?.available ?? false
+  const signedIn = !!userId
+  const coolingDown = cooldown !== null && cooldown > 0
+
+  const openDialog = () => {
+    if (!signedIn) {
+      signIn()
+      return
     }
-  }, [])
-
-  useEffect(() => {
-    fetchEntries()
-  }, [fetchEntries])
-
-  const handleSuccess = () => {
-    fetchEntries()
-    refetchPoints()
+    setDialogOpen(true)
   }
 
-  if (loading) return null
+  const throwEgg = (entry: PilloryEntryView) => {
+    if (!signedIn) {
+      signIn()
+      return
+    }
+    egg.mutate(entry.id, {
+      onSuccess: (result) =>
+        toast.success(`Splat. ${entry.target.name} takes an egg.`, {
+          description: result.extended ? "One more hour on the wall." : "The wall is at its limit, but it still stings.",
+        }),
+      onError: (error) => toast.error(isMigrationPending(error) ? PILLORY_COPY.pending : error.message),
+    })
+  }
+
+  const dialogNode = <ShameDialog open={dialogOpen} onOpenChange={setDialogOpen} />
 
   return (
-    <div className="space-y-2 rounded-lg border border-red-500/15 bg-[var(--color-navy-light)] p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-bold text-red-400">Shame Board</span>
-        {user && (
-          <Button
-            onClick={() => setDialogOpen(true)}
-            size="sm"
-            variant="ghost"
-            className="text-xs text-red-400/70 hover:text-red-400"
-          >
-            Shame (234 pts)
-          </Button>
+    <section aria-labelledby="pillory-title" className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
+      <div aria-hidden className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-gold)]/60 to-transparent" />
+      <header className="flex items-center gap-2">
+        <MegaphoneIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+        <h2 id="pillory-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
+          {PILLORY_COPY.title}
+        </h2>
+        {entries.length > 0 && (
+          <span className="ml-auto rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--color-gold)]">
+            {entries.length} on the wall
+          </span>
         )}
-      </div>
+      </header>
+      <p className="mt-1 text-xs text-muted-foreground">{PILLORY_COPY.tagline}</p>
 
-      {entries.length === 0 && (
-        <div className="py-2 text-center text-xs text-[var(--color-gold-light)]/30">
-          No one on the board... yet
+      {wall.isPending ? (
+        <div className="mt-3 space-y-2" aria-busy="true" aria-label="Loading the pillory">
+          <Skeleton className="h-32 w-full rounded-2xl" />
+        </div>
+      ) : wall.isError && !data ? (
+        <div className="mt-3 flex items-center justify-between gap-2 text-xs text-muted-foreground" role="alert">
+          {PILLORY_COPY.error}
+          <Button variant="outline" className="h-10 shrink-0" onClick={() => wall.refetch()}>
+            <RotateCcwIcon aria-hidden />
+            Retry
+          </Button>
+        </div>
+      ) : entries.length === 0 ? (
+        <p className="mt-3 rounded-xl border border-dashed border-[var(--color-gold)]/25 px-3 py-4 text-center text-xs text-muted-foreground">
+          {data?.available === false ? PILLORY_COPY.pending : PILLORY_COPY.empty}
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <AnimatePresence initial={false}>
+            {entries.slice(0, PREVIEW).map((entry) => (
+              <PilloryCard
+                key={entry.id}
+                entry={entry}
+                compact
+                viewerPlayerId={data?.viewer.playerId ?? null}
+                signedIn={signedIn}
+                canEgg={available}
+                onEgg={throwEgg}
+              />
+            ))}
+          </AnimatePresence>
         </div>
       )}
 
-      {entries.map((entry) => (
-        <div
-          key={entry.id}
-          className="space-y-1.5 rounded-md border border-red-500/10 bg-red-500/5 p-2.5"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-red-400">
-              {entry.target_player_name}
-            </span>
-            <span className="text-[10px] text-[var(--color-gold-light)]/40">
-              {timeRemaining(entry.expires_at)}
-            </span>
-          </div>
+      <div className="mt-3 flex gap-2">
+        {(!signedIn || available) && (
+          <Button
+            onClick={openDialog}
+            disabled={signedIn && coolingDown}
+            className="h-10 flex-1 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
+          >
+            <MegaphoneIcon aria-hidden />
+            {signedIn && coolingDown ? `Ready in ${formatTimeLeft(cooldown ?? 0)}` : `${PILLORY_COPY.post} · ${PILLORY_RULES.cost}`}
+          </Button>
+        )}
+        <Button variant="outline" className="h-10 flex-1 rounded-xl" onClick={() => setSheetOpen(true)}>
+          {entries.length > PREVIEW ? `${PILLORY_COPY.seeAll} (${entries.length})` : PILLORY_COPY.seeAll}
+          <ChevronRightIcon aria-hidden />
+        </Button>
+      </div>
 
-          <div className="rounded bg-red-500/10 px-2 py-1">
-            <span className="text-[10px] text-red-400/70">{entry.worst_stat_label}</span>
-            <div className="text-sm font-bold text-red-300">{entry.worst_stat_value}</div>
-          </div>
-
-          {entry.recent_losses.length > 0 && (
-            <div className="space-y-0.5">
-              <div className="text-[10px] text-[var(--color-gold-light)]/40">Recent losses</div>
-              {entry.recent_losses.slice(0, 3).map((loss, i) => (
-                <div key={i} className="flex items-center gap-1.5 text-[10px] text-[var(--color-gold-light)]/50">
-                  <span className="text-red-400/60">{loss.champion}</span>
-                  <span>{loss.lane}</span>
-                  <span className="ml-auto">{relativeTime(loss.played_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {entry.message && (
-            <div className="text-xs italic text-[var(--color-gold-light)]/50">
-              &ldquo;{entry.message}&rdquo;
-            </div>
-          )}
-
-          <div className="text-[10px] text-[var(--color-gold-light)]/30">
-            by {entry.shamer_username}
-          </div>
-        </div>
-      ))}
-
-      <ShameDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        balance={balance}
-        onSuccess={handleSuccess}
+      <PillorySheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        wall={data}
+        isPending={wall.isPending}
+        isError={wall.isError}
+        onRetry={() => wall.refetch()}
+        signedIn={signedIn}
+        onSignIn={signIn}
+        onPost={openDialog}
+        onEgg={throwEgg}
+        nested={sheetOpen ? dialogNode : null}
       />
-    </div>
+      {!sheetOpen && dialogNode}
+    </section>
   )
 }

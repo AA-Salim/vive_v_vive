@@ -65,9 +65,12 @@ export interface LiveEventPayloads {
   "praise.judged": { verdict: string; authorName: string; delta: number; authorUserId?: string | null; praiseId?: string; note?: string | null }
   "sidebet.placed": { market: string; label: string; amount: number }
   "sidebet.resolved": { market: string; label: string; winners: number; payout: number }
-  "bounty.placed": { targetName: string; amount: number; targetUserId?: string | null }
-  "bounty.claimed": { targetName: string; amount: number; hunters: number; targetUserId?: string | null }
-  "shame.posted": { targetName: string; message?: string | null; targetUserId?: string | null }
+  "bounty.placed": { targetName: string; amount: number; targetUserId?: string | null; total?: number; backers?: number; opened?: boolean }
+  "bounty.claimed": { targetName: string; amount: number; hunters: number; targetUserId?: string | null; hunterNames?: string[]; hunterUserIds?: string[]; share?: number; legacy?: boolean }
+  "bounty.escaped": { targetName: string; bonus: number; total: number; escapes: number; targetUserId?: string | null }
+  "bounty.expired": { targetName: string; refunded: number; backers: number; targetUserId?: string | null }
+  "shame.posted": { targetName: string; message?: string | null; targetUserId?: string | null; source?: "user" | "tribunal"; stat?: string | null }
+  "shame.egged": { targetName: string; eggs: number; extended: boolean; targetUserId?: string | null }
   "title.equipped": { title: string; perk?: string | null }
   "title.bestowed": { title: string; targetName: string; targetUserId?: string | null; curse?: string | null }
   "title.perk": { title: string; perk: string; delta: number; userId?: string; kind?: "perk" | "curse"; beneficiaryName?: string | null }
@@ -212,6 +215,7 @@ export const DB_TABLE_KEYS: Record<string, string[]> = {
   point_balances: ["points", "leaderboard"],
   daily_fearless: ["fearless"],
   bounties: ["bounties"],
+  bounty_warrants: ["bounties"],
   shame_entries: ["shame"],
   user_titles: ["titles"],
   acts: ["acts"],

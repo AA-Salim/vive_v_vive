@@ -35,3 +35,6 @@ export const FEUD_RULES = {
 
 // The act Warrior award only counts players with this many games.
 export const ACT_WARRIOR_MIN_GAMES = 5
+
+// The Hall of Kisses: the leaderboard's praise board, linked from the Hall of Praise.
+export const KISS_BOARD_HREF = "/leaderboard?board=kisses"

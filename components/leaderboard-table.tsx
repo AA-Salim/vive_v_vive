@@ -6,7 +6,7 @@ import { RelativeTime } from "@/components/live/relative-time"
 import { displayName } from "@/components/leaderboard-podium"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { ChangeFlash } from "@/components/pages/change-flash"
-import { formatNumber, formatSigned } from "@/components/pages/format"
+import { formatNumber, formatSigned, plural } from "@/components/pages/format"
 import { Delta, RankShift, toneOf } from "@/components/pages/indicators"
 import { PlayerName } from "@/components/titles/player-name"
 import { PlayerTitles } from "@/components/titles/player-titles"
@@ -91,7 +91,11 @@ function Row({ entry, reduced, onOpen, sealed }: { entry: LeaderboardEntry; redu
               ) : null}
             </span>
             <PlayerTitles userId={entry.user_id} className="mt-0.5" interactive />
-            {record ? <span className="block text-[11px] text-muted-foreground tabular-nums md:hidden">{record}</span> : null}
+            {record || entry.total_kisses > 0 ? (
+              <span className="block text-[11px] text-muted-foreground tabular-nums md:hidden">
+                {[record, entry.total_kisses > 0 ? plural(entry.total_kisses, "kiss", "kisses") : null].filter(Boolean).join(" · ")}
+              </span>
+            ) : null}
           </span>
         </span>
 

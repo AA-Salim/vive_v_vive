@@ -9,6 +9,7 @@ import type {
   DuosResponse,
   GameDetailResponse,
   HistoryResponse,
+  KissBoardResponse,
   LeaderboardResponse,
   PlayerDetailResponse,
   PointsHistoryResponse,
@@ -41,6 +42,8 @@ const retryTransient = (count: number, error: Error) =>
 export const PAGE_KEYS = {
   leaderboard: ["leaderboard"] as const,
   treasury: (season: SeasonKey = "current") => ["leaderboard", season] as const,
+  // Under the praise root: a praise sung or judged (and the praises table) refreshes it.
+  kisses: (season: SeasonKey = "current") => ["praise", "kisses", season] as const,
   stats: (season: SeasonKey = "current") => ["games", "stats", season] as const,
   champions: (season: SeasonKey = "current") => ["games", "champions", season] as const,
   duos: (season: SeasonKey = "current") => ["games", "duos", season] as const,
@@ -59,6 +62,15 @@ export function useLeaderboard(season: SeasonKey = "current") {
     queryKey: PAGE_KEYS.treasury(season),
     queryFn: ({ signal }) => fetchJson<LeaderboardResponse>(withSeason("/api/leaderboard", season), signal),
     staleTime: 10_000,
+    retry: retryTransient,
+  })
+}
+
+export function useKissBoard(season: SeasonKey = "current") {
+  return useQuery({
+    queryKey: PAGE_KEYS.kisses(season),
+    queryFn: ({ signal }) => fetchJson<KissBoardResponse>(withSeason("/api/leaderboard/kisses", season), signal),
+    staleTime: 15_000,
     retry: retryTransient,
   })
 }

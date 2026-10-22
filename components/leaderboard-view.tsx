@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
+import { usePathname, useSearchParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowRightIcon, CoinsIcon, CrownIcon, ScaleIcon, ScrollTextIcon, TrendingDownIcon, UsersIcon } from "lucide-react"
+import { ArrowRightIcon, CoinsIcon, CrownIcon, HandHeartIcon, ScaleIcon, ScrollTextIcon, TrendingDownIcon, UsersIcon } from "lucide-react"
+import { KissBoard } from "@/components/leaderboard-kisses"
 import { displayName, LeaderboardPodium } from "@/components/leaderboard-podium"
 import { LeaderboardTable } from "@/components/leaderboard-table"
 import { useLiveSignal } from "@/components/live/live-context"
@@ -15,9 +17,11 @@ import { PlayerSheet } from "@/components/pages/player-sheet"
 import { PAGE_KEYS, useLeaderboard } from "@/components/pages/queries"
 import { SeasonPicker, TREASURY_HELP } from "@/components/pages/season-picker"
 import { PageEmpty, PageError } from "@/components/pages/states"
+import { TotalTiles } from "@/components/pages/total-tiles"
 import { InfoTip } from "@/components/ui/info-tip"
-import { useSeasonParam } from "@/components/pages/use-season"
+import { useSeasonParam, type SeasonKey } from "@/components/pages/use-season"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuthUser } from "@/hooks/use-auth"
 import { domainOf, type LiveDomain } from "@/lib/live/events"
 import { COURT_LIST_HELP, LEADERBOARD_HELP, TREASURY_TOTALS_HELP } from "@/lib/pages/help"
@@ -69,38 +73,26 @@ function TreasuryTotals({ entries, sealed }: { entries: LeaderboardEntry[]; seal
   const total = entries.reduce((sum, e) => sum + e.balance, 0)
   const debtors = entries.filter((e) => e.balance < 0).length
   const moved = entries.reduce((sum, e) => sum + Math.abs(e.delta_24h), 0)
-  const items = [
-    { icon: CoinsIcon, label: sealed ? "Final treasury" : "Coin in play", value: formatNumber(total), help: TREASURY_TOTALS_HELP.coin },
-    sealed
-      ? {
-          icon: UsersIcon,
-          label: "Nobles",
-          value: formatNumber(entries.length),
-          help: { title: "Nobles", does: "How many players held a treasury when this act was sealed.", cost: "Free to look at." },
-        }
-      : { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved), help: TREASURY_TOTALS_HELP.moved },
-    {
-      icon: TrendingDownIcon,
-      label: "In debt",
-      value: debtors === 0 ? "Nobody" : plural(debtors, "noble"),
-      help: TREASURY_TOTALS_HELP.debt,
-    },
-  ]
   return (
-    <dl className="grid grid-cols-3 gap-2">
-      {items.map((item) => (
-        <div key={item.label} className="min-w-0 rounded-xl border border-[var(--color-gold)]/12 bg-card px-2.5 py-2 sm:px-3">
-          <dt className="flex items-start gap-1 text-[10px] leading-tight font-semibold tracking-[0.12em] text-muted-foreground uppercase">
-            <item.icon className="mt-px size-3 shrink-0 text-[var(--color-gold)]/60" aria-hidden />
-            <span className="min-w-0 flex-1">{item.label}</span>
-            <InfoTip help={item.help} className="-my-1 -mr-1 size-4 before:-inset-3 [&_svg]:size-3.5" />
-          </dt>
-          <dd className="truncate font-display text-base font-semibold text-[var(--color-gold-light)] tabular-nums sm:text-lg">
-            {item.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <TotalTiles
+      items={[
+        { icon: CoinsIcon, label: sealed ? "Final treasury" : "Coin in play", value: formatNumber(total), help: TREASURY_TOTALS_HELP.coin },
+        sealed
+          ? {
+              icon: UsersIcon,
+              label: "Nobles",
+              value: formatNumber(entries.length),
+              help: { title: "Nobles", does: "How many players held a treasury when this act was sealed.", cost: "Free to look at." },
+            }
+          : { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved), help: TREASURY_TOTALS_HELP.moved },
+        {
+          icon: TrendingDownIcon,
+          label: "In debt",
+          value: debtors === 0 ? "Nobody" : plural(debtors, "noble"),
+          help: TREASURY_TOTALS_HELP.debt,
+        },
+      ]}
+    />
   )
 }
 
@@ -125,8 +117,55 @@ function LeaderboardSkeleton() {
   )
 }
 
+type Board = "treasury" | "kisses"
+
+const BOARD_PARAM = "board"
+
+// The board stays in the URL (?board=kisses) so the Hall of Kisses can be linked; the treasury needs no param.
+function useBoardParam(): [Board, (next: Board) => void] {
+  const pathname = usePathname()
+  const board: Board = useSearchParams().get(BOARD_PARAM) === "kisses" ? "kisses" : "treasury"
+  const setBoard = useCallback(
+    (next: Board) => {
+      const params = new URLSearchParams(window.location.search)
+      if (next === "kisses") params.set(BOARD_PARAM, next)
+      else params.delete(BOARD_PARAM)
+      const query = params.toString()
+      window.history.replaceState(null, "", query ? `${pathname}?${query}` : pathname)
+    },
+    [pathname]
+  )
+  return [board, setBoard]
+}
+
+const TAB_TRIGGER = "h-10 flex-1 px-3 text-sm data-active:text-[var(--color-gold-light)] sm:flex-none sm:px-5"
+
 export function LeaderboardView() {
+  const [board, setBoard] = useBoardParam()
   const [picked, setSeason] = useSeasonParam()
+  return (
+    <Tabs value={board} onValueChange={(value) => setBoard(value as Board)} className="mx-auto max-w-5xl gap-6">
+      <TabsList className="h-12 w-full bg-[var(--color-navy-light)] p-1 sm:w-fit">
+        <TabsTrigger value="treasury" className={TAB_TRIGGER}>
+          <CoinsIcon aria-hidden />
+          The Treasury
+        </TabsTrigger>
+        <TabsTrigger value="kisses" className={TAB_TRIGGER}>
+          <HandHeartIcon aria-hidden />
+          Hall of Kisses
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="treasury" className="space-y-6">
+        <TreasuryBoard picked={picked} setSeason={setSeason} />
+      </TabsContent>
+      <TabsContent value="kisses" className="space-y-6">
+        <KissBoard season={picked} onSeasonChange={setSeason} />
+      </TabsContent>
+    </Tabs>
+  )
+}
+
+function TreasuryBoard({ picked, setSeason }: { picked: SeasonKey; setSeason: (next: SeasonKey) => void }) {
   // Balances restart every act, so the treasury has no all-time view: "all" from another tab reads the live act.
   const season = picked === "all" ? "current" : picked
   const query = useLeaderboard(season)
@@ -148,7 +187,7 @@ export function LeaderboardView() {
   })
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <>
       <PageHeader
         eyebrow="The kingdom"
         title="The Treasury"
@@ -215,6 +254,6 @@ export function LeaderboardView() {
         </>
       )}
       <PlayerSheet player={open} onClose={() => setOpen(null)} season={season} />
-    </div>
+    </>
   )
 }

@@ -125,3 +125,47 @@ export interface ArchiveDetailResponse {
   bets: { userId: string; name: string; won: number; lost: number; refunded: number }[]
   spending: { group: ReasonGroup; label: string; total: number }[]
 }
+
+// One praise on the Hall of Kisses, with what the ledger paid for it.
+export interface KissPraise {
+  id: string
+  body: string
+  createdAt: string
+  praiseDay: string
+  verdict: "crowned" | "scorned" | null
+  verdictNote: string | null
+  favor: number
+  points: number
+}
+
+export interface KissEntry {
+  rank: number
+  userId: string
+  playerId: string | null
+  name: string
+  avatarUrl: string | null
+  kisses: number
+  // reward + riddle + favor: everything the ledger paid for these praises.
+  points: number
+  reward: number
+  riddle: number
+  favor: number
+  crowns: number
+  scorns: number
+  // Act I one-click kisses (and early praises whose text was never kept), counted apart from the points.
+  legacy: number
+  today: boolean
+  lastAt: string | null
+  recent: KissPraise[]
+}
+
+export interface KissBoardResponse {
+  // false while the praises table itself is missing.
+  available: boolean
+  entries: KissEntry[]
+  totals: { kisses: number; points: number; crowns: number; legacy: number; today: number }
+  // The UTC day the daily praise counts in ("YYYY-MM-DD").
+  today: string
+  season: Season | null
+  generatedAt: string
+}

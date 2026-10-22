@@ -1,6 +1,6 @@
 "use client"
 
-import { CrownIcon } from "lucide-react"
+import { CrownIcon, HandHeartIcon } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { AnimatedNumber } from "@/components/betting/animated-number"
 import { PlayerAvatar } from "@/components/pages/avatars"
@@ -110,6 +110,13 @@ export function LeaderboardPodium({ entries, onOpen }: { entries: LeaderboardEnt
               <span className="mt-1 flex flex-wrap items-center justify-center gap-x-1.5 text-[11px]">
                 {entry.delta_24h !== 0 ? <Delta value={entry.delta_24h} suffix=" today" /> : null}
                 <RankShift rank={entry.rank} previous={entry.prev_rank} />
+                {entry.total_kisses > 0 ? (
+                  <span className="inline-flex items-center gap-0.5 text-muted-foreground tabular-nums" title="Hands kissed and praises sung">
+                    <HandHeartIcon className="size-3" aria-hidden />
+                    {entry.total_kisses}
+                    <span className="sr-only"> {entry.total_kisses === 1 ? "kiss" : "kisses"}</span>
+                  </span>
+                ) : null}
               </span>
             </ChangeFlash>
           </motion.li>

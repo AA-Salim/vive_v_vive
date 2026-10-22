@@ -54,6 +54,48 @@ export const COURT_LIST_HELP: HelpEntry = {
   limits: `Record: wins and losses of their claimed player. Devotion: ${DEVOTION_LINE}. Last move: their latest ledger line.`,
 }
 
+export const KISS_BOARD_HELP = {
+  page: {
+    title: "The Hall of Kisses",
+    does: "Every subject ranked by what their daily praise of Salaxe earned: the most devoted lips in the kingdom. Each row counts their praises, the points those praises paid and the crowns they won, with what they wrote.",
+    cost: READ_ONLY,
+    reward: "Points are read from the ledger, praise by praise: the praise reward as paid (title boosts included), the Sharp Mind bonus for a first-try riddle, and the Royal Favor of a crown",
+    limits: "Ranked by points, then by number of praises. The season picker counts the praises written during that act, or every act with All time. Act I one-click kisses show apart and do not count toward the rank.",
+  },
+  kisses: {
+    title: "Hands kissed",
+    does: "Every praise written for Salaxe in the season you picked, one per subject per day.",
+    cost: READ_ONLY,
+  },
+  points: {
+    title: "Points paid",
+    does: "What the treasury paid for those praises: rewards, Sharp Mind bonuses and Royal Favor, as written in the ledger.",
+    cost: READ_ONLY,
+  },
+  crowns: {
+    title: "Crowns",
+    does: "Praises Salaxe crowned. Each crown paid its author Royal Favor on top of the praise.",
+    cost: READ_ONLY,
+  },
+  today: {
+    title: "Kissed today",
+    does: "Who has already sung for the King today. The praise resets at midnight UTC, one per subject per day.",
+    cost: READ_ONLY,
+  },
+  panel: {
+    title: "Hand kissers",
+    does: "Who already kissed the hand today, with the line they wrote and what it paid them, plus the three most devoted lips of the act. The full ranking lives in the Hall of Kisses on the leaderboard.",
+    cost: READ_ONLY,
+    reward: "Today's points: the praise reward as paid (title boosts included), the Sharp Mind riddle bonus and any Royal Favor from a crown",
+    limits: "One praise per subject per day, resets at midnight UTC. The top three counts the act being played.",
+  },
+  legacy: {
+    title: "Act I kisses",
+    does: "The one-click hand kisses of Act I, and the first praises sung before the Hall kept their words. They are counted for the record, not for the ranking.",
+    cost: READ_ONLY,
+  },
+} satisfies Record<string, HelpEntry>
+
 export const PROFILE_HELP = {
   earned: {
     title: "Earned",

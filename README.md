@@ -229,6 +229,9 @@ The decree and devotion milestone titles also stack small bonuses (decrees -3/-5
 - **Stats by season**: stats, rivalries, duos and history show the current act by default. Use the season picker for
   older acts or all time. Tap a game in a rivalry to see the full match.
 - **Leaderboard, Gamba hall, Archives**: who is rich, who is broke, who gambled it all, and how past acts ended.
+- **Hall of Kisses**: the leaderboard's second tab ranks who sang for Salaxe the most, with the points, crowns and
+  words of every praise, and who already kissed the hand today. It follows the season picker. The Play tab shows
+  today's hand kissers beside the game.
 - **Install it**: on your phone, use *Add to Home Screen* for a full-screen app.
 
 ---

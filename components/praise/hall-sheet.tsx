@@ -1,9 +1,11 @@
 "use client"
 
-import { LibraryIcon } from "lucide-react"
+import Link from "next/link"
+import { ArrowRightIcon, HandHeartIcon, LibraryIcon } from "lucide-react"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HallList } from "@/components/praise/hall-list"
+import { KISS_BOARD_HREF } from "@/lib/pages/constants"
 import { HALL_VIEWS, type HallView, type PraiseStateReady } from "@/lib/praise/types"
 import { COPY } from "@/lib/praise/voice"
 
@@ -41,6 +43,14 @@ export function HallSheet({ open, onOpenChange, view, onViewChange, state, userI
               ? `${state.totalCount} ${state.totalCount === 1 ? "song" : "songs"} sung so far. He has read them all. Twice.`
               : COPY.hallDescription}
           </SheetDescription>
+          <Link
+            href={KISS_BOARD_HREF}
+            className="mt-1 inline-flex h-10 w-fit items-center gap-1.5 rounded-lg border border-[var(--color-gold)]/25 px-3 text-sm font-medium text-[var(--color-gold-light)] transition-colors outline-none hover:bg-[var(--color-gold)]/10 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <HandHeartIcon className="size-4" aria-hidden />
+            The Hall of Kisses: who sings the most
+            <ArrowRightIcon className="size-4" aria-hidden />
+          </Link>
         </SheetHeader>
 
         <Tabs

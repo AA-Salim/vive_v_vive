@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils"
 
 export interface PraiseTerms {
+  base: number
   reward: number
   favor: number
   rewardNotes: EffectNote[]
@@ -25,11 +26,13 @@ export interface PraiseTerms {
   favorCapped: boolean
 }
 
-// What the viewer's titles make a praise and a crown pay, from the shared effect formulas.
-export function usePraiseTerms(): PraiseTerms {
+// What the viewer's titles make a praise and a crown pay, from the shared effect formulas. base is the reward the
+// live rules pay (PraiseStateReady.reward).
+export function usePraiseTerms(base: number = PRAISE_REWARD): PraiseTerms {
   const { fx } = useMyTitleEffects()
   return {
-    reward: praiseReward(fx),
+    base,
+    reward: praiseReward(fx, base),
     favor: favorReward(fx),
     rewardNotes: effectNotes(fx, "praise_bonus_pct"),
     favorNotes: effectNotes(fx, "favor_bonus_pct"),

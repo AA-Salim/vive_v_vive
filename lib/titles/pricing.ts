@@ -1,7 +1,9 @@
 import { PRAISE_REWARD } from "@/lib/praise/rules"
 
 // Mirrored in supabase/phase10_title-effects.sql (title_tiers, vvv_title_tier_price): keep both in sync.
-// Prices are counted in written praises: one praise pays PRAISE_REWARD, a Legendary title costs fifteen of them.
+// Prices are counted in hand kisses of 100 points (what one kiss, then one written praise, paid before the
+// short-line praise went to PRAISE_REWARD): a Legendary title costs fifteen of them. Prices did not follow the raise.
+export const HAND_KISS = 100
 
 export type PriceTier = "legendary" | "epic" | "rare" | "common"
 
@@ -22,7 +24,7 @@ export const TIER_LABEL: Record<PriceTier, string> = {
 }
 
 export function tierPrice(tier: PriceTier): number {
-  return TIER_MULTIPLIER[tier] * PRAISE_REWARD
+  return TIER_MULTIPLIER[tier] * HAND_KISS
 }
 
 // Every title sold in the armory, self titles and curses alike, ranked by what its immediate effect plus its
@@ -65,11 +67,11 @@ export function shopPrice(name: string, fallback: number): number {
   return tier ? tierPrice(tier) : fallback
 }
 
-// The hand kiss became the written praise; the court still counts in kisses.
+// The court still counts in hand kisses of HAND_KISS points, whatever the praise pays now.
 export function multiplierLabel(tier: PriceTier): string {
   return `x${TIER_MULTIPLIER[tier]} the hand kiss`
 }
 
-export const HAND_KISS_NOTE = `One hand kiss (a written praise) pays ${PRAISE_REWARD} points.`
+export const HAND_KISS_NOTE = `One hand kiss is ${HAND_KISS} points. A daily praise now pays ${PRAISE_REWARD}.`
 
 export const formatPrice = (n: number) => n.toLocaleString("en-US")

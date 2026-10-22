@@ -1,13 +1,12 @@
 import {
   deaccent,
-  PRAISE_MAX_CHARS,
-  PRAISE_MIN_CHARS,
-  PRAISE_MIN_WORDS,
   PRAISE_REWARD,
+  PRAISE_RULES,
   RIDDLE_DAILY_LIMIT,
   RIDDLE_FIRST_TRY_BONUS,
   ROYAL_FAVOR,
   VERDICT_NOTE_MAX,
+  type PraiseRules,
 } from "@/lib/praise/rules"
 import type { JudgeErrorCode, RiddleErrorCode, RiddleKind, SubmitErrorCode } from "@/lib/praise/types"
 
@@ -28,10 +27,12 @@ export const PANEL_KICKERS = [
 ]
 
 export const COMPOSER_INTROS = [
-  "Write it yourself. Name him. Mean it, or make it sound like you do.",
-  "He will read every word, twice, then deny it moved him.",
-  "No kisses, no copy-paste. Ink, honesty, and at least one of his names.",
+  "One line, one of his names, one word of worship. Mean it, or make it sound like you do.",
+  "He will read every letter, twice, then deny it moved him.",
+  "Short and sweet, like his last winning streak. Name him, worship him, never insult him.",
 ]
+
+export const WORSHIP_LABEL = "Words of worship"
 
 const SUNG_GENERIC = [
   "He read it twice, then a third time, lips moving. Your name moves to the maybe-loyal column of the notebook.",
@@ -158,14 +159,15 @@ export const COOLDOWN_LINES = [
 
 export const COPY = {
   title: "Sing His Praises",
-  rewardBadge: `+${PRAISE_REWARD} a day`,
+  rewardBadge: (reward: number) => `+${reward} a day`,
   compose: "Compose your praise",
   composerTitle: "A praise for the exiled king",
   scrollLabel: "Your praise for Salaxe",
-  placeholder: "Begin with his name. He likes that.",
+  placeholder: "His name, then a word of worship.",
   sing: "Sing",
   singing: "Sealing the scroll...",
   shortcut: "Ctrl + Enter to sing",
+  shortcutShort: "Enter to sing",
   successTitle: "The King has heard you",
   successHint: `Salaxe may still crown it (+${ROYAL_FAVOR} Royal Favor) or scorn it in public. Watch the Hall.`,
   todayLabel: "Your song for today",
@@ -176,7 +178,7 @@ export const COPY = {
   featuredCrowned: "Crowned by Salaxe",
   featuredLatest: "Latest song",
   loggedOutTitle: "Only sworn subjects may sing.",
-  loggedOutBody: `Log in with Discord and earn ${PRAISE_REWARD} points a day for a few kind, written words.`,
+  loggedOutBody: `Log in with Discord and earn ${PRAISE_REWARD} points a day for one short line of worship.`,
   login: "Login with Discord",
   pendingTitle: "The court scribes are preparing the Hall of Praise.",
   pendingBody: "The quill returns shortly. No free kisses in the meantime.",
@@ -186,17 +188,24 @@ export const COPY = {
   holdCourt: "Hold court",
   emptyLatest: "The Hall is silent. Be the first voice the exile hears.",
   emptyCrowned: "Nothing crowned yet. Salaxe is a harsh critic, and a slow reader.",
-  emptyMine: `You have not sung yet. ${PRAISE_REWARD} points are waiting for a few honest lies.`,
+  emptyMine: `You have not sung yet. ${PRAISE_REWARD} points are waiting for one honest lie.`,
   emptyCourt: "Nothing to judge. The court is quiet and the King is bored.",
   legacy: (count: number) =>
     `Before the quill: ${count} one-click ${count === 1 ? "kiss" : "kisses"}, archived with honor and zero literary merit.`,
 }
 
+const ruleMessages = (rules: PraiseRules) => ({
+  too_short: `Too short. A king deserves at least ${rules.minChars} characters of worship.`,
+  too_long: `Too long. Even Salaxe stops reading after ${rules.maxChars} characters.`,
+  too_few_words: `At least ${rules.minWords} words. He counts them. On his fingers.`,
+})
+
+export const INSULT_MESSAGE = "The King heard that. Praise, not poison. Try Sidna, Lmalik or Eternal King."
+
 const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
-  too_short: `Too short. A king deserves at least ${PRAISE_MIN_CHARS} characters of worship.`,
-  too_long: `Too long. Even Salaxe stops reading after ${PRAISE_MAX_CHARS} characters.`,
-  too_few_words: `At least ${PRAISE_MIN_WORDS} words. He counts them. On his fingers.`,
+  ...ruleMessages(PRAISE_RULES),
   no_name: "You never named him. Salaxe, SLX, Chklat, Goblino: pick one.",
+  insult: INSULT_MESSAGE,
   keyboard_mash: "Keyboard mash detected. The royal scribe refuses to copy this.",
   repetitive: "Filler and repeats do not count. Give him real, varied words.",
   too_many_symbols: "Too many symbols. He wants words, not hieroglyphs.",
@@ -212,7 +221,8 @@ const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
   unknown: "The royal messenger tripped. Your praise was not delivered, nothing was charged.",
 }
 
-export function submitErrorMessage(code: SubmitErrorCode, matchName?: string | null): string {
+export function submitErrorMessage(code: SubmitErrorCode, matchName?: string | null, rules?: PraiseRules): string {
+  if (rules && (code === "too_short" || code === "too_long" || code === "too_few_words")) return ruleMessages(rules)[code]
   if (matchName && code === "too_similar") return `Too close to what ${matchName} already sang. Change it up.`
   if (matchName && code === "duplicate") return `${matchName} already sang those exact words. Originality is the price of ${PRAISE_REWARD} points.`
   return SUBMIT_MESSAGES[code]

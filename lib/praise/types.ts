@@ -1,4 +1,4 @@
-import type { PraiseViolation } from "@/lib/praise/rules"
+import type { PraiseRules, PraiseViolation } from "@/lib/praise/rules"
 import type { EffectNote } from "@/lib/titles/effects"
 
 export type PraiseVerdict = "crowned" | "scorned"
@@ -44,6 +44,8 @@ export interface PraiseStateReady {
   today: string
   resetsAt: string
   serverNow: string
+  // The rules the live submit_praise enforces (the legacy ones until the version 2 migration runs).
+  rules: PraiseRules
   reward: number
   favor: number
   totalCount: number

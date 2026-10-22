@@ -598,8 +598,8 @@ export function premiumPct(basePct: number, fx: CombinedEffects, backsSalaxe: bo
   return mod === 0 ? basePct : Math.ceil((basePct * (100 + mod)) / 100)
 }
 
-export function praiseReward(fx: CombinedEffects): number {
-  return scaled(PRAISE_REWARD, fxValue(fx, "praise_bonus_pct"))
+export function praiseReward(fx: CombinedEffects, base: number = PRAISE_REWARD): number {
+  return scaled(base, fxValue(fx, "praise_bonus_pct"))
 }
 
 export function favorReward(fx: CombinedEffects): number {

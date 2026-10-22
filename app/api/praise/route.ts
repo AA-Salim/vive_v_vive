@@ -3,7 +3,8 @@ import { z } from "zod"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema, migrationPending } from "@/lib/db-errors"
 import { emitLive } from "@/lib/live/server"
-import { cleanPraise, COURT_WINDOW_DAYS, findViolation, PRAISE_INPUT_MAX, praiseExcerpt } from "@/lib/praise/rules"
+import { findInsult } from "@/lib/praise/insults"
+import { cleanPraise, COURT_WINDOW_DAYS, PRAISE_INPUT_MAX, praiseExcerpt } from "@/lib/praise/rules"
 import {
   PRAISE_COLUMNS,
   asSubmitError,
@@ -79,9 +80,10 @@ export async function POST(request: Request) {
   const parsed = SubmitBody.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return submitFailure("invalid_input")
 
+  // Only the insult filter runs here: the length and word rules depend on which submit_praise is live (see
+  // praise_state rules_version), and the database applies them.
   const body = cleanPraise(parsed.data.body)
-  const violation = findViolation(body)
-  if (violation) return submitFailure(violation)
+  if (findInsult(body)) return submitFailure("insult")
 
   const { data, error } = await supabase.rpc("submit_praise", { p_body: body })
   if (error) {

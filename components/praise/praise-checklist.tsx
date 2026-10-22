@@ -1,30 +1,33 @@
 import { CircleCheckIcon, CircleDashedIcon, CircleIcon, CircleXIcon } from "lucide-react"
 import {
-  PRAISE_MAX_CHARS,
-  PRAISE_MIN_CHARS,
-  PRAISE_MIN_WORDS,
   SALAXE_NAMES,
   type CheckState,
   type PraiseAnalysis,
   type PraiseCheck,
+  type PraiseRules,
 } from "@/lib/praise/rules"
 import { cn } from "@/lib/utils"
 
-const ITEMS: { key: PraiseCheck; label: string; hint: (analysis: PraiseAnalysis) => string }[] = [
-  {
-    key: "words",
-    label: `${PRAISE_MIN_WORDS}+ words`,
-    hint: (a) => `${Math.min(a.words, PRAISE_MIN_WORDS)}/${PRAISE_MIN_WORDS}`,
-  },
-  {
-    key: "length",
-    label: `${PRAISE_MIN_CHARS} to ${PRAISE_MAX_CHARS} characters`,
-    hint: (a) => (a.chars > PRAISE_MAX_CHARS ? `${a.chars - PRAISE_MAX_CHARS} too many` : String(a.chars)),
-  },
-  { key: "name", label: "Names the King", hint: () => `${SALAXE_NAMES.slice(0, 3).join(", ")}...` },
-  { key: "original", label: "Your own words", hint: (a) => (a.checks.original === "fail" ? "Copied" : "No prompt copying") },
-  { key: "clean", label: "No mash, no spam", hint: (a) => (a.checks.clean === "fail" ? "Rewrite it" : "Real words only") },
-]
+type Item = { key: PraiseCheck; label: string; hint: (analysis: PraiseAnalysis) => string }
+
+function items(rules: PraiseRules): Item[] {
+  return [
+    {
+      key: "length",
+      label: `${rules.minChars} to ${rules.maxChars} characters`,
+      hint: (a) => (a.chars > rules.maxChars ? `${a.chars - rules.maxChars} too many` : String(a.chars)),
+    },
+    {
+      key: "words",
+      label: `${rules.minWords}+ words`,
+      hint: (a) => `${Math.min(a.words, rules.minWords)}/${rules.minWords}`,
+    },
+    { key: "name", label: "Names the King", hint: () => `${SALAXE_NAMES.slice(0, 3).join(", ")}...` },
+    { key: "respect", label: "Praise, not poison", hint: (a) => (a.checks.respect === "fail" ? "He heard that" : "No insults") },
+    { key: "original", label: "Never sung before", hint: (a) => (a.checks.original === "fail" ? "Already in the Hall" : "Your own line") },
+    { key: "clean", label: "No mash, no spam", hint: (a) => (a.checks.clean === "fail" ? "Rewrite it" : "Real words only") },
+  ]
+}
 
 const STATUS_TEXT: Record<CheckState, string> = {
   idle: "not started",
@@ -41,10 +44,10 @@ function StatusIcon({ state }: { state: CheckState }) {
   return <CircleIcon className={cn(className, "text-muted-foreground/50")} aria-hidden />
 }
 
-export function PraiseChecklist({ id, analysis }: { id: string; analysis: PraiseAnalysis }) {
+export function PraiseChecklist({ id, analysis, rules }: { id: string; analysis: PraiseAnalysis; rules: PraiseRules }) {
   return (
     <ul id={id} className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2" aria-label="Praise requirements">
-      {ITEMS.map((item) => {
+      {items(rules).map((item) => {
         const state = analysis.checks[item.key]
         return (
           <li

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import { isMissingSchema } from "@/lib/db-errors"
-import { CROWNS_PER_DAY, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { CROWNS_PER_DAY, praiseRulesFrom, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { PRAISE_COLUMNS, loadAuthors, toPraiseView, type PraiseRow, type PraiseStateRow } from "@/lib/praise/server"
 import type { PraiseState } from "@/lib/praise/types"
 
@@ -41,13 +41,15 @@ export async function GET() {
   const todayRow = (today.data as PraiseRow | null) ?? null
   const authors = await loadAuthors(supabase, [featuredRow?.user_id, todayRow?.user_id])
   const isSalaxe = !!userId && userId === state.salaxe_user_id
+  const rules = praiseRulesFrom(state)
 
   const body: PraiseState = {
     available: true,
     today: state.today,
     resetsAt: state.resets_at,
     serverNow: state.server_now,
-    reward: PRAISE_REWARD,
+    rules,
+    reward: rules.reward,
     favor: ROYAL_FAVOR,
     totalCount: state.total_count,
     salaxeUserId: state.salaxe_user_id,

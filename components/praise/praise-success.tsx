@@ -32,15 +32,17 @@ function celebrate() {
 
 interface PraiseSuccessProps {
   result: SubmitResult
+  // The base reward the live rules pay, to tell the title bonus apart.
+  baseReward?: number
   onOpenHall: () => void
   onClose: () => void
 }
 
-export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProps) {
+export function PraiseSuccess({ result, baseReward = PRAISE_REWARD, onOpenHall, onClose }: PraiseSuccessProps) {
   const response = useMemo(() => sungResponse(result.praise.body, result.praise.id), [result])
   const reward = result.praise.reward
   const effectLines = useMemo(() => submittedEffectLines(result), [result])
-  const titleBonus = reward - PRAISE_REWARD
+  const titleBonus = reward - baseReward
   const bonus = result.riddleBonus ?? 0
   const total = reward + bonus
 
@@ -106,7 +108,7 @@ export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProp
             {titleBonus > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--color-gold)]/40 bg-[var(--color-gold)]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[var(--color-gold-light)]">
                 <SparklesIcon className="size-3 text-[var(--color-gold)]" aria-hidden />
-                {PRAISE_REWARD} + {titleBonus} from your titles
+                {baseReward} + {titleBonus} from your titles
               </span>
             )}
             {effectLines.map((line) => (

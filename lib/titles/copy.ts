@@ -1,8 +1,7 @@
 import { pts, type HelpEntry } from "@/lib/help"
-import { PRAISE_REWARD } from "@/lib/praise/rules"
 import { DECREE_COST_RANGE } from "@/lib/titles/effects"
 import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
-import { PRICE_TIERS, TIER_LABEL, TIER_MULTIPLIER, formatPrice, tierPrice } from "@/lib/titles/pricing"
+import { HAND_KISS_NOTE, PRICE_TIERS, TIER_LABEL, TIER_MULTIPLIER, formatPrice, tierPrice } from "@/lib/titles/pricing"
 import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
 import type { PerkInfo } from "@/lib/titles/types"
 
@@ -35,7 +34,7 @@ export const EXPLAINER = [
   },
   {
     title: "Priced in hand kisses",
-    body: `One hand kiss (a written praise) pays ${PRAISE_REWARD}. Titles cost ${priceList}. Honors are earned, never bought.`,
+    body: `${HAND_KISS_NOTE} Titles cost ${priceList}. Honors are earned, never bought.`,
   },
   {
     title: "Curses",

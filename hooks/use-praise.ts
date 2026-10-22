@@ -14,7 +14,7 @@ import { useLiveSignal } from "@/components/live/live-provider"
 import { ACTIVE_SESSION_KEY, ACTIVE_STATUSES, type LiveEventPayloads } from "@/lib/live/events"
 import { createClient } from "@/lib/supabase-client"
 import { writeDraft } from "@/lib/praise/draft"
-import { ROYAL_FAVOR } from "@/lib/praise/rules"
+import { PRAISE_RULES, ROYAL_FAVOR, type PraiseRules } from "@/lib/praise/rules"
 import type {
   HallPage,
   HallView,
@@ -107,6 +107,12 @@ export function usePraiseState(userId: string | null, enabled: boolean) {
     enabled,
     staleTime: 15_000,
   })
+}
+
+// The rules the live submit_praise enforces, read from the praise state (legacy ones before the migration).
+export function usePraiseRules(userId: string | null): PraiseRules {
+  const { data } = usePraiseState(userId, true)
+  return data?.state.available ? (data.state.rules ?? PRAISE_RULES) : PRAISE_RULES
 }
 
 export function usePraiseHall(view: HallView, limit: number, userId: string | null) {

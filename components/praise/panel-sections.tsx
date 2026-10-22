@@ -20,7 +20,7 @@ import { PraiseCountdown } from "@/components/praise/praise-countdown"
 import { BoostedAmount, TitleBonusChips, usePraiseTerms } from "@/components/praise/title-bonus"
 import { VerdictChip } from "@/components/praise/verdict-chip"
 import { formatRelative } from "@/lib/praise/format"
-import { PRAISE_MIN_WORDS, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR, type PraiseRules } from "@/lib/praise/rules"
 import type { PraiseCourt, PraiseMe, PraiseView } from "@/lib/praise/types"
 import { COOLDOWN_LINES, COPY, SELF_PRAISE_LINE, seededPick, verdictLine } from "@/lib/praise/voice"
 
@@ -82,8 +82,8 @@ export function LoggedOutSection({ onLogin }: { onLogin: () => void }) {
   )
 }
 
-export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () => void }) {
-  const terms = usePraiseTerms()
+export function ReadySection({ me, rules, onCompose }: { me: PraiseMe; rules: PraiseRules; onCompose: () => void }) {
+  const terms = usePraiseTerms(rules.reward)
   return (
     <div className="space-y-2.5">
       <div className="flex items-center gap-2.5">
@@ -95,14 +95,15 @@ export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () =>
             <FeatherIcon aria-hidden />
             <span className="truncate">{COPY.compose}</span>
           </span>
-          <BoostedAmount value={terms.reward} base={PRAISE_REWARD} className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums" />
+          <BoostedAmount value={terms.reward} base={terms.base} className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums" />
         </Button>
         <InfoTip help={COMPOSE_HELP} side="top" align="end" />
       </div>
       <TitleBonusChips notes={[...terms.rewardNotes, ...terms.favorNotes]} />
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        One praise a day: solve the King&apos;s Riddle (+{RIDDLE_FIRST_TRY_BONUS} on the first try), then write{" "}
-        {PRAISE_MIN_WORDS}+ words that name him. The best ones get crowned for +{terms.favor}
+        One praise a day: solve the King&apos;s Riddle (+{RIDDLE_FIRST_TRY_BONUS} on the first try), then sing him{" "}
+        {rules.version < 2 ? `${rules.minWords}+ words` : `one line of ${rules.maxChars} characters at most`} that name
+        him, never an insult. The best ones get crowned for +{terms.favor}
         {terms.favor !== ROYAL_FAVOR ? ` (instead of +${ROYAL_FAVOR})` : ""}.
       </p>
       {me.total > 0 && (

@@ -15,7 +15,7 @@ import { usePraiseTerms } from "@/components/praise/title-bonus"
 import { RiddleLocked, RiddleSolved } from "@/components/praise/riddle/riddle-outcome"
 import { RiddleStep } from "@/components/praise/riddle/riddle-step"
 import { RitualSteps } from "@/components/praise/riddle/ritual-steps"
-import { praiseKeys, useRiddle, useSubmitPraise } from "@/hooks/use-praise"
+import { praiseKeys, usePraiseRules, useRiddle, useSubmitPraise } from "@/hooks/use-praise"
 import { normalizePraise } from "@/lib/praise/rules"
 import type { HallPage, RiddleView, SubmitResult } from "@/lib/praise/types"
 import { COMPOSER_INTROS, COPY, RIDDLE_COPY, seededPick } from "@/lib/praise/voice"
@@ -40,7 +40,8 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
   const [error, setError] = useState<string | null>(null)
   const [justSolved, setJustSolved] = useState<RiddleView | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const terms = usePraiseTerms()
+  const rules = usePraiseRules(userId)
+  const terms = usePraiseTerms(rules.reward)
   const stageRef = useRef<HTMLDivElement>(null)
   const intro = seededPick(COMPOSER_INTROS, String(seed))
 
@@ -96,6 +97,7 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
     body = (
       <PraiseSuccess
         result={result}
+        baseReward={rules.reward}
         onClose={() => onOpenChange(false)}
         onOpenHall={() => {
           onOpenChange(false)
@@ -129,7 +131,7 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
     body = (
       <>
         <RitualSteps step={2} />
-        <RiddleSolved view={justSolved} onContinue={() => setJustSolved(null)} />
+        <RiddleSolved view={justSolved} reward={rules.reward} onContinue={() => setJustSolved(null)} />
       </>
     )
   } else if (phase === "locked" && riddle) {
@@ -162,6 +164,7 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
         </DialogHeader>
         <PraiseComposer
           promptSeed={seed}
+          rules={rules}
           knownFingerprints={knownFingerprints}
           bonus={sharpMind}
           pending={submit.isPending}

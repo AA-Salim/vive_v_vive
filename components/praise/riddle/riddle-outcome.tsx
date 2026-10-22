@@ -88,7 +88,15 @@ function Explanation({ view, lead = "The answer" }: { view: RiddleView; lead?: s
   )
 }
 
-export function RiddleSolved({ view, onContinue }: { view: RiddleView; onContinue: () => void }) {
+export function RiddleSolved({
+  view,
+  reward = PRAISE_REWARD,
+  onContinue,
+}: {
+  view: RiddleView
+  reward?: number
+  onContinue: () => void
+}) {
   const line = seededPick(RIDDLE_CORRECT_LINES, `${view.day}:${view.number}`)
   return (
     <div className="flex flex-col items-center gap-3 text-center">
@@ -112,12 +120,12 @@ export function RiddleSolved({ view, onContinue }: { view: RiddleView; onContinu
             <span className="font-display text-sm text-[var(--color-gold)]">
               {RIDDLE_COPY.sharpMind} +{RIDDLE_FIRST_TRY_BONUS}
             </span>{" "}
-            First try. Paid with your praise: +{PRAISE_REWARD + RIDDLE_FIRST_TRY_BONUS} in total.
+            First try. Paid with your praise: +{reward + RIDDLE_FIRST_TRY_BONUS} in total.
           </p>
         </motion.div>
       ) : (
         <p className="text-xs text-muted-foreground">
-          Solved on riddle {view.number}. No Sharp Mind bonus today, the praise still pays +{PRAISE_REWARD}.
+          Solved on riddle {view.number}. No Sharp Mind bonus today, the praise still pays +{reward}.
         </p>
       )}
 

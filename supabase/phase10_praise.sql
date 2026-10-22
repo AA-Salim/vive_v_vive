@@ -1,6 +1,8 @@
--- Phase 10: Sing His Praises. A written praise for Salaxe is worth 100 points, once per day.
+-- Phase 10: Sing His Praises. One short line of worship for Salaxe is worth 300 points, once per day.
 -- Requires phase10_foundation.sql (free-form point reasons, vvv_add_to_realtime).
 -- Additive and idempotent: safe to run while the previous app version is deployed.
+-- Rules version 2 (praise_rules): 8 to 25 characters, 2+ words, his name, no insults, 300 points. Version 1 asked
+-- for 40 to 280 characters and 8+ words for 100 points; its praises stay valid and keep their reward.
 -- Days are UTC days (the database default, so the same boundary as claim_daily_bonus), pinned inside each
 -- function so a client-chosen session time zone cannot shift the daily limits.
 
@@ -18,10 +20,10 @@ $$;
 CREATE TABLE IF NOT EXISTS praises (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  body TEXT NOT NULL CHECK (char_length(body) BETWEEN 40 AND 280),
+  body TEXT NOT NULL CONSTRAINT praises_body_length CHECK (char_length(body) BETWEEN 1 AND 280),
   normalized TEXT NOT NULL,
   fingerprint TEXT NOT NULL,
-  reward INTEGER NOT NULL DEFAULT 100 CHECK (reward >= 0),
+  reward INTEGER NOT NULL DEFAULT 300 CHECK (reward >= 0),
   praise_day DATE NOT NULL DEFAULT CURRENT_DATE,
   verdict TEXT CHECK (verdict IN ('crowned', 'scorned')),
   verdict_note TEXT CHECK (verdict_note IS NULL OR char_length(verdict_note) BETWEEN 1 AND 140),
@@ -31,7 +33,30 @@ CREATE TABLE IF NOT EXISTS praises (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT praises_verdict_complete CHECK ((verdict IS NULL) = (judged_at IS NULL))
 );
-ALTER TABLE praises ALTER COLUMN reward SET DEFAULT 100;
+ALTER TABLE praises ALTER COLUMN reward SET DEFAULT 300;
+
+-- The first version created the length rule inline (40 to 280, auto-named). The table only bounds the body now,
+-- loosely enough for both versions; praise_rule_violation enforces the live limits.
+DO $$
+DECLARE
+  v_name TEXT;
+BEGIN
+  FOR v_name IN
+    SELECT conname FROM pg_constraint
+    WHERE conrelid = 'public.praises'::regclass
+      AND contype = 'c'
+      AND conname <> 'praises_body_length'
+      AND pg_get_constraintdef(oid) ~ 'char_length\(body\)'
+  LOOP
+    EXECUTE format('ALTER TABLE public.praises DROP CONSTRAINT %I', v_name);
+  END LOOP;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'public.praises'::regclass AND conname = 'praises_body_length'
+  ) THEN
+    ALTER TABLE public.praises ADD CONSTRAINT praises_body_length CHECK (char_length(body) BETWEEN 1 AND 280);
+  END IF;
+END
+$$;
 
 -- One praise per user per day (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
 CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_day ON praises (user_id, praise_day);
@@ -45,6 +70,13 @@ ALTER TABLE praises ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "praises_read" ON praises;
 CREATE POLICY "praises_read" ON praises FOR SELECT USING (true);
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON praises FROM anon, authenticated;
+
+-- The live rules, reported by praise_state() so the app can tell this version from the previous one
+-- (lib/praise/rules.ts: PRAISE_RULES, LEGACY_PRAISE_RULES, praiseRulesFrom).
+CREATE OR REPLACE FUNCTION praise_rules() RETURNS JSONB
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT jsonb_build_object('rules_version', 2, 'reward', 300, 'min_length', 8, 'max_length', 25, 'min_words', 2)
+$$;
 
 -- Text rules. Mirrored in lib/praise/rules.ts, which only gives early feedback: these functions decide.
 CREATE OR REPLACE FUNCTION praise_clean(p_body TEXT) RETURNS TEXT
@@ -75,14 +107,135 @@ LANGUAGE sql IMMUTABLE AS $$
     '[^a-z]+', ' ', 'g'))
 $$;
 
+-- A word holds at least two letters or digits: "w", "x" or "#1" alone do not count.
 CREATE OR REPLACE FUNCTION praise_word_count(p_clean TEXT) RETURNS INTEGER
 LANGUAGE sql IMMUTABLE AS $$
   SELECT count(*)::INTEGER
   FROM regexp_split_to_table(public.praise_deaccent(p_clean), '[ \n]+') AS t(token)
-  WHERE token ~ '[a-z0-9]'
+  WHERE char_length(regexp_replace(token, '[^a-z0-9]', '', 'g')) >= 2
 $$;
 
--- The inspiration prompts shown in the composer (lib/praise/prompts.ts). Copying one is not a praise.
+-- The insult filter, mirrored line for line in lib/praise/insults.ts (INSULT_STEMS, findInsult): keep both lists
+-- and both algorithms identical. Each stem starts with its mode:
+--   =  whole token        short or common stems (mok, tg, pd, nul, con)
+--   ^  token prefix       short stems that only take endings (nik, zb, wld, w9, 5to, kelb)
+--   ~  compact substring  long, distinctive stems that survive any split (charmouta, 9ahba, putain)
+-- Repeated letters collapse before matching, so stems are written collapsed: conard for connard, nob for noob
+-- (a whole token, so noble passes).
+CREATE OR REPLACE FUNCTION praise_insult_stems() RETURNS TEXT[]
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT ARRAY[
+    -- Darija
+    '^zaml', '^zamel', '^zamal', '^zmel', '^zml', '^zwaml', '^zwamel',
+    '^5to', '^khto', '^5tk', '^khtk', '^khtek', '^5tek', '^o5t', '^okht', '=5tak', '=khtak',
+    '^w9', '^wqi7', '^wqa7',
+    '^wld', '^wlid', '^wlad',
+    '~9ahba', '~qahba', '~kahba', '~9a7ba', '~qa7ba', '~ka7ba', '~9e7ba', '~9hba', '~q7ba', '~9hab', '~q7ab', '~qhab', '^3ahir',
+    '^zb', '^zebi', '=zeb', '^zob',
+    '^nik', '^nayk', '^nayek', '^n7wi', '^nhwi', '^tnyak', '^tnayk', '^tnik', '^mnyo', '^manyo', '^t7wa',
+    '~9awed', '~qawed', '~9awd', '~qawd', '~9wd', '=qwd', '^9wad', '^qwad', '^m9wd',
+    '=mok', '=tmok', '=mk', '=mouk',
+    '^zok', '=zk',
+    '^7mar', '^hmar', '^7mir', '^hmir', '^7imar', '^himar',
+    '^kelb', '^klb', '^kalb', '^kleb', '^klab',
+    '^bghel', '^bghl', '^bghal', '^b8el',
+    '~9lawi', '~qlawi', '^klawi', '^9lwa', '^qlwa',
+    '^terma', '^tirma',
+    '=5ra', '=khra', '=khara', '=5ara', '^5rya', '^khrya', '^5raw', '^khraw',
+    '^tfou', '=tfo', '=tfu',
+    '~charmout', '~sharmout', '~chermout', '~charmot', '~sharmot', '~chermot', '~charmut', '~sharmut',
+    '^manyak', '^maniak',
+    '^khanz', '^5anz', '^7ayawan', '^hayawan', '^9erd', '^qerd', '^9ird', '^qird',
+    '^halouf', '^7alouf', '^hlouf', '^7louf', '^ghbi', '^ghabi', '^tbon', '^tboun',
+    '^mskhot', '^mskhout', '^msakh', '^mse5', '^msa5',
+    -- French
+    '^pute', '~putain', '=ptn', '^fdp', '^ntm', '^niqu', '^encul', '=con', '=cons', '=conne', '^conar', '^conas',
+    '^coner', '^salop', '^merd', '^emerd', '^batar', '^abrut', '^debil', '=tg', '~tagueule', '=pd', '=pede',
+    '=nul', '=nuls', '^nulos', '^nulard', '=cul', '^boufon', '^tocar', '^minabl', '^pouri', '=cassos', '^baltring',
+    '=teube', '=golmon', '^fiot', '^enfoir', '^ordur', '^raclur', '=chier', '=naze',
+    -- English
+    '~fuck', '^fuk', '^fck', '^fvck', '^shit', '^bulshit', '=sht', '^bitch', '^biatch', '^btch', '^ashol', '^dick',
+    '=nob', '=nobs', '=newb', '=nub', '^trash', '^idiot', '^stupid', '^loser', '^clown', '^dumb', '^moron', '^bastar',
+    '^cunt', '^wank', '=twat', '=bozo', '^suck', '^garbag', '^pathetic', '^feeder', '=inting', '^hardstuck', '^jerk',
+    '=ugly'
+  ]
+$$;
+
+-- The first insult stem found in the text, or NULL. Runs on the cleaned body, digits included (praise_normalize
+-- drops them). Two passes: the Darija one keeps 3, 5, 7 and 9 (letters in Arabizi) and reads 4 and @ as a, 0 as o,
+-- 1 as i and $ as s; the Latin one also reads 3 as e and 5 as s. Accents, compatibility forms (NFKD) and common
+-- Cyrillic and Greek look-alikes fold to latin letters first. Tokens are matched three ways: split on every symbol,
+-- glued across symbols (z.a.m.l, z-a-m-l) and runs of single letters glued back (z a m l). "nul" is a whole token
+-- only (nulle part, nullement pass) and never in the French "nul ne" (nobody).
+-- Known misses, by choice: Nike or Nikola trip nik, and kalbi (my heart, in some dialects) trips kalb.
+CREATE OR REPLACE FUNCTION praise_insult(p_text TEXT) RETURNS TEXT
+LANGUAGE plpgsql IMMUTABLE AS $$
+DECLARE
+  v_folded TEXT := lower(translate(
+    replace(replace(replace(replace(replace(
+      regexp_replace(normalize(coalesce(p_text, ''), NFKD), '[\u0300-\u036f]', '', 'g'),
+      chr(339), 'oe'), chr(338), 'oe'), chr(230), 'ae'), chr(198), 'ae'), chr(223), 'ss'),
+    'аеорсхуікмтвнѕјАЕОРСХУІКМТВНЅЈαεικνορτυχΑΕΙΚΝΟΡΤΥΧ',
+    'aeopcxyikmtbhsjaeopcxyikmtbhsjaeikvoptuxaeiknoptyx'));
+  v_pass TEXT;
+  v_split TEXT[];
+  v_tokens TEXT[];
+  v_token TEXT;
+  v_run TEXT;
+  v_compact TEXT;
+  v_entry TEXT;
+  v_stem TEXT;
+  v_hit BOOLEAN;
+BEGIN
+  FOREACH v_pass IN ARRAY ARRAY[translate(v_folded, '4@01$', 'aaois'), translate(v_folded, '4@01$35', 'aaoises')] LOOP
+    v_pass := regexp_replace(v_pass, '(^|[^a-z0-9])nul([^a-z0-9]+ne)(?![a-z0-9])', '\1\2', 'g');
+
+    v_split := ARRAY[]::TEXT[];
+    FOREACH v_token IN ARRAY regexp_split_to_array(v_pass, '[^a-z0-9]+') LOOP
+      IF v_token <> '' THEN
+        v_split := v_split || regexp_replace(v_token, '(.)\1+', '\1', 'g');
+      END IF;
+    END LOOP;
+
+    v_tokens := v_split;
+    FOREACH v_token IN ARRAY regexp_split_to_array(regexp_replace(v_pass, '[^a-z0-9\s]', '', 'g'), '\s+') LOOP
+      IF v_token <> '' THEN
+        v_tokens := v_tokens || regexp_replace(v_token, '(.)\1+', '\1', 'g');
+      END IF;
+    END LOOP;
+
+    v_run := '';
+    FOREACH v_token IN ARRAY v_split || ''::TEXT LOOP
+      IF char_length(v_token) = 1 THEN
+        v_run := v_run || v_token;
+      ELSE
+        IF char_length(v_run) > 1 THEN
+          v_tokens := v_tokens || regexp_replace(v_run, '(.)\1+', '\1', 'g');
+        END IF;
+        v_run := '';
+      END IF;
+    END LOOP;
+
+    v_compact := regexp_replace(regexp_replace(v_pass, '[^a-z0-9]', '', 'g'), '(.)\1+', '\1', 'g');
+
+    FOREACH v_entry IN ARRAY public.praise_insult_stems() LOOP
+      v_stem := substr(v_entry, 2);
+      v_hit := CASE left(v_entry, 1)
+        WHEN '=' THEN v_stem = ANY (v_tokens)
+        WHEN '^' THEN EXISTS (SELECT 1 FROM unnest(v_tokens) AS t WHERE left(t, char_length(v_stem)) = v_stem)
+        ELSE strpos(v_compact, v_stem) > 0
+      END;
+      IF v_hit THEN
+        RETURN v_stem;
+      END IF;
+    END LOOP;
+  END LOOP;
+  RETURN NULL;
+END;
+$$;
+
+-- The long-form inspiration prompts of rules version 1. The composer now offers words of worship, meant to be used
+-- as they are, so no rule checks against this list anymore. Kept for older callers.
 CREATE OR REPLACE FUNCTION praise_prompt_bodies() RETURNS TEXT[]
 LANGUAGE sql IMMUTABLE AS $$
   SELECT ARRAY[
@@ -118,51 +271,45 @@ LANGUAGE sql IMMUTABLE AS $$
 $$;
 
 -- Returns NULL when the cleaned praise passes every rule, otherwise the first violated rule.
+-- Short lines (rules version 2): the 8-word, 5-distinct-word and stray-letter rules are gone (they only stopped
+-- padding up to the old minimum), mash limits are tighter, and the repeat rule allows no word of 4+ letters twice
+-- and no word three times ("mon roi, mon GOAT" passes, "Legend Legend SLX" does not). Arabic script still counts
+-- as symbols.
 CREATE OR REPLACE FUNCTION praise_rule_violation(p_clean TEXT) RETURNS TEXT
 LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
+  v_rules JSONB := public.praise_rules();
   v_chars INTEGER := char_length(coalesce(p_clean, ''));
   v_lowered TEXT := public.praise_deaccent(p_clean);
   v_norm TEXT := public.praise_normalize(p_clean);
   v_compact TEXT;
-  v_total INTEGER;
-  v_distinct INTEGER;
   v_top INTEGER;
-  v_single INTEGER;
+  v_top_long INTEGER;
 BEGIN
-  IF v_chars < 40 THEN RETURN 'too_short'; END IF;
-  IF v_chars > 280 THEN RETURN 'too_long'; END IF;
-  IF public.praise_word_count(p_clean) < 8 THEN RETURN 'too_few_words'; END IF;
+  IF public.praise_insult(p_clean) IS NOT NULL THEN RETURN 'insult'; END IF;
+  IF v_chars < (v_rules->>'min_length')::INTEGER THEN RETURN 'too_short'; END IF;
+  IF v_chars > (v_rules->>'max_length')::INTEGER THEN RETURN 'too_long'; END IF;
+  IF public.praise_word_count(p_clean) < (v_rules->>'min_words')::INTEGER THEN RETURN 'too_few_words'; END IF;
   IF v_norm !~ '(^| )(salax|slx|chalaks|chklat|chklass|goblino)' THEN RETURN 'no_name'; END IF;
 
   IF v_norm ~ '(.)\1{5,}'
-    OR v_norm ~ '(.{2,3})\1{4,}'
+    OR v_norm ~ '(.{2,3})\1{3,}'
     OR v_norm ~ '(qwert|werty|ertyu|rtyui|tyuio|yuiop|asdfg|sdfgh|dfghj|fghjk|ghjkl|hjklm|zxcvb|xcvbn|cvbnm|azert|zerty|qsdfg|wxcvb|trewq|ytrew|uytre|iuytr|oiuyt|poiuy|gfdsa|hgfds|jhgfd|kjhgf|lkjhg|bvcxz|nbvcx|mnbvc)'
     OR v_norm ~ '[bcdfghjklmnpqrstvwxz]{6,}'
-    OR v_norm ~ '[a-z]{31,}'
+    OR v_norm ~ '[a-z]{20,}'
   THEN
     RETURN 'keyboard_mash';
   END IF;
 
-  -- Function words (a, y, le, un, the...) repeat in any real sentence, so only stray letters and
-  -- repeated words of 4+ letters count as filler.
-  SELECT
-    coalesce(sum(c), 0),
-    count(*) FILTER (WHERE length(w) > 1),
-    coalesce(max(c) FILTER (WHERE length(w) > 3), 0),
-    coalesce(sum(c) FILTER (WHERE length(w) = 1 AND w NOT IN ('a', 'i', 'o', 'y')), 0)
-  INTO v_total, v_distinct, v_top, v_single
+  SELECT coalesce(max(c), 0), coalesce(max(c) FILTER (WHERE length(w) > 3), 0)
+  INTO v_top, v_top_long
   FROM (
     SELECT w, count(*) AS c
     FROM unnest(string_to_array(v_norm, ' ')) AS w
     WHERE w <> ''
     GROUP BY w
   ) g;
-  IF v_distinct < 5
-    OR v_single * 10 > v_total * 3
-    OR (v_top > 3 AND v_top * 100 > 34 * v_total)
-    OR v_norm ~ '(^| )([a-z]+)( \2){3,}( |$)'
-  THEN
+  IF v_top_long > 1 OR v_top > 2 THEN
     RETURN 'repetitive';
   END IF;
 
@@ -171,18 +318,14 @@ BEGIN
     RETURN 'too_many_symbols';
   END IF;
 
-  IF EXISTS (
-    SELECT 1 FROM unnest(public.praise_prompt_bodies()) AS b
-    WHERE strpos(' ' || v_norm || ' ', ' ' || public.praise_normalize(b) || ' ') > 0
-  ) THEN
-    RETURN 'prompt_copy';
-  END IF;
-
   RETURN NULL;
 END;
 $$;
 
--- Jaccard similarity of the distinct words of two normalized praises.
+-- Jaccard similarity of the distinct words of two normalized praises. submit_praise refuses 0.8 and up, kept for
+-- short lines on purpose: with 4 distinct words or fewer, 0.8 is only reached by the same words in another order
+-- (or a 4-word line plus one word), so sharing his name and one word of worship with an earlier praise ("Salaxe
+-- GOAT" after "Salaxe the GOAT", 2/3) still passes. Exact repeats are caught by the fingerprint first.
 CREATE OR REPLACE FUNCTION praise_similarity(p_a TEXT, p_b TEXT) RETURNS NUMERIC
 LANGUAGE sql IMMUTABLE AS $$
   WITH a AS (SELECT DISTINCT w FROM unnest(string_to_array(p_a, ' ')) AS w WHERE w <> ''),
@@ -259,7 +402,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'too_similar', 'match_user_id', v_match);
   END IF;
 
-  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', 100); -- title effects: Last Loyalist, devotion honors
+  v_reward := vvv_title_scaled(v_uid, 'praise_bonus_pct', (praise_rules()->>'reward')::INTEGER); -- title effects: Last Loyalist, devotion honors
 
   BEGIN
     INSERT INTO praises (user_id, body, normalized, fingerprint, reward, praise_day)
@@ -405,7 +548,7 @@ LANGUAGE sql STABLE SET search_path = public SET timezone = 'UTC' AS $$
         AND reason IN ('kiss_the_hand', 'sing_his_praises')
         AND reference_id IS NULL
     )
-  )
+  ) || praise_rules()
 $$;
 
 REVOKE EXECUTE ON FUNCTION submit_praise(TEXT) FROM PUBLIC, anon;

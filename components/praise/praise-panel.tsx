@@ -23,6 +23,7 @@ import {
 } from "@/components/praise/panel-sections"
 import { useNow } from "@/components/praise/use-now"
 import { praiseKeys, usePraiseAuth, usePraiseLiveToasts, usePraiseState } from "@/hooks/use-praise"
+import { PRAISE_REWARD } from "@/lib/praise/rules"
 import type { HallView } from "@/lib/praise/types"
 import { COPY, PANEL_KICKERS, seededPick } from "@/lib/praise/voice"
 
@@ -66,7 +67,7 @@ export function PraisePanel() {
         {!me ? (
           <LoggedOutSection onLogin={auth.signIn} />
         ) : me.canSing ? (
-          <ReadySection me={me} onCompose={() => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true })} />
+          <ReadySection me={me} rules={state.rules} onCompose={() => setComposer({ seed: Math.floor(Math.random() * 1_000_000), open: true })} />
         ) : (
           <CooldownSection
             me={me}
@@ -101,7 +102,7 @@ export function PraisePanel() {
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="border-[var(--color-gold)]/40 text-[var(--color-gold)]">
-              {COPY.rewardBadge}
+              {COPY.rewardBadge(state?.reward ?? PRAISE_REWARD)}
             </Badge>
           </CardAction>
           <CardDescription className="text-xs leading-relaxed">

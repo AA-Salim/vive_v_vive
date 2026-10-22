@@ -46,6 +46,12 @@ export interface PraiseStateRow {
   my_crowned: number
   my_favor: number
   my_legacy: number
+  // Missing before the version 2 migration: see praiseRulesFrom.
+  rules_version?: number
+  reward?: number
+  min_length?: number
+  max_length?: number
+  min_words?: number
 }
 
 export type SubmitRpcResult =
@@ -123,6 +129,7 @@ const VIOLATIONS: readonly PraiseViolation[] = [
   "too_long",
   "too_few_words",
   "no_name",
+  "insult",
   "keyboard_mash",
   "repetitive",
   "too_many_symbols",

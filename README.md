@@ -119,7 +119,7 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 | Win a game | +10 |
 | Play a game (loss) | +2 |
 | Daily stipend (open the app) | +5 per day |
-| **Sing His Praises** (solve the King's Riddle, then write a praise for Salaxe) | **+100 per day** |
+| **Sing His Praises** (solve the King's Riddle, then sing Salaxe one short line) | **+300 per day** |
 | Sharp Mind: the King's Riddle solved on the first try | +20 (paid with the praise) |
 | Salaxe crowns your praise | +50 |
 | Voted MVP by the Tribunal | +15 |
@@ -137,9 +137,14 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 
 ### Sing His Praises
 
-Once a day, write a praise for Salaxe and get **100 points**. The rules: at least 8 words, between 40 and 280
-characters, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass, Goblino...), and write something original (no copy
-paste). Salaxe can **Crown** a praise (+50 to the author) or **Scorn** it in public. The app reminds you once a day
+Once a day, sing Salaxe one short line of worship and get **300 points** (375 with Last Loyalist, at most +40% with
+titles). The rules: **8 to 25 characters**, at least 2 words, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass,
+Goblino...), no keyboard mash or repeated words, and a line nobody sang before. Tap **words of worship** to build it:
+Eternal King, GOAT, Lion of the Rift, Mon Roi, Sa Majeste, Sidna, Lmalik, Sba3, Ma3lem, Tbarkellah...
+
+**Insults are banned.** Darija, French or English, in Arabizi with digits, with accents, repeated letters (zaaaml),
+letters split by dots, dashes or spaces (z.a.m.l) or leetspeak (n1k, $alope): the King hears it and refuses the
+line. Salaxe can **Crown** a praise (+50 to the author) or **Scorn** it in public. The app reminds you once a day
 at most, never during a game.
 
 Before you can write, **the King tests your wit** with one small riddle (free):
@@ -148,7 +153,7 @@ Before you can write, **the King tests your wit** with one small riddle (free):
 - **The Weathervane**: a row of arrows turning by a rule. Pick where the next one points.
 - **The Royal Plumbing**: tap pipes to turn them until the water flows from the entry to the crown.
 
-Solve it on the **first try** for the **Sharp Mind** bonus: **+20**, paid with your praise (120 instead of 100). A
+Solve it on the **first try** for the **Sharp Mind** bonus: **+20**, paid with your praise (320 instead of 300). A
 wrong answer shows the solution and the King poses a new riddle, but the bonus is gone. Up to 10 riddles a day:
 miss them all and there is no praise until midnight UTC.
 
@@ -166,14 +171,14 @@ bigger praise...) plus a small **perk** after each game. Open a title's bubble t
 | Rare | 600 (6 hand kisses) | bronze (3 slots) |
 | Common | 300 (3 hand kisses) | basic (4 slots) |
 
-A hand kiss is one written praise (100 points).
+A hand kiss is 100 points, what one praise paid when the prices were set. Praise now pays 300; prices stayed.
 
 | Title | Tier | Effect, the moment you act |
 | --- | --- | --- |
 | The Usurper | Legendary | +1 use of every limited Royal Decree per game |
 | Kingslayer | Legendary | decrees aimed at Salaxe or his team cost 20% less |
 | Copium Dealer | Legendary | Guardian Angel covers 75% of the stake instead of 60% |
-| Last Loyalist | Epic | written praise pays +25% |
+| Last Loyalist | Epic | praise pays +25% (375 instead of 300) |
 | The One Who Stopped Kneeling | Epic | your champion cannot be exiled |
 | Delayed Victory Specialist | Epic | a lost duel gives back 20% of the stake |
 | Crown Thief | Rare | early-conviction bet window lasts 90 s instead of 60 s |
@@ -184,19 +189,20 @@ A hand kiss is one written praise (100 points).
 | Main Character (Self-Diagnosed) | Rare | the Herald announces every bet, decree and duel you make |
 | The 0/8 Powerspike | Rare | all-in bonus is +25% of the profit instead of +15% |
 | Still Kneeling | Common | daily stipend doubled |
-| Throne Polisher | Common | Royal Favor pays +50% |
+| Throne Polisher | Common | Royal Favor pays +50% (75 instead of 50) |
 | Court Jester (curse) | Legendary | bets capped at 50 points per game |
 | The Crawling One (curse) | Epic | no Guardian Angel insurance |
 | Boot Licker (curse) | Rare | your decrees cost 20% more |
 | Royal Carpet (curse) | Rare | decrees aimed at you cost others 20% less |
 | Salaxe's Emotional Support (curse) | Common | your daily stipend goes to Salaxe |
 
-The decree and devotion milestone titles also stack small bonuses (decrees -3/-5/-7%, praise +5/+5/+10%).
+The decree and devotion milestone titles also stack small bonuses (decrees -3/-5/-7%, praise +5/+5/+10%, so
++15/+15/+30 on a 300-point praise).
 
 - **Loadout**: wear up to 9 titles at once and build combos: 2 super rare slots (Legendary or Epic), 3 bronze slots
   (Rare) and 4 basic slots (Common). Two pairs never mix (Copium Dealer and The Holdout, El Goblino Pequeno and
   Delayed Victory Specialist), and rebels and loyalists cannot share the super rare slots. Every effect has a cap
-  (decree discounts stop at 30% off, praise at +40%, coverage at 75%), and all your post-game perks together pay at
+  (decree discounts stop at 30% off, praise at +40% or 420 points, coverage at 75%), and all your post-game perks together pay at
   most 60 points a game. Your loadout is public: friends see your build on your profile ("See their strategy").
 - **Curses**: mockery titles (Court Jester, Boot Licker...) are bought for someone else. They hurt the wearer for 8
   games, take no slot and pay the person who bought them. The victim can buy back their dignity for exactly the

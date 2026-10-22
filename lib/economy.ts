@@ -4,7 +4,7 @@ import { BOARD_DECREES, WAGER_BASE_MULTIPLIER, WAGER_DEFIANCE_STEP, WAGER_MAX_DE
 import { DUEL_RULES } from "@/lib/duels/rules"
 import { FREE, pts, ptsRange, type HelpEntry } from "@/lib/help"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
-import { CROWNS_PER_DAY, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { CROWNS_PER_DAY, PRAISE_MAX_CHARS, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { reasonLabel, reasonMeta, type ReasonGroup } from "@/lib/reasons"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
@@ -141,10 +141,10 @@ export function economyEntries(ctx: EconomyContext = {}): EconomyEntry[] {
       featured: true,
       help: {
         title: "Sing His Praises",
-        does: "Write one real sentence of praise for Salaxe in the match room. The biggest free payout in the kingdom.",
+        does: "Solve the King's Riddle, then sing Salaxe one short line of worship in the match room. The biggest free payout in the kingdom.",
         cost: FREE,
         reward: `${pts(PRAISE_REWARD)} a day, plus ${pts(ROYAL_FAVOR)} if he crowns it`,
-        limits: "One a day. It must name him and be original: no mash, no copies.",
+        limits: `One a day, ${PRAISE_MAX_CHARS} characters at most. It must name him and be original: no insults, no mash, no copies.`,
       },
     },
     {

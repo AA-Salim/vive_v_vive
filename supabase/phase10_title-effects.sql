@@ -8,7 +8,7 @@
 --
 -- Mirrored in TypeScript, keep both in lockstep:
 --   lib/titles/effects.ts   effect keys, ranges, the per-title table and every formula
---   lib/titles/pricing.ts   price tiers: Legendary 15, Epic 10, Rare 6, Common 3 written praises (100 points each)
+--   lib/titles/pricing.ts   price tiers: Legendary 15, Epic 10, Rare 6, Common 3 hand kisses (100 points each)
 --   lib/titles/loadout.ts   slots (2 super rare, 3 rare, 4 common) and the conflicting pairs
 --   lib/titles/catalog.ts   honor tiers (act awards Legendary, the last title of a milestone group Rare, the rest Common)
 --
@@ -276,7 +276,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   )
 $$;
 
--- Written praises per tier, times the 100 points one praise pays (PRAISE_REWARD, submit_praise).
+-- Hand kisses per tier, times 100 points (HAND_KISS in lib/titles/pricing.ts). Praise pays 300 now; prices stayed.
 CREATE OR REPLACE FUNCTION vvv_title_tier_price(p_tier TEXT) RETURNS INTEGER
 LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp AS $$
   SELECT 100 * CASE p_tier WHEN 'legendary' THEN 15 WHEN 'epic' THEN 10 WHEN 'rare' THEN 6 ELSE 3 END

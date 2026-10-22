@@ -15,13 +15,13 @@ import {
 
 const NAMES = SALAXE_NAMES.slice(0, 4).join(", ")
 
-const WRITING_RULES = `${PRAISE_MIN_WORDS}+ words, ${PRAISE_MIN_CHARS} to ${PRAISE_MAX_CHARS} characters, and it must name him (${NAMES}...). No keyboard mash, filler, copied prompts or songs already in the Hall.`
+const WRITING_RULES = `One short line: ${PRAISE_MIN_CHARS} to ${PRAISE_MAX_CHARS} characters, ${PRAISE_MIN_WORDS}+ words, and it must name him (${NAMES}...). Insults are banned, in Darija, French or English, however you spell them. No keyboard mash, repeated words or lines already in the Hall.`
 
 const SHARP_MIND = `${pts(RIDDLE_FIRST_TRY_BONUS)} more (Sharp Mind) if you solved the King's Riddle on the first try`
 
 export const PRAISE_HELP: HelpEntry = {
   title: "Sing His Praises",
-  does: "Once a day, solve the King's Riddle, then write the exiled king a few kind words and the treasury pays you. Salaxe reads every one and may crown the best or scorn the worst, in public.",
+  does: "Once a day, solve the King's Riddle first, then sing the exiled king one short line of worship and the treasury pays you. Salaxe reads every one and may crown the best or scorn the worst, in public.",
   cost: FREE,
   reward: `${pts(PRAISE_REWARD)} per praise, ${SHARP_MIND}, plus ${pts(ROYAL_FAVOR)} of Royal Favor if Salaxe crowns it.`,
   limits: `One praise per day, resets at midnight UTC. ${WRITING_RULES}`,
@@ -29,7 +29,7 @@ export const PRAISE_HELP: HelpEntry = {
 
 export const COMPOSE_HELP: HelpEntry = {
   title: "Compose a praise",
-  does: "Step 2 of 2, after the King's Riddle. Your praise is checked as you type, then sealed into the Hall of Praise for the whole court to read. Once sung, it cannot be edited.",
+  does: "Step 2 of 2, after the King's Riddle. Write one short line or tap words of worship (Sidna, Eternal King, Mon Roi...). It is checked as you type, then sealed into the Hall of Praise for the whole court to read. Once sung, it cannot be edited.",
   cost: FREE,
   reward: `${pts(PRAISE_REWARD)} the moment it is accepted, ${SHARP_MIND}. A crown from Salaxe adds ${pts(ROYAL_FAVOR)}.`,
   limits: `One a day. ${WRITING_RULES}`,

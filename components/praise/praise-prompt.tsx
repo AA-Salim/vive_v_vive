@@ -11,7 +11,9 @@ import { useAuthUser } from "@/hooks/use-auth"
 import { usePraiseState } from "@/hooks/use-praise"
 import { useSession } from "@/hooks/use-session"
 import { TIMED_STATUSES } from "@/lib/live/events"
+import { WORSHIP_WORDS } from "@/lib/praise/prompts"
 import { PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS } from "@/lib/praise/rules"
+import { seededPick } from "@/lib/praise/voice"
 
 const SHOW_AFTER_MS = 75_000
 const MUTE_MS = 7 * 24 * 60 * 60 * 1000
@@ -34,6 +36,11 @@ function writeStorage(key: string, value: string) {
 
 const isMuted = () => Number(readStorage(MUTE_KEY) ?? 0) > Date.now()
 
+function sampleWords(seed: string): string[] {
+  const first = WORSHIP_WORDS.indexOf(seededPick(WORSHIP_WORDS, seed))
+  return [0, 7, 15].map((step) => WORSHIP_WORDS[(first + step) % WORSHIP_WORDS.length])
+}
+
 // A once-a-day nudge to sing for Salaxe: only when the praise is available and not sung yet, never during a
 // timed game phase, never over another dialog or broadcast, and silenced for a week on request.
 export function PraisePrompt() {
@@ -49,8 +56,9 @@ export function PraisePrompt() {
   const state = praise.data?.state
   const ready = !!state?.available && !!state.me?.canSing
   const today = state?.available ? state.today : null
-  const terms = usePraiseTerms()
-  const reward = state?.available && state.reward !== PRAISE_REWARD ? state.reward : terms.reward
+  const terms = usePraiseTerms(state?.available ? state.reward : PRAISE_REWARD)
+  const reward = terms.reward
+  const samples = sampleWords(today ?? "")
   const gameBusy = !!session && TIMED_STATUSES.includes(session.status)
 
   useEffect(() => {
@@ -107,8 +115,11 @@ export function PraisePrompt() {
               <div className="min-w-0 space-y-1">
                 <p className="font-display text-base text-[var(--color-gold-light)]">Salaxe awaits his song</p>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  Solve his riddle, then write one praise a day: +{reward}, +{RIDDLE_FIRST_TRY_BONUS} more for a first-try
-                  solve. The exiled King is pretending not to check his inbox.
+                  Solve his riddle, then sing him one short line a day: +{reward}, +{RIDDLE_FIRST_TRY_BONUS} more for a
+                  first-try solve. The exiled King is pretending not to check his inbox.
+                </p>
+                <p className="text-xs text-[var(--color-gold-light)]/90">
+                  Try: <span className="font-serif italic">{samples.join(", ")}</span>
                 </p>
                 <TitleBonusChips notes={terms.rewardNotes} capped={terms.rewardCapped} />
               </div>

@@ -12,8 +12,8 @@ import { MarketSwitch } from "@/components/prophecy/market-switch"
 import { ComingSoon, PanelError, PanelShell, PanelSkeleton } from "@/components/prophecy/panel-states"
 import { ProphecyBuilder } from "@/components/prophecy/prophecy-builder"
 import { ProphecyLedger } from "@/components/prophecy/prophecy-ledger"
+import { PROPHECY_HELP } from "@/components/prophecy/help"
 import { useProphecyBoard, useSealProphecy, type ClockedBoard, type SealInput } from "@/components/prophecy/queries"
-import { RulesPopover } from "@/components/prophecy/rules-popover"
 import { SealedProphecy } from "@/components/prophecy/sealed-prophecy"
 import { useSettleWhenDue } from "@/components/prophecy/use-settle-when-due"
 import { sealLabel } from "@/lib/prophecy/lines"
@@ -84,7 +84,7 @@ export function ProphecyBoardView({ sessionId, sealingAllowed }: { sessionId: st
 
   if (!board.enabled) {
     return (
-      <ComingSoon icon={ScrollTextIcon} title={TITLE}>
+      <ComingSoon icon={ScrollTextIcon} title={TITLE} help={PROPHECY_HELP}>
         <p>
           MVP and Inter prophecies unlock once the royal scribes finish the paperwork. Lane Calls are retired: the lanes
           were visible during betting, everyone hit, and the treasury wept.
@@ -127,15 +127,13 @@ export function ProphecyBoardView({ sessionId, sealingAllowed }: { sessionId: st
         icon={ScrollTextIcon}
         title={TITLE}
         subtitle={SUBTITLES[phase]}
+        help={PROPHECY_HELP}
         aside={
-          <div className="flex items-center gap-1">
-            <span className="flex h-8 items-center gap-1 rounded-full bg-[var(--color-gold)]/10 px-2.5 text-xs font-semibold text-[var(--color-gold)]">
-              <CoinsIcon className="size-3.5" aria-hidden />
-              <span className="sr-only">Total pot</span>
-              <AnimatedNumber value={pot} />
-            </span>
-            <RulesPopover />
-          </div>
+          <span className="flex h-8 items-center gap-1 rounded-full bg-[var(--color-gold)]/10 px-2.5 text-xs font-semibold text-[var(--color-gold)]">
+            <CoinsIcon className="size-3.5" aria-hidden />
+            <span className="sr-only">Total pot</span>
+            <AnimatedNumber value={pot} />
+          </span>
         }
       >
         <AnimatePresence mode="wait" initial={false}>

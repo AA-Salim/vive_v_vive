@@ -1,4 +1,12 @@
-import { deaccent, PRAISE_MAX_CHARS, PRAISE_MIN_CHARS, PRAISE_MIN_WORDS, PRAISE_REWARD, VERDICT_NOTE_MAX } from "@/lib/praise/rules"
+import {
+  deaccent,
+  PRAISE_MAX_CHARS,
+  PRAISE_MIN_CHARS,
+  PRAISE_MIN_WORDS,
+  PRAISE_REWARD,
+  ROYAL_FAVOR,
+  VERDICT_NOTE_MAX,
+} from "@/lib/praise/rules"
 import type { JudgeErrorCode, SubmitErrorCode } from "@/lib/praise/types"
 
 export function seededPick<T>(list: readonly T[], seed: string): T {
@@ -157,7 +165,7 @@ export const COPY = {
   singing: "Sealing the scroll...",
   shortcut: "Ctrl + Enter to sing",
   successTitle: "The King has heard you",
-  successHint: "Salaxe may still crown it (+50 Royal Favor) or scorn it in public. Watch the Hall.",
+  successHint: `Salaxe may still crown it (+${ROYAL_FAVOR} Royal Favor) or scorn it in public. Watch the Hall.`,
   todayLabel: "Your song for today",
   nextSong: "Next song in",
   hallButton: "Open the Hall of Praise",

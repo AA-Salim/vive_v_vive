@@ -5,6 +5,7 @@ import { GavelIcon, LoaderCircleIcon } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { BallotBox } from "@/components/prophecy/ballot-box"
 import { CountdownChip, TimeBar } from "@/components/prophecy/countdown-chip"
+import { TRIBUNAL_HELP } from "@/components/prophecy/help"
 import { ComingSoon, PanelError, PanelShell, PanelSkeleton } from "@/components/prophecy/panel-states"
 import { useTribunal } from "@/components/prophecy/queries"
 import { useNow } from "@/components/prophecy/use-now"
@@ -44,7 +45,7 @@ export function Tribunal({ sessionId }: { sessionId: string }) {
   }
   if (!state.enabled) {
     return (
-      <ComingSoon icon={GavelIcon} title={TITLE}>
+      <ComingSoon icon={GavelIcon} title={TITLE} help={TRIBUNAL_HELP}>
         After every game the court will crown an MVP and roast an Inter, and settle the prophecies riding on them.
         The bailiff is still nailing the benches together.
       </ComingSoon>
@@ -52,7 +53,7 @@ export function Tribunal({ sessionId }: { sessionId: string }) {
   }
   if (!vote) {
     return (
-      <PanelShell icon={GavelIcon} title={TITLE} subtitle="The court never convened for this game.">
+      <PanelShell icon={GavelIcon} title={TITLE} help={TRIBUNAL_HELP} subtitle="The court never convened for this game.">
         <p className="text-xs leading-relaxed text-muted-foreground">
           The ballots closed before the bailiff found the keys: nobody is crowned, nobody is roasted, and every prophecy
           stake goes home.
@@ -79,6 +80,7 @@ export function Tribunal({ sessionId }: { sessionId: string }) {
       <PanelShell
         icon={GavelIcon}
         title={TITLE}
+        help={TRIBUNAL_HELP}
         subtitle={subtitle}
         aside={
           phase === "open" ? (

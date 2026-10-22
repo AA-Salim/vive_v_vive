@@ -4,9 +4,11 @@ import { useMemo, useState } from "react"
 import { LoaderCircleIcon, SwordsIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 import { BannerPicker } from "@/components/duels/banner-picker"
+import { challengeHelp } from "@/components/duels/help"
 import { RivalPicker, type RivalChoice } from "@/components/duels/rival-picker"
 import { StakeField } from "@/components/duels/stake-field"
 import { useCreateDuel } from "@/components/duels/use-duel-mutations"
@@ -154,9 +156,12 @@ function ChallengeForm({ session, duels, me, mySide, balance, gatesOpen, onDone 
           <SwordsIcon className="size-[18px]" aria-hidden />
           {DUEL_COPY.cta}
         </SheetTitle>
-        <SheetDescription className="text-xs leading-relaxed">
-          Name a rival, raise a banner, set the price. Your stake is held until someone answers.
-        </SheetDescription>
+        <div className="flex items-start gap-2">
+          <SheetDescription className="text-xs leading-relaxed">
+            Name a rival, raise a banner, set the price. Your stake is held until someone answers.
+          </SheetDescription>
+          <InfoTip help={challengeHelp(valid ? stake : null)} side="bottom" align="end" />
+        </div>
         <SheetClose
           render={<Button variant="ghost" size="icon" className="absolute top-3 right-3 size-10 rounded-full" />}
         >

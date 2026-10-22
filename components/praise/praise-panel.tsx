@@ -6,9 +6,11 @@ import { MotionConfig } from "motion/react"
 import { CrownIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ComposerDialog } from "@/components/praise/composer-dialog"
 import { HallSheet } from "@/components/praise/hall-sheet"
+import { PRAISE_HELP } from "@/components/praise/help"
 import {
   CooldownSection,
   CourtSection,
@@ -90,11 +92,12 @@ export function PraisePanel() {
     <MotionConfig reducedMotion="user">
       <Card className="relative gap-3 ring-[var(--color-gold)]/25 before:pointer-events-none before:absolute before:inset-x-8 before:top-0 before:h-px before:bg-gradient-to-r before:from-transparent before:via-[var(--color-gold)]/70 before:to-transparent">
         <CardHeader className="gap-1">
-          <CardTitle>
+          <CardTitle className="flex min-w-0 items-center gap-1.5">
             <h2 className="flex items-center gap-2 font-display text-base tracking-wide text-[var(--color-gold)]">
               <CrownIcon className="size-4 shrink-0" aria-hidden />
               {COPY.title}
             </h2>
+            <InfoTip help={PRAISE_HELP} side="bottom" align="start" />
           </CardTitle>
           <CardAction>
             <Badge variant="outline" className="border-[var(--color-gold)]/40 text-[var(--color-gold)]">

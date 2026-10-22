@@ -5,6 +5,8 @@ import { useQueryClient } from "@tanstack/react-query"
 import { ScrollTextIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
+import { COMPOSE_HELP } from "@/components/praise/help"
 import { PraiseComposer } from "@/components/praise/praise-composer"
 import { PraiseSuccess } from "@/components/praise/praise-success"
 import { useSubmitPraise } from "@/hooks/use-praise"
@@ -70,9 +72,12 @@ export function ComposerDialog({ open, onOpenChange, seed, userId, onOpenHall }:
                 <ScrollTextIcon className="size-3.5" aria-hidden />
                 Royal scroll
               </p>
-              <DialogTitle className="font-display text-xl leading-tight text-[var(--color-gold)]">
-                {COPY.composerTitle}
-              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="font-display text-xl leading-tight text-[var(--color-gold)]">
+                  {COPY.composerTitle}
+                </DialogTitle>
+                <InfoTip help={COMPOSE_HELP} side="bottom" align="start" />
+              </div>
               <DialogDescription className="text-xs leading-relaxed">
                 {intro} One a day, {PRAISE_REWARD} points. He may crown the best one (+{ROYAL_FAVOR}).
               </DialogDescription>

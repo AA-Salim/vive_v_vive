@@ -11,13 +11,15 @@ import {
   ScrollTextIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AnimatedNumber } from "@/components/praise/animated-number"
+import { COMPOSE_HELP, VERDICT_HELP } from "@/components/praise/help"
 import { AuthorAvatar, PraiseQuote } from "@/components/praise/praise-card"
 import { PraiseCountdown } from "@/components/praise/praise-countdown"
 import { VerdictChip } from "@/components/praise/verdict-chip"
 import { formatRelative } from "@/lib/praise/format"
-import { PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { PRAISE_MIN_WORDS, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
 import type { PraiseCourt, PraiseMe, PraiseView } from "@/lib/praise/types"
 import { COOLDOWN_LINES, COPY, SELF_PRAISE_LINE, seededPick, verdictLine } from "@/lib/praise/voice"
 
@@ -82,18 +84,21 @@ export function LoggedOutSection({ onLogin }: { onLogin: () => void }) {
 export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () => void }) {
   return (
     <div className="space-y-2.5">
-      <Button
-        className="h-11 w-full justify-between gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20"
-        onClick={onCompose}
-      >
-        <span className="flex items-center gap-2">
-          <FeatherIcon aria-hidden />
-          {COPY.compose}
-        </span>
-        <span className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums">+{PRAISE_REWARD}</span>
-      </Button>
+      <div className="flex items-center gap-2.5">
+        <Button
+          className="h-11 min-w-0 flex-1 justify-between gap-2 text-[15px] font-semibold shadow-lg shadow-primary/20"
+          onClick={onCompose}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <FeatherIcon aria-hidden />
+            <span className="truncate">{COPY.compose}</span>
+          </span>
+          <span className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums">+{PRAISE_REWARD}</span>
+        </Button>
+        <InfoTip help={COMPOSE_HELP} side="top" align="end" />
+      </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        One written praise a day: 8+ words, name him, mean it. The best ones get crowned for +{ROYAL_FAVOR}.
+        One written praise a day: {PRAISE_MIN_WORDS}+ words, name him, mean it. The best ones get crowned for +{ROYAL_FAVOR}.
       </p>
       {me.total > 0 && (
         <p className="text-[11px] text-muted-foreground">
@@ -161,10 +166,13 @@ export function CooldownSection({ me, today, resetsAt, clockOffset, salaxeUserId
 export function CourtSection({ court, onHoldCourt }: { court: PraiseCourt; onHoldCourt: () => void }) {
   return (
     <div className="rounded-lg border border-[var(--color-gold)]/30 bg-[var(--color-gold)]/5 p-3">
-      <p className="flex items-center gap-2 font-display text-sm text-[var(--color-gold)]">
-        <GavelIcon className="size-4" aria-hidden />
-        {COPY.courtTitle}
-      </p>
+      <div className="flex items-center gap-1.5">
+        <p className="flex items-center gap-2 font-display text-sm text-[var(--color-gold)]">
+          <GavelIcon className="size-4" aria-hidden />
+          {COPY.courtTitle}
+        </p>
+        <InfoTip help={VERDICT_HELP} side="bottom" align="start" />
+      </div>
       <p className="mt-1 text-xs text-muted-foreground">
         <AnimatedNumber value={court.pending} className="font-semibold text-foreground" />{" "}
         {court.pending === 1 ? "song awaits" : "songs await"} your verdict.{" "}

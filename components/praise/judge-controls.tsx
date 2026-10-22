@@ -3,8 +3,10 @@
 import { useEffect, useId, useRef, useState } from "react"
 import { CrownIcon, FlameIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { VERDICT_HELP } from "@/components/praise/help"
 import { ROYAL_FAVOR, VERDICT_NOTE_MAX } from "@/lib/praise/rules"
 import type { PraiseVerdict } from "@/lib/praise/types"
 
@@ -28,15 +30,18 @@ export function JudgeControls({ authorName, crownsLeft, pending, onJudge }: Judg
   if (!mode) {
     return (
       <div className="mt-3 space-y-1.5">
-        <div className="grid grid-cols-2 gap-2">
-          <Button className="h-10" disabled={pending || crownsLeft <= 0} onClick={() => setMode("crowned")}>
-            <CrownIcon aria-hidden />
-            Crown +{ROYAL_FAVOR}
-          </Button>
-          <Button variant="destructive" className="h-10" disabled={pending} onClick={() => setMode("scorned")}>
-            <FlameIcon aria-hidden />
-            Scorn
-          </Button>
+        <div className="flex items-center gap-2.5">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+            <Button className="h-10" disabled={pending || crownsLeft <= 0} onClick={() => setMode("crowned")}>
+              <CrownIcon aria-hidden />
+              Crown +{ROYAL_FAVOR}
+            </Button>
+            <Button variant="destructive" className="h-10" disabled={pending} onClick={() => setMode("scorned")}>
+              <FlameIcon aria-hidden />
+              Scorn
+            </Button>
+          </div>
+          <InfoTip help={VERDICT_HELP} side="top" align="end" />
         </div>
         {crownsLeft <= 0 && (
           <p className="text-[11px] text-muted-foreground">No crowns left today. Scorn remains free.</p>

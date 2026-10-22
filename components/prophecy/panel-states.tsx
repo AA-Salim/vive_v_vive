@@ -4,7 +4,9 @@ import { useId, type ReactNode } from "react"
 import { RefreshCwIcon, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface PanelShellProps {
@@ -12,12 +14,13 @@ interface PanelShellProps {
   title: string
   subtitle?: ReactNode
   aside?: ReactNode
+  help?: HelpEntry
   children?: ReactNode
   className?: string
 }
 
 // Shared frame: a thin gold crest across the top, a display-serif title, and an optional right-hand slot.
-export function PanelShell({ icon: Icon, title, subtitle, aside, children, className }: PanelShellProps) {
+export function PanelShell({ icon: Icon, title, subtitle, aside, help, children, className }: PanelShellProps) {
   const headingId = useId()
   return (
     <Card aria-labelledby={headingId} role="region" className={cn("relative gap-0 overflow-hidden py-0", className)}>
@@ -27,10 +30,13 @@ export function PanelShell({ icon: Icon, title, subtitle, aside, children, class
       />
       <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0">
-          <h3 id={headingId} className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]">
-            <Icon className="size-[18px] shrink-0" aria-hidden />
-            {title}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3 id={headingId} className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]">
+              <Icon className="size-[18px] shrink-0" aria-hidden />
+              {title}
+            </h3>
+            {help && <InfoTip help={help} side="bottom" align="start" />}
+          </div>
           {subtitle && <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{subtitle}</div>}
         </div>
         {aside && <div className="shrink-0">{aside}</div>}
@@ -80,9 +86,19 @@ export function PanelError({
   )
 }
 
-export function ComingSoon({ icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
+export function ComingSoon({
+  icon,
+  title,
+  help,
+  children,
+}: {
+  icon: LucideIcon
+  title: string
+  help?: HelpEntry
+  children: ReactNode
+}) {
   return (
-    <PanelShell icon={icon} title={title} subtitle="Coming with the next royal decree">
+    <PanelShell icon={icon} title={title} help={help} subtitle="Coming with the next royal decree">
       <div className="rounded-xl border border-dashed border-[var(--color-gold)]/25 bg-[var(--color-navy)]/50 px-4 py-5 text-sm leading-relaxed text-muted-foreground">
         {children}
       </div>

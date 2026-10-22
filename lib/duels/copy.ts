@@ -1,4 +1,4 @@
-import { DUEL_RULES, SIDE_NAME, otherSide } from "@/lib/duels/rules"
+import { SIDE_NAME, otherSide } from "@/lib/duels/rules"
 import type { DuelAction, DuelView } from "@/lib/duels/types"
 
 export const DUEL_COPY = {
@@ -26,18 +26,8 @@ export const DUEL_COPY = {
   awaitingKicker: "Awaiting an answer",
   verdictKicker: "Verdicts",
   lockedNote: "Unanswered gauntlets expire when the gates close. Every stake goes home.",
-  tithe: `The royal tithe: ${DUEL_RULES.taxPct}% of the winnings vanish into the exiled King's war chest. Nobody knows where it is. Neither does he.`,
   treason: "You fight for this banner. Betting against your own team is treason, and Salaxe keeps a notebook.",
 }
-
-export const DUEL_RULE_LINES = [
-  `Challenge a rival by name, or the whole court with an open gauntlet. Pick a banner and a stake from ${DUEL_RULES.minStake} to ${DUEL_RULES.maxStake}.`,
-  "Your stake is held the moment you throw the gauntlet. Whoever answers puts up the same amount on the other side.",
-  "Declined, withdrawn, or still unanswered when betting closes: every point goes home.",
-  `When the Nexus falls the victor takes the pot minus the royal tithe (${DUEL_RULES.taxPct}% of the winnings, burned).`,
-  "Players only fight for their own team. Betting against your own banner is treason.",
-  `One duel per pair per game, ${DUEL_RULES.maxPending} unanswered gauntlets at most. Canceled game: everyone is refunded.`,
-]
 
 const VICTORY_LINES = [
   "The steel was kind. The treasury, kinder.",

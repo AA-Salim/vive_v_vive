@@ -8,13 +8,23 @@ import { LoreText } from "@/components/lore/lore-text"
 import { useVisibleViewport } from "@/components/lore/use-visible-viewport"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
 import { useAct } from "@/hooks/use-act"
 import { useChronicle } from "@/hooks/use-chronicle"
 import { useSession } from "@/hooks/use-session"
 import { getActContent } from "@/lib/act-content"
+import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { TIMED_STATUSES } from "@/lib/live/events"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
 import { pick } from "@/lib/lore/seed"
+
+const STIPEND_HELP: HelpEntry = {
+  title: "The daily stipend",
+  does: "Salaxe feeds his subjects a small allowance on their first visit of the day. It lands in your purse by itself, nothing to click.",
+  cost: FREE,
+  reward: `${pts(DAILY_STIPEND)} a day.`,
+  limits: "Once per day for signed-in subjects, paid on your first visit. Resets at midnight UTC.",
+}
 
 interface SalaxeDailyDialogProps {
   open: boolean
@@ -84,16 +94,19 @@ export function SalaxeDailyDialog({ open, onDismiss, username }: SalaxeDailyDial
             ))}
           </DialogDescription>
 
-          <motion.div
-            initial={reduceMotion ? false : { y: 10, opacity: 0, scale: 0.9 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            transition={{ delay: reduceMotion ? 0 : 0.3, type: "spring", stiffness: 300, damping: 20 }}
-            className="relative mx-auto mt-5 inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)]/35 bg-[var(--color-gold)]/10 px-4 py-1.5"
-          >
-            <CoinsIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
-            <span className="font-display text-lg font-semibold text-[var(--color-gold)] tabular-nums">+{DAILY_STIPEND}</span>
-            <span className="text-xs text-[var(--color-gold-light)]/70">points to your purse</span>
-          </motion.div>
+          <div className="relative mt-5 flex items-center justify-center gap-2">
+            <motion.div
+              initial={reduceMotion ? false : { y: 10, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              transition={{ delay: reduceMotion ? 0 : 0.3, type: "spring", stiffness: 300, damping: 20 }}
+              className="inline-flex items-center gap-2 rounded-full border border-[var(--color-gold)]/35 bg-[var(--color-gold)]/10 px-4 py-1.5"
+            >
+              <CoinsIcon className="size-4 text-[var(--color-gold)]" aria-hidden />
+              <span className="font-display text-lg font-semibold text-[var(--color-gold)] tabular-nums">+{DAILY_STIPEND}</span>
+              <span className="text-xs text-[var(--color-gold-light)]/70">points to your purse</span>
+            </motion.div>
+            <InfoTip help={STIPEND_HELP} side="top" />
+          </div>
 
           {intel && (
             <div className="relative mt-5 rounded-lg border border-border bg-[var(--color-navy-light)]/70 px-3 py-2.5 text-left">

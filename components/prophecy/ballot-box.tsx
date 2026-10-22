@@ -4,10 +4,12 @@ import { useState } from "react"
 import { LogInIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarGroup, AvatarGroupCount, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnimatedNumber } from "@/components/prophecy/animated-number"
 import { CandidateGrid } from "@/components/prophecy/candidate-grid"
 import { TONES } from "@/components/prophecy/category-meta"
+import { BALLOT_HELP } from "@/components/prophecy/help"
 import { useCastVote, type ClockedTribunal } from "@/components/prophecy/queries"
 import { CATEGORIES, type Category } from "@/lib/prophecy/constants"
 import { CATEGORY_COPY } from "@/lib/prophecy/lines"
@@ -89,9 +91,12 @@ export function BallotBox({ state, onSignIn }: BallotBoxProps) {
         </div>
       )}
       {state.viewer && (
-        <p className="px-1 text-center text-[11px] text-muted-foreground">
-          Tap a player to vote. Changed your mind? Tap another one until the gavel falls. Ballots are public.
-        </p>
+        <div className="flex items-center justify-center gap-2 px-1">
+          <p className="text-center text-[11px] text-muted-foreground">
+            Tap a player to vote. Changed your mind? Tap another one until the gavel falls. Ballots are public.
+          </p>
+          <InfoTip help={BALLOT_HELP} side="top" align="end" />
+        </div>
       )}
     </Tabs>
   )

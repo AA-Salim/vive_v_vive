@@ -1,10 +1,14 @@
 "use client"
 
+import type { ReactNode } from "react"
 import { LoaderCircleIcon, LogInIcon, SwordsIcon, Undo2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
+import { acceptHelp, respondHelp, withdrawHelp } from "@/components/duels/help"
 import { takeBlock, takeBlockLabel } from "@/lib/duels/eligibility"
 import { SIDE_NAME, otherSide } from "@/lib/duels/rules"
 import type { DuelAction, DuelView } from "@/lib/duels/types"
+import type { HelpEntry } from "@/lib/help"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -36,15 +40,17 @@ export function DuelActions({ duel, viewer, rivals, pendingAction, busy, onActio
 
   if (mine) {
     return (
-      <Button
-        variant="ghost"
-        onClick={() => onAction(duel, "withdraw")}
-        disabled={busy}
-        className="h-10 w-full gap-1.5 text-muted-foreground hover:text-foreground"
-      >
-        {pendingAction === "withdraw" ? <Spinner /> : <Undo2Icon className="size-4" aria-hidden />}
-        Withdraw and take back {duel.stake}
-      </Button>
+      <WithTip help={withdrawHelp(duel.stake)}>
+        <Button
+          variant="ghost"
+          onClick={() => onAction(duel, "withdraw")}
+          disabled={busy}
+          className="h-10 min-w-0 flex-1 gap-1.5 text-muted-foreground hover:text-foreground"
+        >
+          {pendingAction === "withdraw" ? <Spinner /> : <Undo2Icon className="size-4" aria-hidden />}
+          Withdraw and take back {duel.stake}
+        </Button>
+      </WithTip>
     )
   }
 
@@ -62,15 +68,26 @@ export function DuelActions({ duel, viewer, rivals, pendingAction, busy, onActio
 
   const answer = SIDE_NAME[otherSide(duel.challengerSide)]
   return (
-    <Button
-      onClick={() => onAction(duel, "accept")}
-      disabled={!!block || busy}
-      className={cn("h-10 w-full gap-1.5 rounded-lg font-semibold", !block && GOLD)}
-      variant={block ? "outline" : "default"}
-    >
-      {pendingAction === "accept" ? <Spinner /> : <SwordsIcon className="size-4" aria-hidden />}
-      {block ? takeBlockLabel(block, duel) : `Take ${answer} · ${duel.stake}`}
-    </Button>
+    <WithTip help={acceptHelp(duel.stake, duel.challengerSide)}>
+      <Button
+        onClick={() => onAction(duel, "accept")}
+        disabled={!!block || busy}
+        className={cn("h-10 min-w-0 flex-1 gap-1.5 rounded-lg font-semibold", !block && GOLD)}
+        variant={block ? "outline" : "default"}
+      >
+        {pendingAction === "accept" ? <Spinner /> : <SwordsIcon className="size-4" aria-hidden />}
+        <span className="truncate">{block ? takeBlockLabel(block, duel) : `Take ${answer} · ${duel.stake}`}</span>
+      </Button>
+    </WithTip>
+  )
+}
+
+function WithTip({ help, children }: { help: HelpEntry; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {children}
+      <InfoTip help={help} side="top" align="end" />
+    </div>
   )
 }
 
@@ -84,19 +101,21 @@ interface RespondButtonsProps {
 
 export function RespondButtons({ duel, pendingAction, busy, cannotAfford, onAction }: RespondButtonsProps) {
   return (
-    <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
-      <Button variant="outline" onClick={() => onAction(duel, "decline")} disabled={busy} className="h-11 gap-1.5 rounded-lg">
-        {pendingAction === "decline" && <Spinner />}
-        Decline
-      </Button>
-      <Button
-        onClick={() => onAction(duel, "accept")}
-        disabled={busy || cannotAfford}
-        className={cn("h-11 gap-1.5 rounded-lg font-semibold", GOLD)}
-      >
-        {pendingAction === "accept" ? <Spinner /> : <SwordsIcon className="size-4" aria-hidden />}
-        {cannotAfford ? "Purse too light" : `Accept · ${duel.stake}`}
-      </Button>
-    </div>
+    <WithTip help={respondHelp(duel.stake, duel.challengerSide)}>
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
+        <Button variant="outline" onClick={() => onAction(duel, "decline")} disabled={busy} className="h-11 gap-1.5 rounded-lg">
+          {pendingAction === "decline" && <Spinner />}
+          Decline
+        </Button>
+        <Button
+          onClick={() => onAction(duel, "accept")}
+          disabled={busy || cannotAfford}
+          className={cn("h-11 gap-1.5 rounded-lg font-semibold", GOLD)}
+        >
+          {pendingAction === "accept" ? <Spinner /> : <SwordsIcon className="size-4" aria-hidden />}
+          {cannotAfford ? "Purse too light" : `Accept · ${duel.stake}`}
+        </Button>
+      </div>
+    </WithTip>
   )
 }

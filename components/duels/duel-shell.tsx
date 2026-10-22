@@ -3,7 +3,9 @@
 import { useId, type ReactNode } from "react"
 import { HammerIcon, RefreshCwIcon, SwordsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { DUEL_PANEL_HELP } from "@/components/duels/help"
 import { DUEL_COPY } from "@/lib/duels/copy"
 import { cn } from "@/lib/utils"
 
@@ -32,13 +34,16 @@ export function DuelShell({ subtitle, aside, children, busy = false, className }
       />
       <header className="flex items-start justify-between gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0">
-          <h3
-            id={headingId}
-            className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]"
-          >
-            <SwordsIcon className="size-[18px] shrink-0" aria-hidden />
-            {DUEL_COPY.title}
-          </h3>
+          <div className="flex items-center gap-1.5">
+            <h3
+              id={headingId}
+              className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]"
+            >
+              <SwordsIcon className="size-[18px] shrink-0" aria-hidden />
+              {DUEL_COPY.title}
+            </h3>
+            <InfoTip help={DUEL_PANEL_HELP} side="bottom" align="start" />
+          </div>
           {subtitle && <div className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{subtitle}</div>}
         </div>
         {aside && <div className="flex shrink-0 items-center gap-1">{aside}</div>}

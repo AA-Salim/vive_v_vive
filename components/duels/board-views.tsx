@@ -4,9 +4,10 @@ import type { ReactNode } from "react"
 import { AnimatePresence } from "motion/react"
 import { CoinsIcon, LogInIcon, SwordsIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { DuelActions, type ActionViewer } from "@/components/duels/duel-actions"
-import { DuelRules } from "@/components/duels/duel-rules"
 import { DuelShell } from "@/components/duels/duel-shell"
+import { CHALLENGE_HELP } from "@/components/duels/help"
 import { IncomingGauntlet } from "@/components/duels/incoming-gauntlet"
 import { VerdictSummary } from "@/components/duels/verdict-summary"
 import { VersusCard } from "@/components/duels/versus-card"
@@ -123,15 +124,7 @@ export function OpenView({ groups, all, highlights, actions, signedIn, authLoadi
   const empty = groups.incoming.length + groups.mine.length + groups.openCalls.length + othersSworn.length + groups.awaiting.length === 0
 
   return (
-    <DuelShell
-      subtitle={DUEL_COPY.subtitle.open}
-      aside={
-        <>
-          <PotChip duels={groups.sworn} />
-          <DuelRules />
-        </>
-      }
-    >
+    <DuelShell subtitle={DUEL_COPY.subtitle.open} aside={<PotChip duels={groups.sworn} />}>
       <AnimatePresence initial={false}>
         {viewerId &&
           groups.incoming.map((duel) => {
@@ -152,20 +145,23 @@ export function OpenView({ groups, all, highlights, actions, signedIn, authLoadi
       </AnimatePresence>
 
       {signedIn ? (
-        <Button
-          onClick={onChallenge}
-          disabled={!gatesOpen}
-          variant="outline"
-          className="h-auto min-h-12 w-full justify-start gap-3 rounded-xl border-[var(--color-gold)]/45 bg-[var(--color-gold)]/[0.07] px-3 py-2.5 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-gold)]/15"
-        >
-          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-gold)] text-[var(--color-navy)]">
-            <SwordsIcon className="size-4" aria-hidden />
-          </span>
-          <span className="min-w-0">
-            <span className="block font-display text-sm font-semibold text-[var(--color-gold)]">{DUEL_COPY.cta}</span>
-            <span className="block truncate text-xs font-normal text-muted-foreground">{DUEL_COPY.ctaHint}</span>
-          </span>
-        </Button>
+        <div className="flex items-center gap-2.5">
+          <Button
+            onClick={onChallenge}
+            disabled={!gatesOpen}
+            variant="outline"
+            className="h-auto min-h-12 min-w-0 flex-1 justify-start gap-3 rounded-xl border-[var(--color-gold)]/45 bg-[var(--color-gold)]/[0.07] px-3 py-2.5 text-left hover:border-[var(--color-gold)] hover:bg-[var(--color-gold)]/15"
+          >
+            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--color-gold)] text-[var(--color-navy)]">
+              <SwordsIcon className="size-4" aria-hidden />
+            </span>
+            <span className="min-w-0">
+              <span className="block font-display text-sm font-semibold text-[var(--color-gold)]">{DUEL_COPY.cta}</span>
+              <span className="block truncate text-xs font-normal text-muted-foreground">{DUEL_COPY.ctaHint}</span>
+            </span>
+          </Button>
+          <InfoTip help={CHALLENGE_HELP} side="top" align="end" />
+        </div>
       ) : (
         <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-[var(--color-gold)]/30 px-4 py-4 text-center">
           <p className="text-xs leading-relaxed text-muted-foreground">{DUEL_COPY.signInHint}</p>

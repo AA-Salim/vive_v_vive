@@ -5,8 +5,10 @@ import { AnimatePresence, motion } from "motion/react"
 import { GavelIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
 import { useSession } from "@/hooks/use-session"
 import { CountdownChip } from "@/components/prophecy/countdown-chip"
+import { TRIBUNAL_HELP } from "@/components/prophecy/help"
 import { useOpenTribunal } from "@/components/prophecy/queries"
 import { Tribunal } from "@/components/prophecy/tribunal"
 import { useNow } from "@/components/prophecy/use-now"
@@ -72,6 +74,7 @@ export function TribunalCallout({ hideForSessionId }: TribunalCalloutProps) {
                 <CountdownChip msLeft={msLeft} />
               </span>
             )}
+            <InfoTip help={TRIBUNAL_HELP} side="bottom" align="end" />
             <Button
               onClick={() => setDialogOpen(true)}
               className="relative h-10 shrink-0 bg-[var(--color-gold)] px-4 font-bold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"

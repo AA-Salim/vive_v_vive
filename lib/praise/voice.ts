@@ -1,4 +1,4 @@
-import { deaccent, PRAISE_MAX_CHARS, PRAISE_MIN_CHARS, PRAISE_MIN_WORDS, VERDICT_NOTE_MAX } from "@/lib/praise/rules"
+import { deaccent, PRAISE_MAX_CHARS, PRAISE_MIN_CHARS, PRAISE_MIN_WORDS, PRAISE_REWARD, VERDICT_NOTE_MAX } from "@/lib/praise/rules"
 import type { JudgeErrorCode, SubmitErrorCode } from "@/lib/praise/types"
 
 export function seededPick<T>(list: readonly T[], seed: string): T {
@@ -148,7 +148,7 @@ export const COOLDOWN_LINES = [
 
 export const COPY = {
   title: "Sing His Praises",
-  rewardBadge: "+150 a day",
+  rewardBadge: `+${PRAISE_REWARD} a day`,
   compose: "Compose your praise",
   composerTitle: "A praise for the exiled king",
   scrollLabel: "Your praise for Salaxe",
@@ -166,7 +166,7 @@ export const COPY = {
   featuredCrowned: "Crowned by Salaxe",
   featuredLatest: "Latest song",
   loggedOutTitle: "Only sworn subjects may sing.",
-  loggedOutBody: "Log in with Discord and earn 150 points a day for a few kind, written words.",
+  loggedOutBody: `Log in with Discord and earn ${PRAISE_REWARD} points a day for a few kind, written words.`,
   login: "Login with Discord",
   pendingTitle: "The court scribes are preparing the Hall of Praise.",
   pendingBody: "The quill returns shortly. No free kisses in the meantime.",
@@ -176,7 +176,7 @@ export const COPY = {
   holdCourt: "Hold court",
   emptyLatest: "The Hall is silent. Be the first voice the exile hears.",
   emptyCrowned: "Nothing crowned yet. Salaxe is a harsh critic, and a slow reader.",
-  emptyMine: "You have not sung yet. 150 points are waiting for a few honest lies.",
+  emptyMine: `You have not sung yet. ${PRAISE_REWARD} points are waiting for a few honest lies.`,
   emptyCourt: "Nothing to judge. The court is quiet and the King is bored.",
   legacy: (count: number) =>
     `Before the quill: ${count} one-click ${count === 1 ? "kiss" : "kisses"}, archived with honor and zero literary merit.`,
@@ -192,7 +192,7 @@ const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
   too_many_symbols: "Too many symbols. He wants words, not hieroglyphs.",
   prompt_copy: "That is the prompt, not a praise. Write your own words.",
   already_sung: "You already sang today. The quill rests until tomorrow.",
-  duplicate: "That exact song was already sung. Originality is the price of 150 points.",
+  duplicate: `That exact song was already sung. Originality is the price of ${PRAISE_REWARD} points.`,
   too_similar: "Too close to a praise already in the Hall. Change it up.",
   not_authenticated: "Only sworn subjects may sing. Log in first.",
   no_balance: "Your treasury is not open yet. Reload the page and try again.",
@@ -203,7 +203,7 @@ const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
 
 export function submitErrorMessage(code: SubmitErrorCode, matchName?: string | null): string {
   if (matchName && code === "too_similar") return `Too close to what ${matchName} already sang. Change it up.`
-  if (matchName && code === "duplicate") return `${matchName} already sang those exact words. Originality is the price of 150 points.`
+  if (matchName && code === "duplicate") return `${matchName} already sang those exact words. Originality is the price of ${PRAISE_REWARD} points.`
   return SUBMIT_MESSAGES[code]
 }
 

@@ -1,4 +1,4 @@
--- Phase 10: Sing His Praises. A written praise for Salaxe is worth 150 points, once per day.
+-- Phase 10: Sing His Praises. A written praise for Salaxe is worth 100 points, once per day.
 -- Requires phase10_foundation.sql (free-form point reasons, vvv_add_to_realtime).
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Days are UTC days (the database default, so the same boundary as claim_daily_bonus), pinned inside each
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS praises (
   body TEXT NOT NULL CHECK (char_length(body) BETWEEN 40 AND 280),
   normalized TEXT NOT NULL,
   fingerprint TEXT NOT NULL,
-  reward INTEGER NOT NULL DEFAULT 150 CHECK (reward >= 0),
+  reward INTEGER NOT NULL DEFAULT 100 CHECK (reward >= 0),
   praise_day DATE NOT NULL DEFAULT CURRENT_DATE,
   verdict TEXT CHECK (verdict IN ('crowned', 'scorned')),
   verdict_note TEXT CHECK (verdict_note IS NULL OR char_length(verdict_note) BETWEEN 1 AND 140),
@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS praises (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT praises_verdict_complete CHECK ((verdict IS NULL) = (judged_at IS NULL))
 );
+ALTER TABLE praises ALTER COLUMN reward SET DEFAULT 100;
 
 -- One praise per user per day (same CURRENT_DATE boundary as claim_daily_bonus) and no song sung twice.
 CREATE UNIQUE INDEX IF NOT EXISTS praises_one_per_day ON praises (user_id, praise_day);
@@ -250,7 +251,7 @@ BEGIN
 
   BEGIN
     INSERT INTO praises (user_id, body, normalized, fingerprint, reward, praise_day)
-    VALUES (v_uid, v_body, v_norm, v_fp, 150, CURRENT_DATE)
+    VALUES (v_uid, v_body, v_norm, v_fp, 100, CURRENT_DATE)
     RETURNING * INTO v_row;
   EXCEPTION WHEN unique_violation THEN
     GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
@@ -260,7 +261,7 @@ BEGIN
     );
   END;
 
-  v_balance := adjust_balance(v_uid, 150, 'sing_his_praises', v_row.id);
+  v_balance := adjust_balance(v_uid, 100, 'sing_his_praises', v_row.id);
 
   RETURN jsonb_build_object(
     'ok', true,

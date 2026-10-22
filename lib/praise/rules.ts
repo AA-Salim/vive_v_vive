@@ -1,7 +1,7 @@
 import { PRAISE_PROMPTS } from "@/lib/praise/prompts"
 
 // Every rule below is mirrored in supabase/phase10_praise.sql (praise_rule_violation), which is the final authority.
-export const PRAISE_REWARD = 150
+export const PRAISE_REWARD = 100
 export const ROYAL_FAVOR = 50
 export const CROWNS_PER_DAY = 3
 export const COURT_WINDOW_DAYS = 7

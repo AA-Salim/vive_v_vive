@@ -6,7 +6,6 @@ import { ChevronRightIcon, CrosshairIcon, PlusIcon, RotateCcwIcon } from "lucide
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BountyDialog } from "@/components/bounty-dialog"
-import { BountyCelebration } from "@/components/bounties/bounty-celebration"
 import { BountySheet, liveFirst } from "@/components/bounties/bounty-sheet"
 import { LastHunt } from "@/components/bounties/hunt-history"
 import { useOnTheRift } from "@/components/bounties/use-wanted"
@@ -135,7 +134,6 @@ export function BountyPanel() {
         nested={sheetOpen ? dialogNode : null}
       />
       {!sheetOpen && dialogNode}
-      <BountyCelebration />
     </section>
   )
 }

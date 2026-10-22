@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase"
 import { emitLive, getActor } from "@/lib/live/server"
+import { removeFromQueue } from "@/lib/lobby/server/queue"
 import { splitTeams, assignLanes, assignChampions } from "@/lib/randomizer"
 import { getChampionPools } from "@/lib/champions-db"
 import type { Player } from "@/lib/types"
@@ -81,6 +82,9 @@ export async function POST(request: Request) {
   const { session } = await loadSession(supabase, created.id)
   if (!session) return errorResponse(500, "The game was created but could not be loaded.")
 
-  emitLive("session.created", { sessionId: session.id, actor: await getActor(supabase, user.id), data: { mode: "standard" } })
+  const actor = await getActor(supabase, user.id)
+  emitLive("session.created", { sessionId: session.id, actor, data: { mode: "standard" } })
+  const { removed } = await removeFromQueue(supabase, playerIds)
+  if (removed > 0) emitLive("queue.changed", { sessionId: session.id, actor, data: { action: "advanced", count: removed }, persist: false })
   return sessionResponse(await presentSession(supabase, session), { status: 201 })
 }

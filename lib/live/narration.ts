@@ -1,4 +1,6 @@
-import type { LiveEvent } from "@/lib/live/events"
+import type { LiveEvent, LiveEventPayloads } from "@/lib/live/events"
+import { narrateBountyEvent } from "@/lib/bounties/narration"
+import { narrateLobbyEvent } from "@/lib/lobby/narration"
 import { narrateDecree, narratePraise, narrateShame, narrateVote } from "@/lib/lore/herald/court"
 import {
   narrateBetInsured,
@@ -48,7 +50,10 @@ export function narrate(event: LiveEvent): Narration | null {
     case "session.lock":
       return null
     case "coachdraft.pick":
-      return narrateCoachPick(event)
+      return narrateCoachPick(event) ?? narrateLobbyEvent(event)
+    case "coachdraft.undo":
+    case "roster.changed":
+      return narrateLobbyEvent(event)
     case "bet.placed":
       return narrateBetPlaced(event)
     case "bet.insured":
@@ -65,10 +70,21 @@ export function narrate(event: LiveEvent): Narration | null {
     case "sidebet.resolved":
       return narrateProphecyResolved(event)
     case "bounty.placed":
+      return (event.data as LiveEventPayloads["bounty.placed"]).opened === false
+        ? narrateBountyEvent(event)
+        : (narrateBounty(event) ?? narrateBountyEvent(event))
     case "bounty.claimed":
-      return narrateBounty(event)
+      return (event.data as LiveEventPayloads["bounty.claimed"]).legacy
+        ? narrateBountyEvent(event)
+        : (narrateBounty(event) ?? narrateBountyEvent(event))
+    case "bounty.escaped":
+    case "bounty.expired":
+    case "shame.egged":
+      return narrateBountyEvent(event)
     case "shame.posted":
-      return narrateShame(event)
+      return (event.data as LiveEventPayloads["shame.posted"]).source === "tribunal"
+        ? narrateBountyEvent(event)
+        : (narrateShame(event) ?? narrateBountyEvent(event))
     case "title.equipped":
     case "title.bestowed":
     case "title.perk":
@@ -79,9 +95,9 @@ export function narrate(event: LiveEvent): Narration | null {
     case "title.settled":
       return wellFormedTitle(event) ? narrateTitleEvent(event) : null
     case "queue.changed":
-      return narrateQueue(event)
+      return narrateQueue(event) ?? narrateLobbyEvent(event)
     case "vainqueur.changed":
-      return narrateVainqueur(event)
+      return narrateVainqueur(event) ?? narrateLobbyEvent(event)
     case "fearless.changed":
       return narrateFearless(event)
     case "points.changed":

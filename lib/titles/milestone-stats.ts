@@ -34,7 +34,10 @@ export async function computeMilestoneStats(supabase: SupabaseClient, userId: st
         .in("reason", ["kiss_the_hand", "sing_his_praises"])
     ),
     count(supabase.from("chaos_actions").select("id", { count: "exact", head: true }).eq("user_id", userId)),
-    count(supabase.from("bounties").select("id", { count: "exact", head: true }).eq("poster_user_id", userId)),
+    Promise.all([
+      count(supabase.from("bounties").select("id", { count: "exact", head: true }).eq("poster_user_id", userId)),
+      count(supabase.from("bounty_pledges").select("id", { count: "exact", head: true }).eq("user_id", userId)),
+    ]).then(([legacy, pledges]) => legacy + pledges),
   ])
 
   const games = (player?.games_played as number | undefined) ?? 0

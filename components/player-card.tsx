@@ -5,6 +5,7 @@ import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon } from "lucide-react
 import { Button } from "@/components/ui/button"
 import { LaneIcon } from "@/components/lane-icon"
 import { TitleBadge } from "@/components/title-badge"
+import { WantedBadge } from "@/components/bounties/wanted-badge"
 import { ChampionAvatar } from "@/components/session/champion-avatar"
 import { PlayerDetails } from "@/components/session/player-details"
 import type { EquippedTitle } from "@/app/api/titles/equipped/route"
@@ -129,6 +130,7 @@ export function PlayerCard({
                 <span className="truncate text-[var(--color-gold-light)]/80">{assignment.players.name}</span>
                 {isMe && <YouChip />}
                 {outcome === "won" && <CrownIcon className="size-3.5 shrink-0 text-[var(--color-gold)]" aria-label="Winner" />}
+                <WantedBadge playerId={assignment.player_id} />
               </>
             ) : (
               <span className="text-muted-foreground">{state === "shuffling" ? "Rolling..." : "Awaiting fate"}</span>

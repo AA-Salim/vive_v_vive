@@ -36,6 +36,9 @@ const AFTERMATH_TYPES: ReadonlySet<string> = new Set([
   "vote.cast",
   "vote.closed",
   "shame.posted",
+  "shame.egged",
+  "bounty.escaped",
+  "bounty.expired",
 ])
 
 // Worth interrupting someone who is not in a game.
@@ -72,9 +75,31 @@ export function isPersonal(event: LiveEvent, viewer: Viewer): boolean {
       return isMe(d.winnerUserId, d.winnerName, viewer) || isMe(d.loserUserId, d.loserName, viewer)
     }
     case "bounty.placed":
-    case "bounty.claimed": {
+    case "bounty.escaped":
+    case "bounty.expired": {
       const d = event.data as LiveEventPayloads["bounty.placed"]
       return isMe(d.targetUserId, d.targetName, viewer)
+    }
+    case "bounty.claimed": {
+      const d = event.data as LiveEventPayloads["bounty.claimed"]
+      return isMe(d.targetUserId, d.targetName, viewer) || (!!d.hunterUserIds && d.hunterUserIds.includes(viewer.userId))
+    }
+    case "shame.egged": {
+      const d = event.data as LiveEventPayloads["shame.egged"]
+      return isMe(d.targetUserId, d.targetName, viewer)
+    }
+    case "coachdraft.pick": {
+      const d = event.data as LiveEventPayloads["coachdraft.pick"] & { targetUserId?: string | null; playerUserId?: string | null }
+      return (!!d.targetUserId && d.targetUserId === viewer.userId) || (!!d.playerUserId && d.playerUserId === viewer.userId)
+    }
+    case "coachdraft.undo": {
+      const d = event.data as LiveEventPayloads["coachdraft.undo"]
+      return !!d.targetUserId && d.targetUserId === viewer.userId
+    }
+    case "queue.changed":
+    case "vainqueur.changed": {
+      const d = event.data as { targetUserId?: string | null; targetUserIds?: string[] | null }
+      return (!!d.targetUserId && d.targetUserId === viewer.userId) || (!!d.targetUserIds && d.targetUserIds.includes(viewer.userId))
     }
     case "title.bestowed": {
       const d = event.data as LiveEventPayloads["title.bestowed"]

@@ -104,5 +104,10 @@ export async function POST(request: Request) {
     data: { excerpt: praiseExcerpt(praise.body), reward: praise.reward, praiseId: praise.id },
   })
 
-  return NextResponse.json({ praise, balance: result.balance, resetsAt: result.resets_at } satisfies SubmitResult)
+  return NextResponse.json({
+    praise,
+    balance: result.balance,
+    riddleBonus: result.riddle_bonus ?? 0,
+    resetsAt: result.resets_at,
+  } satisfies SubmitResult)
 }

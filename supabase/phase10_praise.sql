@@ -215,6 +215,7 @@ DECLARE
   v_row praises%ROWTYPE;
   v_balance INTEGER;
   v_constraint TEXT;
+  v_riddle_bonus INTEGER;
 BEGIN
   IF v_uid IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'error', 'not_authenticated');
@@ -226,6 +227,14 @@ BEGIN
 
   IF NOT EXISTS (SELECT 1 FROM point_balances WHERE user_id = v_uid) THEN
     RETURN jsonb_build_object('ok', false, 'error', 'no_balance');
+  END IF;
+
+  -- King's Riddle (phase10_riddles.sql): today's riddle must be solved first. Skipped while that file is missing.
+  IF to_regprocedure('public.praise_riddle_bonus(uuid)') IS NOT NULL THEN
+    v_riddle_bonus := praise_riddle_bonus(v_uid);
+    IF v_riddle_bonus IS NULL THEN
+      RETURN jsonb_build_object('ok', false, 'error', 'riddle_required');
+    END IF;
   END IF;
 
   v_violation := praise_rule_violation(v_body);
@@ -262,11 +271,16 @@ BEGIN
   END;
 
   v_balance := adjust_balance(v_uid, 100, 'sing_his_praises', v_row.id);
+  -- King's Riddle: the Sharp Mind bonus for a first-try solve, once per day like the praise itself.
+  IF v_riddle_bonus > 0 THEN
+    v_balance := adjust_balance(v_uid, v_riddle_bonus, 'riddle_bonus', v_row.id);
+  END IF;
 
   RETURN jsonb_build_object(
     'ok', true,
     'praise', to_jsonb(v_row) - 'normalized' - 'fingerprint',
     'balance', v_balance,
+    'riddle_bonus', coalesce(v_riddle_bonus, 0),
     'resets_at', (CURRENT_DATE + 1)::TIMESTAMPTZ
   );
 END;

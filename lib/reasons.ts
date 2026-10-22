@@ -2,6 +2,7 @@ import {
   AwardIcon,
   BadgeCheckIcon,
   BanknoteIcon,
+  BrainIcon,
   CalendarCheckIcon,
   CoinsIcon,
   CrosshairIcon,
@@ -34,7 +35,7 @@ import { BOUNTY_RULES, PILLORY_RULES } from "@/lib/bounties/rules"
 import { WAGER_BASE_MULTIPLIER, WAGER_DEFIANCE_STEP, WAGER_MAX_DEFIANCE } from "@/lib/chaos/catalog"
 import { DUEL_RULES } from "@/lib/duels/rules"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
-import { CROWNS_PER_DAY, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { CROWNS_PER_DAY, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
 import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
@@ -256,6 +257,14 @@ export const REASONS: Readonly<Record<string, Definition>> = {
     "devotion",
     "earn",
     CrownIcon
+  ),
+  riddle_bonus: def(
+    "Sharp Mind",
+    "Solved the King's Riddle on the first try.",
+    `+${RIDDLE_FIRST_TRY_BONUS} on top of the praise when you solve the King's Riddle on your first try.`,
+    "devotion",
+    "earn",
+    BrainIcon
   ),
 
   title_bought: def(

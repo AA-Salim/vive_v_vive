@@ -70,6 +70,7 @@ export type SubmitErrorCode =
   | "too_similar"
   | "not_authenticated"
   | "no_balance"
+  | "riddle_required"
   | "invalid_input"
   | "migration_pending"
   | "unknown"
@@ -91,6 +92,7 @@ export type JudgeErrorCode =
 export interface SubmitResult {
   praise: PraiseView
   balance: number
+  riddleBonus: number
   resetsAt: string
 }
 
@@ -98,3 +100,81 @@ export interface JudgeResult {
   praise: PraiseView
   crownsLeft: number
 }
+
+export type RiddleKind = "sequence" | "arrows" | "maze"
+
+export interface SequencePuzzle {
+  terms: number[]
+  options: number[]
+}
+
+// Directions 0..7, clockwise from up, 45 degrees apart.
+export interface ArrowPuzzle {
+  arrows: number[]
+}
+
+// tiles: one letter per cell, row by row (I straight, L corner, T tee). rotations: clockwise quarter turns.
+// The entry opens on the west side of row `entry`, the exit on the east side of row `exit`.
+export interface MazePuzzle {
+  size: number
+  tiles: string
+  rotations: number[]
+  entry: number
+  exit: number
+}
+
+export type Riddle =
+  | { kind: "sequence"; puzzle: SequencePuzzle }
+  | { kind: "arrows"; puzzle: ArrowPuzzle }
+  | { kind: "maze"; puzzle: MazePuzzle }
+
+export interface RiddleSolution {
+  value?: number
+  rule?: string
+  a?: number | null
+  b?: number | null
+  rotations?: number[]
+  path?: number[]
+}
+
+export type RiddleStatus = "open" | "solved" | "locked"
+
+export interface RiddleView {
+  day: string
+  status: RiddleStatus
+  number: number
+  limit: number
+  misses: number
+  firstTry: boolean | null
+  bonus: number
+  riddle: Riddle
+  solution: RiddleSolution | null
+  solvedAt: string | null
+  resetsAt: string
+}
+
+export type RiddleState = { available: false } | ({ available: true } & RiddleView)
+
+export type RiddleAnswer = { value: number } | { rotations: number[] } | { skip: true }
+
+export type RiddleOutcome = "correct" | "wrong" | "skipped" | "already_solved" | "stale"
+
+export interface RetiredRiddle {
+  riddle: Riddle
+  solution: RiddleSolution
+}
+
+export interface RiddleSolveResult {
+  outcome: RiddleOutcome
+  view: RiddleView
+  previous: RetiredRiddle | null
+}
+
+export type RiddleErrorCode =
+  | "not_authenticated"
+  | "no_riddle"
+  | "riddle_limit"
+  | "invalid_answer"
+  | "invalid_input"
+  | "migration_pending"
+  | "unknown"

@@ -114,7 +114,8 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 | Win a game | +10 |
 | Play a game (loss) | +2 |
 | Daily stipend (open the app) | +5 per day |
-| **Sing His Praises** (write a praise for Salaxe) | **+100 per day** |
+| **Sing His Praises** (solve the King's Riddle, then write a praise for Salaxe) | **+100 per day** |
+| Sharp Mind: the King's Riddle solved on the first try | +20 (paid with the praise) |
 | Salaxe crowns your praise | +50 |
 | Voted MVP by the Tribunal | +15 |
 | Winning bets, wagers, duels, prophecies, bounties | depends on the odds |
@@ -135,6 +136,16 @@ Once a day, write a praise for Salaxe and get **100 points**. The rules: at leas
 characters, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass, Goblino...), and write something original (no copy
 paste). Salaxe can **Crown** a praise (+50 to the author) or **Scorn** it in public. The app reminds you once a day
 at most, never during a game.
+
+Before you can write, **the King tests your wit** with one small riddle (free):
+
+- **The Royal Count**: a number sequence like 2, 4, 8, 16... pick the next number among four.
+- **The Weathervane**: a row of arrows turning by a rule. Pick where the next one points.
+- **The Royal Plumbing**: tap pipes to turn them until the water flows from the entry to the crown.
+
+Solve it on the **first try** for the **Sharp Mind** bonus: **+20**, paid with your praise (120 instead of 100). A
+wrong answer shows the solution and the King poses a new riddle, but the bonus is gone. Up to 10 riddles a day:
+miss them all and there is no praise until midnight UTC.
 
 ---
 

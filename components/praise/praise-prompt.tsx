@@ -10,7 +10,7 @@ import { useAuthUser } from "@/hooks/use-auth"
 import { usePraiseState } from "@/hooks/use-praise"
 import { useSession } from "@/hooks/use-session"
 import { TIMED_STATUSES } from "@/lib/live/events"
-import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS } from "@/lib/praise/rules"
 
 const SHOW_AFTER_MS = 75_000
 const MUTE_MS = 7 * 24 * 60 * 60 * 1000
@@ -105,7 +105,8 @@ export function PraisePrompt() {
               <div className="min-w-0 space-y-1">
                 <p className="font-display text-base text-[var(--color-gold-light)]">Salaxe awaits his song</p>
                 <p className="text-sm leading-relaxed text-muted-foreground">
-                  One written praise a day pays +{reward}. The exiled King is pretending not to check his inbox.
+                  Solve his riddle, then write one praise a day: +{reward}, +{RIDDLE_FIRST_TRY_BONUS} more for a first-try
+                  solve. The exiled King is pretending not to check his inbox.
                 </p>
               </div>
             </div>

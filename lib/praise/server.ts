@@ -6,9 +6,15 @@ import type {
   PraiseAuthor,
   PraiseVerdict,
   PraiseView,
+  Riddle,
+  RiddleErrorCode,
+  RiddleOutcome,
+  RiddleSolution,
+  RiddleStatus,
+  RiddleView,
   SubmitErrorCode,
 } from "@/lib/praise/types"
-import { judgeErrorMessage, submitErrorMessage } from "@/lib/praise/voice"
+import { judgeErrorMessage, riddleErrorMessage, submitErrorMessage } from "@/lib/praise/voice"
 
 export const PRAISE_COLUMNS =
   "id, user_id, body, reward, favor, verdict, verdict_note, judged_at, created_at, praise_day"
@@ -43,7 +49,7 @@ export interface PraiseStateRow {
 }
 
 export type SubmitRpcResult =
-  | { ok: true; praise: PraiseRow; balance: number; resets_at: string }
+  | { ok: true; praise: PraiseRow; balance: number; riddle_bonus?: number; resets_at: string }
   | { ok: false; error: string; match_user_id?: string | null; resets_at?: string }
 
 export type JudgeRpcResult =
@@ -128,13 +134,22 @@ const SUBMIT_STATUS: Partial<Record<SubmitErrorCode, number>> = {
   duplicate: 409,
   too_similar: 409,
   no_balance: 409,
+  riddle_required: 428,
   not_authenticated: 401,
   invalid_input: 400,
   unknown: 500,
 }
 
 export function asSubmitError(code: string): SubmitErrorCode {
-  const known: readonly string[] = [...VIOLATIONS, "already_sung", "duplicate", "too_similar", "not_authenticated", "no_balance"]
+  const known: readonly string[] = [
+    ...VIOLATIONS,
+    "already_sung",
+    "duplicate",
+    "too_similar",
+    "not_authenticated",
+    "no_balance",
+    "riddle_required",
+  ]
   return known.includes(code) ? (code as SubmitErrorCode) : "unknown"
 }
 
@@ -164,4 +179,65 @@ export function asJudgeError(code: string): JudgeErrorCode {
 
 export function judgeFailure(code: JudgeErrorCode) {
   return NextResponse.json({ error: judgeErrorMessage(code), code }, { status: JUDGE_STATUS[code] })
+}
+
+interface RiddleRpcView {
+  day: string
+  status: RiddleStatus
+  number: number
+  limit: number
+  misses: number
+  first_try: boolean | null
+  bonus: number
+  kind: Riddle["kind"]
+  puzzle: Riddle["puzzle"]
+  solution: RiddleSolution | null
+  solved_at: string | null
+  resets_at: string
+}
+
+export type RiddleRpcResult =
+  | (RiddleRpcView & {
+      ok: true
+      result?: RiddleOutcome
+      previous?: { kind: Riddle["kind"]; puzzle: Riddle["puzzle"]; solution: RiddleSolution }
+    })
+  | { ok: false; error: string }
+
+export function toRiddle(kind: Riddle["kind"], puzzle: Riddle["puzzle"]): Riddle {
+  return { kind, puzzle } as Riddle
+}
+
+export function toRiddleView(row: RiddleRpcView): RiddleView {
+  return {
+    day: row.day,
+    status: row.status,
+    number: row.number,
+    limit: row.limit,
+    misses: row.misses,
+    firstTry: row.first_try,
+    bonus: row.bonus,
+    riddle: toRiddle(row.kind, row.puzzle),
+    solution: row.solution ?? null,
+    solvedAt: row.solved_at,
+    resetsAt: row.resets_at,
+  }
+}
+
+const RIDDLE_STATUS: Record<RiddleErrorCode, number> = {
+  not_authenticated: 401,
+  no_riddle: 409,
+  riddle_limit: 409,
+  invalid_answer: 422,
+  invalid_input: 400,
+  migration_pending: 503,
+  unknown: 500,
+}
+
+export function asRiddleError(code: string): RiddleErrorCode {
+  return Object.hasOwn(RIDDLE_STATUS, code) ? (code as RiddleErrorCode) : "unknown"
+}
+
+export function riddleFailure(code: RiddleErrorCode) {
+  return NextResponse.json({ error: riddleErrorMessage(code), code }, { status: RIDDLE_STATUS[code] })
 }

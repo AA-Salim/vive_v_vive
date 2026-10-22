@@ -7,7 +7,15 @@ import { fetchAllRows, QueryError } from "@/lib/pages/fetch-all"
 // only hands a stake back (refunds, a withdrawn duel, a lost bet's Guardian Angel cover) is never income, so
 // staking and withdrawing the same points cannot inflate the total. Bet bonuses are already in the bet payout.
 
-const INCOME_REASONS = new Set(["kiss_the_hand", "sing_his_praises", "royal_favor", "title_perk", "title_tribute", "bounty_claimed"])
+const INCOME_REASONS = new Set([
+  "kiss_the_hand",
+  "sing_his_praises",
+  "riddle_bonus",
+  "royal_favor",
+  "title_perk",
+  "title_tribute",
+  "bounty_claimed",
+])
 
 // Credits that are neither income nor a market: the act's starting purse and the honors carried from the last act.
 const GRANT_REASONS = new Set(["initial_grant", "act_carryover"])

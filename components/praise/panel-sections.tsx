@@ -19,7 +19,7 @@ import { AuthorAvatar, PraiseQuote } from "@/components/praise/praise-card"
 import { PraiseCountdown } from "@/components/praise/praise-countdown"
 import { VerdictChip } from "@/components/praise/verdict-chip"
 import { formatRelative } from "@/lib/praise/format"
-import { PRAISE_MIN_WORDS, PRAISE_REWARD, ROYAL_FAVOR } from "@/lib/praise/rules"
+import { PRAISE_MIN_WORDS, PRAISE_REWARD, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
 import type { PraiseCourt, PraiseMe, PraiseView } from "@/lib/praise/types"
 import { COOLDOWN_LINES, COPY, SELF_PRAISE_LINE, seededPick, verdictLine } from "@/lib/praise/voice"
 
@@ -98,7 +98,8 @@ export function ReadySection({ me, onCompose }: { me: PraiseMe; onCompose: () =>
         <InfoTip help={COMPOSE_HELP} side="top" align="end" />
       </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
-        One written praise a day: {PRAISE_MIN_WORDS}+ words, name him, mean it. The best ones get crowned for +{ROYAL_FAVOR}.
+        One praise a day: solve the King&apos;s Riddle (+{RIDDLE_FIRST_TRY_BONUS} on the first try), then write{" "}
+        {PRAISE_MIN_WORDS}+ words that name him. The best ones get crowned for +{ROYAL_FAVOR}.
       </p>
       {me.total > 0 && (
         <p className="text-[11px] text-muted-foreground">

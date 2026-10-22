@@ -23,10 +23,14 @@ import type {
   PraiseState,
   PraiseVerdict,
   PraiseView,
+  RiddleAnswer,
+  RiddleErrorCode,
+  RiddleSolveResult,
+  RiddleState,
   SubmitErrorCode,
   SubmitResult,
 } from "@/lib/praise/types"
-import { judgeErrorMessage, submitErrorMessage } from "@/lib/praise/voice"
+import { judgeErrorMessage, riddleErrorMessage, submitErrorMessage } from "@/lib/praise/voice"
 import type { SessionWithAssignments } from "@/lib/types"
 
 export class PraiseRequestError<Code extends string = string> extends Error {
@@ -50,6 +54,7 @@ export const praiseKeys = {
   state: (userId: string | null) => ["praise", "state", userId ?? "anon"] as const,
   hall: (view: HallView, limit: number, userId: string | null) =>
     ["praise", "hall", view, limit, userId ?? "anon"] as const,
+  riddle: (userId: string | null) => ["praise", "riddle", userId ?? "anon"] as const,
 }
 
 function invalidateEconomy(queryClient: QueryClient) {
@@ -159,6 +164,66 @@ export function useSubmitPraise(userId: string | null) {
       })
     },
     onSettled: () => invalidateEconomy(queryClient),
+  })
+}
+
+async function fetchRiddle(): Promise<RiddleState> {
+  const res = await fetch("/api/praise/riddle", { cache: "no-store" })
+  const json = await res.json().catch(() => null)
+  if (res.ok) return json as RiddleState
+  if (res.status === 503) return { available: false }
+  const code = (json?.code ?? "unknown") as RiddleErrorCode
+  throw new PraiseRequestError(json?.error ?? riddleErrorMessage(code), code, res.status)
+}
+
+// Within a day a riddle only moves forward (more answers, then solved or locked), so a refetch that started
+// before an answer landed must not rewind the dialog to the riddle it replaced.
+function isBehind(next: RiddleState, current: RiddleState | undefined): boolean {
+  if (!current?.available || !next.available || next.day !== current.day) return false
+  return next.number < current.number || (next.status === "open" && current.status !== "open")
+}
+
+// Today's King's Riddle, the first step of the hand kiss. { available: false } while its migration is missing.
+export function useRiddle(userId: string | null, enabled: boolean) {
+  const queryClient = useQueryClient()
+  return useQuery({
+    queryKey: praiseKeys.riddle(userId),
+    queryFn: async () => {
+      const next = await fetchRiddle()
+      const current = queryClient.getQueryData<RiddleState>(praiseKeys.riddle(userId))
+      return isBehind(next, current) ? current! : next
+    },
+    enabled: enabled && !!userId,
+    staleTime: 60_000,
+    retry: 1,
+  })
+}
+
+export interface RiddleInput {
+  number: number
+  answer: RiddleAnswer
+}
+
+export function useSolveRiddle(userId: string | null) {
+  const queryClient = useQueryClient()
+  return useMutation<RiddleSolveResult, PraiseRequestError<RiddleErrorCode>, RiddleInput>({
+    mutationFn: async (input) => {
+      const result = await postJson<RiddleSolveResult>("/api/praise/riddle", input)
+      if (result.ok) return result.data
+      const code = (result.code ?? "unknown") as RiddleErrorCode
+      throw new PraiseRequestError(result.error ?? riddleErrorMessage(code), code, result.status)
+    },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: praiseKeys.riddle(userId) })
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData<RiddleState>(praiseKeys.riddle(userId), { available: true, ...result.view })
+    },
+    onError: (error) => {
+      if (error.code === "no_riddle" || error.code === "riddle_limit" || error.code === "migration_pending") {
+        queryClient.invalidateQueries({ queryKey: praiseKeys.riddle(userId) })
+      }
+    },
   })
 }
 

@@ -6,6 +6,8 @@ import {
   PRAISE_MIN_CHARS,
   PRAISE_MIN_WORDS,
   PRAISE_REWARD,
+  RIDDLE_DAILY_LIMIT,
+  RIDDLE_FIRST_TRY_BONUS,
   ROYAL_FAVOR,
   SALAXE_NAMES,
   VERDICT_NOTE_MAX,
@@ -15,20 +17,30 @@ const NAMES = SALAXE_NAMES.slice(0, 4).join(", ")
 
 const WRITING_RULES = `${PRAISE_MIN_WORDS}+ words, ${PRAISE_MIN_CHARS} to ${PRAISE_MAX_CHARS} characters, and it must name him (${NAMES}...). No keyboard mash, filler, copied prompts or songs already in the Hall.`
 
+const SHARP_MIND = `${pts(RIDDLE_FIRST_TRY_BONUS)} more (Sharp Mind) if you solved the King's Riddle on the first try`
+
 export const PRAISE_HELP: HelpEntry = {
   title: "Sing His Praises",
-  does: "Write the exiled king a few kind words once a day and the treasury pays you. Salaxe reads every one and may crown the best or scorn the worst, in public.",
+  does: "Once a day, solve the King's Riddle, then write the exiled king a few kind words and the treasury pays you. Salaxe reads every one and may crown the best or scorn the worst, in public.",
   cost: FREE,
-  reward: `${pts(PRAISE_REWARD)} per praise, plus ${pts(ROYAL_FAVOR)} of Royal Favor if Salaxe crowns it.`,
+  reward: `${pts(PRAISE_REWARD)} per praise, ${SHARP_MIND}, plus ${pts(ROYAL_FAVOR)} of Royal Favor if Salaxe crowns it.`,
   limits: `One praise per day, resets at midnight UTC. ${WRITING_RULES}`,
 }
 
 export const COMPOSE_HELP: HelpEntry = {
   title: "Compose a praise",
-  does: "Your praise is checked as you type, then sealed into the Hall of Praise for the whole court to read. Once sung, it cannot be edited.",
+  does: "Step 2 of 2, after the King's Riddle. Your praise is checked as you type, then sealed into the Hall of Praise for the whole court to read. Once sung, it cannot be edited.",
   cost: FREE,
-  reward: `${pts(PRAISE_REWARD)} the moment it is accepted. A crown from Salaxe adds ${pts(ROYAL_FAVOR)}.`,
+  reward: `${pts(PRAISE_REWARD)} the moment it is accepted, ${SHARP_MIND}. A crown from Salaxe adds ${pts(ROYAL_FAVOR)}.`,
   limits: `One a day. ${WRITING_RULES}`,
+}
+
+export const RIDDLE_HELP: HelpEntry = {
+  title: "The King's Riddle",
+  does: "Step 1 of 2: before you may praise him, Salaxe tests your wit with one small puzzle (a number sequence, an arrow pattern or a pipe maze). Solve it and the quill is yours. A wrong answer shows the solution and he poses a new riddle.",
+  cost: FREE,
+  reward: `The riddle itself pays nothing. Solve it on the first try and your praise pays ${pts(RIDDLE_FIRST_TRY_BONUS)} more: ${pts(PRAISE_REWARD + RIDDLE_FIRST_TRY_BONUS)} instead of ${pts(PRAISE_REWARD)}.`,
+  limits: `One riddle at a time, ${RIDDLE_DAILY_LIMIT} a day. One miss, or asking for another riddle, loses the first-try bonus. Miss all ${RIDDLE_DAILY_LIMIT} and there is no praise until midnight UTC.`,
 }
 
 export const VERDICT_HELP: HelpEntry = {

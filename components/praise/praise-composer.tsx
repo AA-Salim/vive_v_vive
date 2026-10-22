@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils"
 interface PraiseComposerProps {
   promptSeed: number
   knownFingerprints: ReadonlySet<string>
+  bonus?: number
   pending: boolean
   error: string | null
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -44,6 +45,7 @@ function ScrollRod({ className }: { className: string }) {
 export function PraiseComposer({
   promptSeed,
   knownFingerprints,
+  bonus = 0,
   pending,
   error,
   textareaRef,
@@ -149,7 +151,7 @@ export function PraiseComposer({
               <FeatherIcon aria-hidden />
               {COPY.sing}
               <span className="rounded-md bg-primary-foreground/15 px-1.5 py-0.5 text-sm tabular-nums">
-                +{PRAISE_REWARD}
+                +{PRAISE_REWARD + bonus}
               </span>
             </>
           )}

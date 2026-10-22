@@ -11,6 +11,10 @@ export const PRAISE_MAX_CHARS = 280
 export const PRAISE_INPUT_MAX = 600
 export const VERDICT_NOTE_MAX = 140
 
+// The King's Riddle, mirrored in supabase/phase10_riddles.sql (riddle_first_try_bonus, riddle_daily_limit).
+export const RIDDLE_FIRST_TRY_BONUS = 20
+export const RIDDLE_DAILY_LIMIT = 10
+
 export const SALAXE_NAMES = ["Salaxe", "SLX", "Chklat", "Chalaksse", "Chklass", "Goblino", "Chalakssinoss", "Le Bon Salaxe"]
 
 export type PraiseViolation =

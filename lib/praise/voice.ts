@@ -4,10 +4,12 @@ import {
   PRAISE_MIN_CHARS,
   PRAISE_MIN_WORDS,
   PRAISE_REWARD,
+  RIDDLE_DAILY_LIMIT,
+  RIDDLE_FIRST_TRY_BONUS,
   ROYAL_FAVOR,
   VERDICT_NOTE_MAX,
 } from "@/lib/praise/rules"
-import type { JudgeErrorCode, SubmitErrorCode } from "@/lib/praise/types"
+import type { JudgeErrorCode, RiddleErrorCode, RiddleKind, SubmitErrorCode } from "@/lib/praise/types"
 
 export function seededPick<T>(list: readonly T[], seed: string): T {
   let hash = 2166136261
@@ -204,6 +206,7 @@ const SUBMIT_MESSAGES: Record<SubmitErrorCode, string> = {
   too_similar: "Too close to a praise already in the Hall. Change it up.",
   not_authenticated: "Only sworn subjects may sing. Log in first.",
   no_balance: "Your treasury is not open yet. Reload the page and try again.",
+  riddle_required: "Solve the King's Riddle first. He wants proof of wit before praise.",
   invalid_input: "The scroll arrived torn. Try again.",
   migration_pending: "The court scribes are still preparing the Hall of Praise.",
   unknown: "The royal messenger tripped. Your praise was not delivered, nothing was charged.",
@@ -232,4 +235,81 @@ const JUDGE_MESSAGES: Record<JudgeErrorCode, string> = {
 
 export function judgeErrorMessage(code: JudgeErrorCode): string {
   return JUDGE_MESSAGES[code]
+}
+
+export const RIDDLE_COPY = {
+  kicker: "The King tests your wit",
+  stepRiddle: "The King's Riddle",
+  stepOne: "The riddle",
+  stepTwo: "Your praise",
+  bonusBadge: `+${RIDDLE_FIRST_TRY_BONUS} first try`,
+  sharpMind: "Sharp Mind",
+  answer: "Answer the King",
+  answering: "The King ponders...",
+  skip: "Ask for another riddle",
+  skipNote: "counts as a miss",
+  next: "Now, sing his praises",
+  solvedTitle: "The King is impressed",
+  lockedTitle: "The King has heard enough guesses",
+  lockedBody: `${RIDDLE_DAILY_LIMIT} riddles, ${RIDDLE_DAILY_LIMIT} misses. The quill stays dry until tomorrow. Salaxe is not angry, only disappointed.`,
+  loading: "The King is thinking of a riddle...",
+  connected: "Connected. The water reaches the throne.",
+}
+
+export const RIDDLE_INTROS = [
+  "Before you praise him, prove you are worth hearing.",
+  "Salaxe only reads praises from sharp minds. Or lucky ones.",
+  "A riddle first. The exiled King has time. So much time.",
+  "He solved this one in his head, he says. Mid-teamfight. He lost the fight.",
+]
+
+export const RIDDLE_PROMPTS: Record<RiddleKind, { title: string; question: string; lore: string }> = {
+  sequence: {
+    title: "The Royal Count",
+    question: "What number comes next?",
+    lore: "Salaxe counts his loyal subjects by a rule only he remembers.",
+  },
+  arrows: {
+    title: "The Weathervane",
+    question: "Where does the next arrow point?",
+    lore: "The castle weathervane turns by royal decree. Read the pattern.",
+  },
+  maze: {
+    title: "The Royal Plumbing",
+    question: "Tap a pipe to turn it. Connect the entry to the exit.",
+    lore: "The throne room is flooding again. Fix the pipes before he notices.",
+  },
+}
+
+export const RIDDLE_CORRECT_LINES = [
+  "Correct. Salaxe nods slowly, as if he knew all along.",
+  "Sharp. Your name moves to the clever column of the notebook.",
+  "Right answer. The King insists he solved it faster.",
+  "Well reasoned. He will pretend that was easy.",
+]
+
+export const RIDDLE_MISS_LINES = [
+  "Wrong. Salaxe sighs and scribbles a new riddle.",
+  "Not quite. The King poses another, slower this time.",
+  "Even the 0/8 Yone saw that coming. Here is another.",
+  "The court winces. Try this one instead.",
+]
+
+export const RIDDLE_SKIP_LINES = [
+  "The King tears up the riddle and writes a new one. Easier, he claims.",
+  "Fine, another riddle. He sighs loudly enough for the whole court.",
+]
+
+const RIDDLE_MESSAGES: Record<RiddleErrorCode, string> = {
+  not_authenticated: "Only sworn subjects may answer the King. Log in first.",
+  no_riddle: "The riddle crumbled at midnight. Here is a fresh one.",
+  riddle_limit: "No riddles left today. The quill rests until tomorrow.",
+  invalid_answer: "The King could not read that answer. Try again.",
+  invalid_input: "The King could not read that answer. Try again.",
+  migration_pending: "The King is still writing his riddles.",
+  unknown: "The royal messenger tripped. Your answer was not delivered.",
+}
+
+export function riddleErrorMessage(code: RiddleErrorCode): string {
+  return RIDDLE_MESSAGES[code]
 }

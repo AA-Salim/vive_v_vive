@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { AnimatedNumber } from "@/components/praise/animated-number"
 import type { SubmitResult } from "@/lib/praise/types"
-import { COPY, sungResponse } from "@/lib/praise/voice"
+import { COPY, RIDDLE_COPY, sungResponse } from "@/lib/praise/voice"
 
 function themeColors(): string[] | undefined {
   const styles = getComputedStyle(document.documentElement)
@@ -37,6 +37,8 @@ interface PraiseSuccessProps {
 export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProps) {
   const response = useMemo(() => sungResponse(result.praise.body, result.praise.id), [result])
   const reward = result.praise.reward
+  const bonus = result.riddleBonus ?? 0
+  const total = reward + bonus
 
   useEffect(() => {
     celebrate()
@@ -72,19 +74,34 @@ export function PraiseSuccess({ result, onOpenHall, onClose }: PraiseSuccessProp
           </DialogTitle>
         </div>
 
-        <AnimatedNumber
-          value={reward}
-          from={0}
-          prefix="+"
-          duration={1.1}
-          className="font-display text-5xl font-bold text-[var(--color-gold)]"
-        />
+        <div className="space-y-1">
+          <AnimatedNumber
+            value={total}
+            from={0}
+            prefix="+"
+            duration={1.1}
+            className="font-display text-5xl font-bold text-[var(--color-gold)]"
+          />
+          {bonus > 0 && (
+            <motion.p
+              className="text-xs text-muted-foreground"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6, duration: 0.3 }}
+            >
+              {reward} for the praise{" "}
+              <span className="font-semibold text-[var(--color-gold)]">
+                + {bonus} {RIDDLE_COPY.sharpMind}
+              </span>
+            </motion.p>
+          )}
+        </div>
 
         <DialogDescription className="text-sm">
           Treasury{" "}
           <AnimatedNumber
             value={result.balance}
-            from={result.balance - reward}
+            from={result.balance - total}
             duration={1.1}
             className="font-semibold text-foreground"
           />{" "}

@@ -170,6 +170,7 @@ const ROUTINE_REASONS = new Set([
   "game_participation",
   "kiss_the_hand",
   "sing_his_praises",
+  "riddle_bonus",
   "mvp_bonus",
 ])
 const ROUTINE_PREFIXES = ["bet_", "chaos_", "insurance_", "prophecy_", "title_", "bounty_", "sabotage_", "shame_", "duel_"]

@@ -138,6 +138,7 @@ export type PointReason =
   | "shame_spent"
   | "act_carryover"
   | "sing_his_praises"
+  | "riddle_bonus"
   | "title_bought"
   | "bounty_placed"
   | "bounty_claimed"

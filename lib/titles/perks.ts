@@ -26,6 +26,10 @@ import type { TitleCategory } from "@/lib/titles/types"
 
 export type { PerkDefinition, PerkGame, PerkHit, PerkSubject } from "@/lib/titles/perk-kit"
 
+const BARON_WIN = 10
+const BARON_LOSS = 4
+const PLOT_TWIST = 5
+
 const SHOP_PERKS: Record<string, PerkDefinition> = {
   Kingslayer: {
     kind: "perk",
@@ -110,9 +114,11 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "Baron Caller (Derogatory)": {
     kind: "perk",
     trigger: "chance",
-    cap: 10,
-    describe: fixed("Every game: 50% chance of +10, 50% chance of -4"),
-    evaluate: (_s, _g, roll) => (roll < 0.5 ? hit(10, "Called Baron. It worked.") : hit(-4, "Called Baron. Died alone.")),
+    cap: BARON_WIN,
+    downside: BARON_LOSS,
+    describe: fixed(`Every game: 50% chance of +${BARON_WIN}, 50% chance of -${BARON_LOSS}`),
+    evaluate: (_s, _g, roll) =>
+      roll < 0.5 ? hit(BARON_WIN, "Called Baron. It worked.") : hit(-BARON_LOSS, "Called Baron. Died alone."),
   },
   "The 0/8 Powerspike": {
     kind: "perk",
@@ -126,10 +132,11 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
     kind: "perk",
     trigger: "bet_win",
     cap: 60,
-    describe: fixed("Bet on your own team: +30% profit if it wins, -5 if it loses"),
+    downside: PLOT_TWIST,
+    describe: fixed(`Bet on your own team: +30% profit if it wins, -${PLOT_TWIST} if it loses`),
     evaluate: (s) => {
       if (!s.play || !s.bet || s.bet.side !== s.play.side) return null
-      return s.bet.won ? hit(share(profit(s), 30), "Main character energy") : hit(-5, "Plot twist: side character arc")
+      return s.bet.won ? hit(share(profit(s), 30), "Main character energy") : hit(-PLOT_TWIST, "Plot twist: side character arc")
     },
   },
   "El Goblino Pequeno": {

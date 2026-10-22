@@ -16,6 +16,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react"
+import type { FlairTone } from "@/lib/titles/flair"
 import type { PerkTrigger, TitleRarity } from "@/lib/titles/types"
 
 export const RARITY_BADGE: Record<TitleRarity, string> = {
@@ -41,6 +42,14 @@ export const RARITY_FRAME: Record<TitleRarity, string> = {
   epic: "border-violet-400/25",
   legendary: "border-[var(--color-gold)]/40",
   cursed: "border-rose-500/30",
+}
+
+export const FLAIR_EDGE: Record<FlairTone, string> = {
+  rebellion: "via-orange-400/70",
+  loyalty: "via-[var(--color-gold-bright)]/80",
+  absurd: "via-fuchsia-300/70",
+  award: "via-[var(--color-gold)]/80",
+  jester: "via-rose-400/70",
 }
 
 export const CATEGORY_ICON = {

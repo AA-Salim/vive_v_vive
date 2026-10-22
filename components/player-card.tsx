@@ -5,11 +5,14 @@ import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon } from "lucide-react
 import { Button } from "@/components/ui/button"
 import { LaneIcon } from "@/components/lane-icon"
 import { TitleBadge } from "@/components/title-badge"
+import { PlayerName } from "@/components/titles/player-name"
+import { FLAIR_EDGE } from "@/components/titles/title-visuals"
 import { WantedBadge } from "@/components/bounties/wanted-badge"
 import { ChampionAvatar } from "@/components/session/champion-avatar"
 import { PlayerDetails } from "@/components/session/player-details"
 import type { EquippedTitle } from "@/app/api/titles/equipped/route"
 import { getChampionTileUrl, ROLE_LABELS, type Champion } from "@/lib/champions"
+import { flairOf } from "@/lib/titles/flair"
 import type { PlayerRevealState } from "@/lib/types"
 import type { RoomAssignment } from "@/lib/session/types"
 import { cn } from "@/lib/utils"
@@ -59,6 +62,7 @@ export function PlayerCard({
 }: PlayerCardProps) {
   const revealed = state === "revealed" || state === "locking"
   const accent = assignment.side === "blue" ? "bg-[var(--color-blue-team)]" : "bg-[var(--color-red-team)]"
+  const flair = revealed ? flairOf(title) : null
 
   return (
     <div
@@ -87,6 +91,12 @@ export function PlayerCard({
         />
       )}
       <span aria-hidden className={cn("absolute inset-y-0 w-1", mirrored ? "right-0" : "left-0", accent)} />
+      {flair && (
+        <span
+          aria-hidden
+          className={cn("pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent to-transparent", FLAIR_EDGE[flair.tone])}
+        />
+      )}
 
       <PlayerDetails
         assignment={assignment}
@@ -127,7 +137,7 @@ export function PlayerCard({
           <span className={cn("flex min-w-0 items-center gap-1 text-xs", mirrored && "flex-row-reverse")}>
             {revealed ? (
               <>
-                <span className="truncate text-[var(--color-gold-light)]/80">{assignment.players.name}</span>
+                <PlayerName name={assignment.players.name} title={title ?? null} className="text-[var(--color-gold-light)]/80" />
                 {isMe && <YouChip />}
                 {outcome === "won" && <CrownIcon className="size-3.5 shrink-0 text-[var(--color-gold)]" aria-label="Winner" />}
                 <WantedBadge playerId={assignment.player_id} />
@@ -139,7 +149,7 @@ export function PlayerCard({
           {revealed && title && (
             <span className={cn("mt-1 flex min-w-0", mirrored && "justify-end")}>
               <span className="inline-flex min-w-0 max-w-full [&>span]:truncate">
-                <TitleBadge name={title.title} category={title.category} />
+                <TitleBadge name={title.title} category={title.category} rarity={title.rarity} />
               </span>
             </span>
           )}

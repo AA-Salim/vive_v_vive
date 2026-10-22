@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react"
 import { metaFor, TONE_CHIP } from "@/components/live/domain-meta"
 import { liveTone } from "@/lib/live/tone"
 import { RelativeTime } from "@/components/live/relative-time"
+import { HeraldText } from "@/components/titles/herald-text"
 import type { FeedItem } from "@/hooks/use-live-feed"
 import { cn } from "@/lib/utils"
 
@@ -37,7 +38,7 @@ export function ActivityItem({ item, clockOffset }: { item: FeedItem; clockOffse
       <div className="relative min-w-0 flex-1">
         <p className="text-[13px] leading-snug wrap-break-word text-foreground">
           <span className="sr-only">{meta.label}: </span>
-          {line.title}
+          <HeraldText text={line.title} actor={event.actor} interactive />
         </p>
         {line.description && (
           <p className="mt-0.5 line-clamp-2 text-xs leading-snug wrap-break-word text-muted-foreground">

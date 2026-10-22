@@ -2,11 +2,13 @@
 
 import { Check, Coins, Skull, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
 import { RARITY_FRAME, RARITY_TEXT } from "@/components/titles/title-visuals"
 import { cn } from "@/lib/utils"
 import { RARITY_LABEL } from "@/lib/titles/catalog"
+import { titleHelp } from "@/lib/titles/help"
 import { CURSE_GAMES } from "@/lib/titles/rules"
 import type { OwnedTitleView, TitleView } from "@/lib/titles/types"
 
@@ -52,6 +54,7 @@ export function TitleShopCard({ title, owned, balance, signedIn, locked, busy, o
             rarity={title.rarity}
             perk={title.perk}
             description={title.description}
+            price={title.price}
             size="md"
             interactive
           />
@@ -91,6 +94,12 @@ export function TitleShopCard({ title, owned, balance, signedIn, locked, busy, o
               ? `${title.holders} branded so far`
               : `${title.holders} own it${title.wearing > 0 ? `, ${title.wearing} wearing` : ""}`}
         </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <InfoTip
+            help={titleHelp({ name: title.name, category: title.category, perk: title.perk, price: title.price })}
+            side="top"
+            align="end"
+          />
         {curse ? (
           <Button
             variant="destructive"
@@ -117,6 +126,7 @@ export function TitleShopCard({ title, owned, balance, signedIn, locked, busy, o
             {affordable ? "Buy" : "Too poor"}
           </Button>
         )}
+        </span>
       </footer>
       {brandedOnMe && (
         <p className="-mt-1 text-[11px] text-rose-300">This brand is currently burning on you.</p>

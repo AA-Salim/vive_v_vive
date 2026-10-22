@@ -4,6 +4,7 @@ import { CrownIcon } from "lucide-react"
 import { InfoTip } from "@/components/ui/info-tip"
 import { LaneIcon } from "@/components/lane-icon"
 import { TitleBadge } from "@/components/title-badge"
+import { PlayerName } from "@/components/titles/player-name"
 import { YouChip, championLabel } from "@/components/player-card"
 import { ChampionAvatar } from "@/components/session/champion-avatar"
 import { PlayerDetails } from "@/components/session/player-details"
@@ -63,15 +64,17 @@ function MatchupSide({
           {championLabel(assignment, state, shuffle)}
         </span>
         <span className={cn("flex min-w-0 items-center gap-1 text-xs", mirrored && "flex-row-reverse")}>
-          <span className={cn("truncate", revealed ? "text-[var(--color-gold-light)]/80" : "text-muted-foreground")}>
-            {revealed ? assignment.players.name : "Rolling..."}
-          </span>
+          {revealed ? (
+            <PlayerName name={assignment.players.name} title={title ?? null} className="text-[var(--color-gold-light)]/80" />
+          ) : (
+            <span className="truncate text-muted-foreground">Rolling...</span>
+          )}
           {revealed && props.meId === assignment.player_id && <YouChip />}
         </span>
         {revealed && title && (
           <span className={cn("mt-0.5 flex min-w-0", mirrored && "justify-end")}>
             <span className="inline-flex min-w-0 max-w-full [&>span]:truncate">
-              <TitleBadge name={title.title} category={title.category} />
+              <TitleBadge name={title.title} category={title.category} rarity={title.rarity} />
             </span>
           </span>
         )}

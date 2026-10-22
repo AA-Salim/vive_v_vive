@@ -25,6 +25,8 @@ export interface PerkInfo {
   trigger: PerkTrigger
   summary: string
   cap: number
+  // The most a bad game can take from a perk wearer (Baron calls, plot twists).
+  downside?: number
 }
 
 export interface CurseState {
@@ -108,6 +110,9 @@ export interface CurseBadge {
   perk: string
   bestowedBy: string | null
   gamesLeft: number
+  cap?: number
+  price?: number
+  dignityCost?: number
 }
 
 // Extends the original { userId, playerId, title, category, perk } contract with optional fields only.
@@ -119,6 +124,7 @@ export interface EquippedTitle {
   perk: string | null
   kind?: PerkKind | "cosmetic"
   rarity?: TitleRarity
+  price?: number
   curses?: CurseBadge[]
 }
 
@@ -132,4 +138,19 @@ export interface MilestoneView extends MilestoneDefinition {
 
 export interface MilestonesResponse {
   milestones: MilestoneView[]
+}
+
+export interface TitlePayoutItem {
+  id: string
+  title: string | null
+  kind: PerkKind | "tribute"
+  amount: number
+  detail: string
+  // Whoever is on the other end: the brander a curse paid, or the branded who paid a tribute.
+  counterpart: string | null
+}
+
+export interface TitlePayoutsResponse {
+  items: TitlePayoutItem[]
+  total: number
 }

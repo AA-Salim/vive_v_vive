@@ -11,6 +11,7 @@ import { PayoutPreview } from "@/components/betting/payout-preview"
 import { SidePicker } from "@/components/betting/side-picker"
 import { StakePicker } from "@/components/betting/stake-picker"
 import { usePlaceBet, type Market } from "@/components/betting/use-market"
+import { TitleInPlay } from "@/components/titles/title-in-play"
 import type { MarketClock } from "@/components/betting/use-clock"
 import { MARKET_COPY } from "@/lib/betting/copy"
 import { allInHelp, betHelp, earlyHelp } from "@/lib/betting/help"
@@ -222,6 +223,8 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
             <InfoTip help={earlyHelp(projection?.win.early ?? 0)} align="end" className="-my-0.5" />
           </div>
         )}
+
+        <TitleInPlay userId={userId} context="bet" />
 
         <PayoutPreview side={side} projection={amount > 0 ? projection : null} />
 

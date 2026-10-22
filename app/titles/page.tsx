@@ -49,6 +49,7 @@ export default function TitlesPage() {
   const [bestowTarget, setBestowTarget] = useState<TitleView | null>(null)
   const [dignityTarget, setDignityTarget] = useState<{ title: TitleView; owned: OwnedTitleView } | null>(null)
   const [pledged, setPledged] = useState<(() => void) | null>(null)
+  const [raisedId, setRaisedId] = useState<string | null>(null)
 
   const data = catalog.data
   const balance = wallet.data ?? data?.balance ?? null
@@ -62,10 +63,26 @@ export default function TitlesPage() {
     else action()
   }
 
-  const equipTitle = (title: TitleView | null) => equip.mutate({ titleId: title?.id ?? null, name: title?.name })
+  const look = (title: TitleView) => ({ category: title.category, rarity: title.rarity, wearer: me?.name ?? null })
+
+  const equipTitle = (title: TitleView | null) =>
+    equip.mutate(
+      { titleId: title?.id ?? null, name: title?.name, ...(title ? look(title) : {}) },
+      { onSuccess: () => setRaisedId(title?.id ?? null) }
+    )
 
   const confirmBuy = (title: TitleView, equipNow: boolean) =>
-    withPledge(() => buy.mutate({ titleId: title.id, name: title.name, equip: equipNow }, { onSuccess: () => setBuyTarget(null) }))
+    withPledge(() =>
+      buy.mutate(
+        { titleId: title.id, name: title.name, equip: equipNow, ...look(title) },
+        {
+          onSuccess: (result) => {
+            setBuyTarget(null)
+            if (result.equipped) setRaisedId(title.id)
+          },
+        }
+      )
+    )
 
   const confirmBestow = (title: TitleView, target: CourtMember) =>
     withPledge(() =>
@@ -80,7 +97,7 @@ export default function TitlesPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <HallHeader balance={signedIn ? balance : null} signedIn={signedIn} />
+      <HallHeader balance={signedIn ? balance : null} signedIn={signedIn} prices={data?.titles.map((t) => t.price)} />
 
       {catalog.error && (
         <Alert variant="destructive">
@@ -106,6 +123,8 @@ export default function TitlesPage() {
             unequipping={equip.isPending}
             onBrowse={setTab}
             onDignity={(title, owned) => setDignityTarget({ title, owned })}
+            wearer={me?.name ?? null}
+            raisedId={raisedId}
           />
         </aside>
 

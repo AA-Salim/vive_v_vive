@@ -3,11 +3,13 @@
 import { Check, Sparkles } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
 import { cn } from "@/lib/utils"
 import { MILESTONE_GROUPS } from "@/lib/milestones"
+import { MILESTONES_HELP, titleHelp } from "@/lib/titles/help"
 import type { MilestoneView } from "@/lib/titles/types"
 
 interface MilestonesPanelProps {
@@ -56,9 +58,10 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3.5">
-        <p className="text-sm text-[var(--color-gold-light)]">
+        <p className="flex items-center gap-1 text-sm text-[var(--color-gold-light)]">
           <span className="font-display text-lg text-[var(--color-gold)] tabular-nums">{engraved}</span>
           <span className="text-muted-foreground"> of {milestones.length} engraved</span>
+          <InfoTip help={MILESTONES_HELP} side="top" align="start" />
         </p>
         {claimable.length > 0 && (
           <Button className="h-10 gap-2" disabled={claimingAll || claimingId !== null} onClick={onClaimAll}>
@@ -111,6 +114,8 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
                         />
                         <p className="text-xs text-muted-foreground">{m.description}</p>
                       </div>
+                      <span className="flex shrink-0 items-center gap-1.5">
+                      <InfoTip help={titleHelp({ name: m.title, category: "award", perk: m.perk })} side="top" align="end" />
                       {m.claimed ? (
                         <span className="inline-flex h-10 shrink-0 items-center gap-1 text-xs font-semibold text-emerald-300">
                           <Check aria-hidden className="size-4" />
@@ -125,6 +130,7 @@ export function MilestonesPanel({ milestones, isLoading, error, claimingId, clai
                           Claim
                         </Button>
                       ) : null}
+                      </span>
                     </div>
                     <PerkLine perk={m.perk} className="mt-2" />
                     {!m.claimed && (

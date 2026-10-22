@@ -1,29 +1,46 @@
 "use client"
 
-import { useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { EquippedTitle } from "@/lib/titles/types"
 
 export const EQUIPPED_TITLES_KEY = ["titles", "equipped"] as const
 
-export function useEquippedTitles() {
+export interface EquippedIndex {
+  equipped: EquippedTitle[]
+  byPlayerId: Map<string, EquippedTitle>
+  byUserId: Map<string, EquippedTitle>
+  entryFor: (playerId?: string | null, userId?: string | null) => EquippedTitle | undefined
+}
+
+const EMPTY: EquippedTitle[] = []
+const INDEXES = new WeakMap<EquippedTitle[], EquippedIndex>()
+
+// Every name on screen reads the same list: the maps are built once per response, not once per row.
+function indexOf(list: EquippedTitle[]): EquippedIndex {
+  const cached = INDEXES.get(list)
+  if (cached) return cached
+  const byPlayerId = new Map(list.filter((t) => t.playerId).map((t) => [t.playerId as string, t]))
+  const byUserId = new Map(list.map((t) => [t.userId, t]))
+  const index: EquippedIndex = {
+    equipped: list,
+    byPlayerId,
+    byUserId,
+    entryFor: (playerId, userId) => (playerId ? byPlayerId.get(playerId) : undefined) ?? (userId ? byUserId.get(userId) : undefined),
+  }
+  INDEXES.set(list, index)
+  return index
+}
+
+export function useEquippedTitles(): EquippedIndex {
   const query = useQuery({
     queryKey: EQUIPPED_TITLES_KEY,
     queryFn: async (): Promise<EquippedTitle[]> => {
       const res = await fetch("/api/titles/equipped")
       if (!res.ok) return []
-      return res.json()
+      const body: unknown = await res.json()
+      return Array.isArray(body) ? (body as EquippedTitle[]) : []
     },
     staleTime: 60_000,
   })
-
-  const list = query.data
-  return useMemo(() => {
-    const equipped = list ?? []
-    return {
-      equipped,
-      byPlayerId: new Map(equipped.filter((t) => t.playerId).map((t) => [t.playerId as string, t])),
-      byUserId: new Map(equipped.map((t) => [t.userId, t])),
-    }
-  }, [list])
+  return indexOf(query.data ?? EMPTY)
 }

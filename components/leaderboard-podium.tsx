@@ -7,6 +7,7 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { ChangeFlash } from "@/components/pages/change-flash"
 import { formatNumber } from "@/components/pages/format"
 import { Delta, RankShift } from "@/components/pages/indicators"
+import { Epithet, PlayerName } from "@/components/titles/player-name"
 import { PlayerTitles } from "@/components/titles/player-titles"
 import type { LeaderboardEntry, PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
@@ -77,21 +78,22 @@ export function LeaderboardPodium({ entries, onOpen }: { entries: LeaderboardEnt
               <button
                 type="button"
                 onClick={() => onOpen({ id: entry.player_id as string, name, avatarUrl: entry.avatar_url, userId: entry.user_id })}
-                className="w-full truncate rounded-sm font-display text-sm font-semibold text-[var(--color-gold-light)] outline-none hover:text-[var(--color-gold)] focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-base"
+                className="flex w-full min-w-0 justify-center rounded-sm font-display text-sm font-semibold text-[var(--color-gold-light)] outline-none hover:text-[var(--color-gold)] focus-visible:ring-2 focus-visible:ring-ring/50 sm:text-base"
               >
-                {name}
+                <PlayerName name={name} userId={entry.user_id} />
                 {entry.is_current_user ? <span className="sr-only"> (you)</span> : null}
               </button>
             ) : (
-              <p className="w-full truncate font-display text-sm font-semibold text-[var(--color-gold-light)] sm:text-base">
-                {name}
+              <p className="flex w-full min-w-0 justify-center font-display text-sm font-semibold text-[var(--color-gold-light)] sm:text-base">
+                <PlayerName name={name} userId={entry.user_id} />
                 {entry.is_current_user ? <span className="sr-only"> (you)</span> : null}
               </p>
             )}
+            <Epithet userId={entry.user_id} className="w-full truncate text-[11px] sm:hidden" />
             {entry.player_name && entry.player_name !== entry.username ? (
               <p className="hidden w-full truncate text-[11px] text-muted-foreground sm:block">@{entry.username}</p>
             ) : null}
-            <PlayerTitles userId={entry.user_id} className="mt-1 hidden max-w-full justify-center sm:flex" />
+            <PlayerTitles userId={entry.user_id} className="mt-1 hidden max-w-full justify-center sm:flex" interactive />
             <ChangeFlash
               value={entry.balance}
               className={cn(

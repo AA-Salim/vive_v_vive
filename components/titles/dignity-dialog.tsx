@@ -3,8 +3,10 @@
 import { Flame } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { HelpRows } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
+import { dignityHelp } from "@/lib/titles/help"
 import type { OwnedTitleView, TitleView } from "@/lib/titles/types"
 
 interface DignityDialogProps {
@@ -40,6 +42,7 @@ export function DignityDialog({ target, balance, pending, onOpenChange, onConfir
                 {curse.left} game{curse.left === 1 ? "" : "s"} left on the clock if you do nothing.
               </p>
             </div>
+            <HelpRows help={dignityHelp(target.title.name, cost, target.owned.bestowed_by?.name ?? null, curse.left)} />
             <p className="text-xs text-muted-foreground">
               {bestower} keeps the {target.title.price} they spent. Their tribute stops the moment the brand burns.
             </p>

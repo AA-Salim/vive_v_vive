@@ -12,6 +12,10 @@ import { byLane } from "@/components/session/board-types"
 import { useServerNow } from "@/components/session/use-clock"
 import { SIDE_NAME, relativeTime, victoryLine } from "@/components/session/copy"
 import { GAME_POINTS_LINE, RESULT_POINTS_HELP } from "@/components/session/help"
+import { PlayerName } from "@/components/titles/player-name"
+import { TitlePayout } from "@/components/titles/title-payout"
+import { useAuthUser } from "@/hooks/use-auth"
+import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { winnerOf } from "@/lib/session/constants"
 import type { RoomSession } from "@/lib/session/types"
 import type { Side } from "@/lib/types"
@@ -49,7 +53,9 @@ interface ResultScreenProps {
 export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScreenProps) {
   const winner = winnerOf(session.status)
   const reduced = useReducedMotion()
-  const serverNow = useServerNow(serverTimeDelta, 30_000)
+  const serverNow = useServerNow(serverTimeDelta, 5_000)
+  const { user } = useAuthUser()
+  const { byPlayerId } = useEquippedTitles()
   const [flash, setFlash] = useState<Side | null>(null)
   const endedAt = Date.parse(session.updated_at)
 
@@ -146,7 +152,11 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
                 className="flex w-[58px] flex-col items-center gap-1.5 sm:w-20"
               >
                 <ChampionAvatar assignment={a} size={48} rounded="full" className="ring-[3px]" />
-                <span className="w-full truncate text-xs font-semibold text-foreground">{a.players.name}</span>
+                <PlayerName
+                  name={a.players.name}
+                  title={byPlayerId.get(a.player_id) ?? null}
+                  className="w-full justify-center text-xs font-semibold text-foreground"
+                />
                 <span className="-mt-1 w-full truncate text-[10px] text-muted-foreground">{a.champion}</span>
               </motion.li>
             ))}
@@ -156,6 +166,11 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
             {GAME_POINTS_LINE}
             <InfoTip help={RESULT_POINTS_HELP} />
           </p>
+          <TitlePayout
+            sessionId={session.id}
+            userId={user?.id ?? null}
+            sinceResultMs={serverNow !== null && !Number.isNaN(endedAt) ? serverNow - endedAt : null}
+          />
           <p className="text-xs text-muted-foreground">
             {session.resolver ? `Declared by ${session.resolver.name}` : "Result recorded"}
             {serverNow !== null && !Number.isNaN(endedAt) ? ` · ${relativeTime(endedAt, serverNow)}` : ""}

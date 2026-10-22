@@ -31,6 +31,7 @@ import { DECREE_WINDOW_HELP, decreeHelp, decreesPanelHelp } from "@/components/c
 import { DecreeDialog } from "@/components/chaos/decree-dialog"
 import { DecreeLedger, DecreeLedgerSkeleton } from "@/components/chaos/decree-ledger"
 import { EdictBoard, EdictBoardSkeleton } from "@/components/chaos/edict-board"
+import { TitleInPlay } from "@/components/titles/title-in-play"
 import { Proclamation, useProclamation } from "@/components/chaos/proclamation"
 import { TreasuryStrip, TreasuryStripSkeleton } from "@/components/chaos/treasury-strip"
 import { formatClock, useRemainingMs } from "@/components/chaos/use-now"
@@ -215,6 +216,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
               )}
               {!roundOver && (
                 <>
+                  {windowOpen && <TitleInPlay userId={viewerId} context="decree" />}
                   <EdictBoard cards={cards} onSelect={openDecree} />
                   <p className="text-center text-[11px] text-[var(--color-gold-light)]/40">
                     Decrees are final and public. Every point comes back if the game is canceled.

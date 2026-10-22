@@ -2,8 +2,10 @@
 
 import { Hourglass } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { HelpRows } from "@/components/ui/info-tip"
 import { cn } from "@/lib/utils"
 import { CATEGORY_META, RARITY_LABEL, isCurseCategory, perkInfo, rarityOf } from "@/lib/titles/catalog"
+import { titleHelp } from "@/lib/titles/help"
 import type { PerkInfo, TitleCategory, TitleRarity } from "@/lib/titles/types"
 import { PerkLine } from "@/components/titles/perk-line"
 import { CATEGORY_ICON, RARITY_BADGE, RARITY_TEXT, iconKeyFor } from "@/components/titles/title-visuals"
@@ -15,7 +17,9 @@ interface TitleBadgeProps {
   // undefined: derive the perk from the title; null: cosmetic; string or PerkInfo: shown as given.
   perk?: string | PerkInfo | null
   description?: string | null
-  curse?: { bestowedBy?: string | null; gamesLeft?: number } | null
+  curse?: { bestowedBy?: string | null; gamesLeft?: number; dignityCost?: number | null } | null
+  // Shop price, for the cost line of the popover. Seeded shop prices are used when omitted.
+  price?: number | null
   size?: "sm" | "md" | "lg"
   // Opt-in popover with the perk. Keep it off inside buttons and other popover triggers.
   interactive?: boolean
@@ -50,6 +54,7 @@ export function TitleBadge({
   perk,
   description,
   curse,
+  price,
   size = "sm",
   interactive = false,
   className,
@@ -92,7 +97,11 @@ export function TitleBadge({
       >
         {content}
       </PopoverTrigger>
-      <PopoverContent side="top" sideOffset={6} className="w-64 gap-2 border border-border bg-[var(--color-navy-light)] p-3">
+      <PopoverContent
+        side="top"
+        sideOffset={6}
+        className="max-h-[min(30rem,75dvh)] w-80 gap-2 overflow-y-auto border border-border bg-[var(--color-navy-light)] p-3"
+      >
         <div className="flex items-start gap-2">
           <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", RARITY_TEXT[tier])} />
           <div className="min-w-0">
@@ -112,6 +121,17 @@ export function TitleBadge({
           </p>
         ) : null}
         {description ? <p className="text-[11px] text-muted-foreground italic">&ldquo;{description}&rdquo;</p> : null}
+        <div className="border-t border-border/60 pt-2">
+          <HelpRows
+            help={titleHelp({
+              name,
+              category: cat,
+              perk: info,
+              price,
+              curse: curse ? { bestowedBy: curse.bestowedBy, gamesLeft: curse.gamesLeft, dignityCost: curse.dignityCost } : null,
+            })}
+          />
+        </div>
       </PopoverContent>
     </Popover>
   )

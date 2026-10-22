@@ -11,6 +11,7 @@ import { RivalPicker, type RivalChoice } from "@/components/duels/rival-picker"
 import { StakeField } from "@/components/duels/stake-field"
 import { useCreateDuel } from "@/components/duels/use-duel-mutations"
 import { useDuelRoster } from "@/components/duels/use-duels"
+import { TitleInPlay } from "@/components/titles/title-in-play"
 import { rivalBlock, rivalsOf, type RivalBlock, type RivalContext } from "@/lib/duels/eligibility"
 import { DUEL_COPY } from "@/lib/duels/copy"
 import { DUEL_RULES, SIDE_NAME, canAfford, duelPayout, duelProfit, duelTax, isValidStake, otherSide } from "@/lib/duels/rules"
@@ -177,6 +178,7 @@ function ChallengeForm({ session, duels, me, mySide, balance, gatesOpen, onDone 
           disabled={create.isPending}
         />
         <StakeField value={stakeText} onChange={setStakeText} balance={balance} disabled={create.isPending} />
+        <TitleInPlay userId={me.userId} context="duel" />
       </div>
 
       <div className="sticky bottom-0 space-y-2 border-t border-border/60 bg-popover/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">

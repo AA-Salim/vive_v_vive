@@ -28,6 +28,7 @@ export interface PerkDefinition {
   kind: PerkKind
   trigger: PerkTrigger
   cap: number
+  downside?: number
   // `to` names whoever collects a curse's tribute; perks ignore it.
   describe: (to: string) => string
   evaluate: (subject: PerkSubject, game: PerkGame, roll: number) => PerkHit | null

@@ -2,10 +2,12 @@
 
 import { useState } from "react"
 import { motion, useReducedMotion } from "motion/react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { TitleShopCard } from "@/components/titles/title-shop-card"
 import { CATEGORY_ICON } from "@/components/titles/title-visuals"
 import { cn } from "@/lib/utils"
 import { CATEGORY_META } from "@/lib/titles/catalog"
+import { categoryHelp } from "@/lib/titles/help"
 import type { OwnedTitleView, TitleCategory, TitleView } from "@/lib/titles/types"
 
 type ShopCategory = Exclude<TitleCategory, "award">
@@ -78,9 +80,12 @@ export function Armory({ titles, collection, balance, signedIn, locked, busyId, 
                   className={cn("mt-0.5 size-4 shrink-0", category === "mockery" ? "text-rose-400" : "text-[var(--color-gold)]")}
                 />
                 <div className="min-w-0">
-                  <h2 id={`armory-${category}`} className="font-display text-base leading-tight text-[var(--color-gold-light)]">
-                    {CATEGORY_META[category].label}
-                  </h2>
+                  <div className="flex items-center gap-1">
+                    <h2 id={`armory-${category}`} className="font-display text-base leading-tight text-[var(--color-gold-light)]">
+                      {CATEGORY_META[category].label}
+                    </h2>
+                    <InfoTip help={categoryHelp(category, items.map((t) => t.price))} side="top" align="start" />
+                  </div>
                   <p className="text-xs text-muted-foreground">{CATEGORY_META[category].tagline}</p>
                 </div>
               </div>

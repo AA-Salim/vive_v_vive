@@ -3,8 +3,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { useLiveSignal } from "@/components/live/live-provider"
+import { showEquipToast } from "@/components/titles/equip-moment"
 import { signed } from "@/lib/titles/copy"
-import type { CourtResponse, MilestonesResponse, TitlesCatalogResponse } from "@/lib/titles/types"
+import type { CourtResponse, MilestonesResponse, TitleRarity, TitlesCatalogResponse } from "@/lib/titles/types"
 
 export const TITLES_KEYS = {
   all: ["titles"] as const,
@@ -12,6 +13,13 @@ export const TITLES_KEYS = {
   court: ["titles", "court"] as const,
   milestones: ["titles", "milestones"] as const,
   wallet: (userId: string | null) => ["points", userId ?? "anonymous", "titles-wallet"] as const,
+}
+
+// Optional details of the banner being raised, for the "title moment" toast.
+interface BannerLook {
+  category?: string
+  rarity?: TitleRarity
+  wearer?: string | null
 }
 
 export class TitlesApiError extends Error {
@@ -94,7 +102,7 @@ export function useEquipTitle() {
   const queryClient = useQueryClient()
   const refresh = useRefreshTitles()
   return useMutation({
-    mutationFn: (vars: { titleId: string | null; name?: string }) =>
+    mutationFn: (vars: { titleId: string | null; name?: string } & BannerLook) =>
       post<{ title: string | null }>("/api/titles/activate", { title_id: vars.titleId }),
     onMutate: async ({ titleId }) => {
       await queryClient.cancelQueries({ queryKey: TITLES_KEYS.catalog })
@@ -112,8 +120,9 @@ export function useEquipTitle() {
       if (context?.previous) queryClient.setQueryData(TITLES_KEYS.catalog, context.previous)
       fail(error)
     },
-    onSuccess: (_data, { titleId, name }) => {
-      if (titleId) toast.success(`You are now known as ${name ?? "something new"}.`, { description: "The perk fires after your next game." })
+    onSuccess: (_data, { titleId, name, category, rarity, wearer }) => {
+      if (titleId && name && category) showEquipToast({ title: name, category, rarity, wearer })
+      else if (titleId) toast.success(`You are now known as ${name ?? "something new"}.`, { description: "The perk fires after your next game." })
       else toast("Banner lowered.", { description: "You are nobody again. Peaceful, honestly." })
     },
     onSettled: refresh,
@@ -123,7 +132,9 @@ export function useEquipTitle() {
 export function useBuyTitle() {
   const refresh = useRefreshTitles()
   return useMutation({
-    mutationFn: async (vars: { titleId: string; name: string; targetUserId?: string; targetName?: string; equip?: boolean }) => {
+    mutationFn: async (
+      vars: { titleId: string; name: string; targetUserId?: string; targetName?: string; equip?: boolean } & BannerLook
+    ) => {
       await post("/api/titles/buy", { title_id: vars.titleId, target_user_id: vars.targetUserId ?? null })
       if (!vars.equip) return { equipped: false, equipError: null as string | null }
       try {
@@ -138,6 +149,8 @@ export function useBuyTitle() {
         toast.success(`${vars.targetName ?? "They"} now bears the brand: ${vars.name}.`, {
           description: "The tribute flows to you. Try to look surprised.",
         })
+      } else if (result.equipped && vars.category) {
+        showEquipToast({ title: vars.name, category: vars.category, rarity: vars.rarity, wearer: vars.wearer })
       } else if (result.equipped) {
         toast.success(`${vars.name} is yours, and the banner is raised.`)
       } else {

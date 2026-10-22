@@ -2,12 +2,12 @@
 
 import type { ReactNode } from "react"
 import Image from "next/image"
-import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon, SparklesIcon } from "lucide-react"
+import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { LaneIcon } from "@/components/lane-icon"
-import { TitleBadge } from "@/components/title-badge"
+import { PlayerName, TitleCard } from "@/components/titles/player-name"
 import type { EquippedTitle } from "@/app/api/titles/equipped/route"
 import { getChampionSplashUrl, ROLE_LABELS } from "@/lib/champions"
 import type { RoomAssignment } from "@/lib/session/types"
@@ -77,17 +77,14 @@ export function PlayerDetails({
           </div>
         </div>
         <div className="space-y-3 p-3">
-          <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            Played by <span className="font-semibold text-foreground">{assignment.players.name}</span>
-            {outcome === "won" && <CrownIcon className="size-4 text-[var(--color-gold)]" aria-label="Winner" />}
+          <p className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground">
+            <span className="shrink-0">Played by</span>
+            <PlayerName name={assignment.players.name} title={title ?? null} epithet className="font-semibold text-foreground" />
+            {outcome === "won" && <CrownIcon className="size-4 shrink-0 text-[var(--color-gold)]" aria-label="Winner" />}
           </p>
           {title ? (
-            <div className="space-y-1.5 rounded-md border border-border bg-muted/40 p-2">
-              <TitleBadge name={title.title} category={title.category} />
-              <p className="flex gap-1.5 text-xs leading-relaxed text-muted-foreground">
-                <SparklesIcon className="mt-0.5 size-3.5 shrink-0 text-[var(--color-gold)]" aria-hidden />
-                {title.perk ?? "Pure prestige. This title carries no perk, only bragging rights."}
-              </p>
+            <div className="rounded-md border border-border bg-muted/40 p-2">
+              <TitleCard name={assignment.players.name} entry={title} showName={false} />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">No title equipped. A blank page in the royal notebook.</p>

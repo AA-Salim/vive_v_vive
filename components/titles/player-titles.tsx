@@ -15,8 +15,8 @@ interface PlayerTitlesProps {
 
 // The equipped title (with its perk) plus any active brands, ready to drop into a player card.
 export function PlayerTitles({ playerId, userId, size = "sm", interactive = false, className }: PlayerTitlesProps) {
-  const { byPlayerId, byUserId } = useEquippedTitles()
-  const entry = (playerId ? byPlayerId.get(playerId) : undefined) ?? (userId ? byUserId.get(userId) : undefined)
+  const { entryFor } = useEquippedTitles()
+  const entry = entryFor(playerId, userId)
   if (!entry) return null
 
   return (
@@ -27,6 +27,7 @@ export function PlayerTitles({ playerId, userId, size = "sm", interactive = fals
           category={entry.category}
           rarity={entry.rarity}
           perk={entry.perk}
+          price={entry.price}
           size={size}
           interactive={interactive}
         />
@@ -38,7 +39,8 @@ export function PlayerTitles({ playerId, userId, size = "sm", interactive = fals
           category="mockery"
           rarity="cursed"
           perk={curse.perk}
-          curse={{ bestowedBy: curse.bestowedBy, gamesLeft: curse.gamesLeft }}
+          price={curse.price}
+          curse={{ bestowedBy: curse.bestowedBy, gamesLeft: curse.gamesLeft, dignityCost: curse.dignityCost }}
           size={size}
           interactive={interactive}
         />

@@ -6,6 +6,7 @@ import { XIcon, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { TONE_CHIP } from "@/components/live/domain-meta"
+import { HeraldText } from "@/components/titles/herald-text"
 import type { LiveActor } from "@/lib/live/events"
 import type { LiveTone } from "@/lib/live/tone"
 import { cn } from "@/lib/utils"
@@ -176,7 +177,7 @@ export function LiveToast({
               tone === "royal" && "font-display"
             )}
           >
-            {title}
+            <HeraldText text={title} actor={actor} />
           </p>
           {description && (
             <p className="mt-0.5 line-clamp-2 text-[13px] leading-snug wrap-break-word text-muted-foreground">

@@ -5,10 +5,12 @@ import { ArrowRight, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { HelpRows } from "@/components/ui/info-tip"
 import { Label } from "@/components/ui/label"
 import { TitleBadge } from "@/components/title-badge"
 import { AnimatedNumber } from "@/components/titles/animated-number"
 import { PerkLine } from "@/components/titles/perk-line"
+import { titleHelp } from "@/lib/titles/help"
 import { cn } from "@/lib/utils"
 import type { TitleView } from "@/lib/titles/types"
 
@@ -39,6 +41,9 @@ export function BuyDialog({ title, balance, locked, pending, onOpenChange, onCon
               <TitleBadge name={title.name} category={title.category} rarity={title.rarity} perk={title.perk} size="lg" interactive={false} />
               <p className="text-xs text-muted-foreground italic">&ldquo;{title.description}&rdquo;</p>
               <PerkLine perk={title.perk} className="text-sm" />
+              <div className="border-t border-border/60 pt-2.5">
+                <HelpRows help={titleHelp({ name: title.name, category: title.category, perk: title.perk, price: title.price })} />
+              </div>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5 text-sm">

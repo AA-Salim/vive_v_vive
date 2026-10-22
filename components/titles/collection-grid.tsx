@@ -3,11 +3,13 @@
 import { Check, Hourglass } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
 import { PerkLine } from "@/components/titles/perk-line"
 import { RARITY_FRAME } from "@/components/titles/title-visuals"
 import { cn } from "@/lib/utils"
 import { HALL_COPY } from "@/lib/titles/copy"
+import { titleHelp } from "@/lib/titles/help"
 import type { OwnedTitleView, TitleRarity, TitleView } from "@/lib/titles/types"
 
 const RARITY_ORDER: Record<TitleRarity, number> = { legendary: 0, epic: 1, rare: 2, common: 3, cursed: 4 }
@@ -70,7 +72,12 @@ export function CollectionGrid({ titles, collection, locked, busyId, onEquip, on
                 rarity={title.rarity}
                 perk={owned.perk}
                 description={title.description}
-                curse={owned.curse ? { bestowedBy: owned.bestowed_by?.name, gamesLeft: owned.curse.left } : null}
+                curse={
+                  owned.curse
+                    ? { bestowedBy: owned.bestowed_by?.name, gamesLeft: owned.curse.left, dignityCost: owned.curse.dignity_cost }
+                    : null
+                }
+                price={title.price}
                 size="md"
                 interactive
               />
@@ -93,7 +100,21 @@ export function CollectionGrid({ titles, collection, locked, busyId, onEquip, on
                   : `Branded by ${owned.bestowed_by?.name ?? "someone"}, now cold`}
               </p>
             )}
-            <div className="mt-auto flex justify-end">
+            <div className="mt-auto flex items-center justify-end gap-1.5">
+              <InfoTip
+                help={titleHelp({
+                  name: title.name,
+                  category: title.category,
+                  perk: owned.perk,
+                  price: title.price,
+                  wearer: "you",
+                  curse: owned.curse?.active
+                    ? { bestowedBy: owned.bestowed_by?.name, gamesLeft: owned.curse.left, dignityCost: owned.curse.dignity_cost }
+                    : null,
+                })}
+                side="top"
+                align="end"
+              />
               {owned.is_active ? null : (
                 <Button
                   variant="outline"

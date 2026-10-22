@@ -53,6 +53,10 @@ const SHOP_PRICES: Record<string, number> = {
   "El Goblino Pequeno": 100,
 }
 
+export function seededPrice(name: string): number | null {
+  return Object.prototype.hasOwnProperty.call(SHOP_PRICES, name) ? SHOP_PRICES[name] : null
+}
+
 export function rarityOf(name: string, category: string, price?: number): TitleRarity {
   if (isCurseCategory(category)) return "cursed"
   if (category === "award") {
@@ -66,5 +70,7 @@ export function rarityOf(name: string, category: string, price?: number): TitleR
 export function perkInfo(name: string, category: string, to = "whoever branded you"): PerkInfo | null {
   const def = perkFor(name, category)
   if (!def) return null
-  return { kind: def.kind, trigger: def.trigger, summary: def.describe(to), cap: def.cap }
+  const info: PerkInfo = { kind: def.kind, trigger: def.trigger, summary: def.describe(to), cap: def.cap }
+  if (def.downside) info.downside = def.downside
+  return info
 }

@@ -160,11 +160,15 @@ export async function buildEquippedTitles(supabase: SupabaseClient): Promise<Equ
     if (!state.active) continue
     const bestower = identities.get(brand.assigned_by ?? "")?.name ?? null
     const list = cursesByUser.get(brand.user_id) ?? []
+    const info = perkInfo(brand.title.name, brand.title.category, bestower ?? "whoever branded them")
     list.push({
       title: brand.title.name,
-      perk: perkInfo(brand.title.name, brand.title.category, bestower ?? "whoever branded them")?.summary ?? "",
+      perk: info?.summary ?? "",
       bestowedBy: bestower,
       gamesLeft: state.left,
+      cap: info?.cap,
+      price: brand.title.price,
+      dignityCost: state.dignity_cost,
     })
     cursesByUser.set(brand.user_id, list)
   }
@@ -183,6 +187,7 @@ export async function buildEquippedTitles(supabase: SupabaseClient): Promise<Equ
       perk: wornBrand?.perk ?? info?.summary ?? null,
       kind: wornBrand ? "curse" : info ? info.kind : "cosmetic",
       rarity: rarityOf(row.title.name, row.title.category, row.title.price),
+      price: row.title.price,
       curses,
     })
   }

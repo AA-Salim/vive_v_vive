@@ -5,13 +5,41 @@ import { Flag, HandCoins, Lock, LogIn, Skull, Sparkles } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { InfoTip } from "@/components/ui/info-tip"
 import { TitleBadge } from "@/components/title-badge"
 import { AnimatedNumber } from "@/components/titles/animated-number"
 import { CurseCard } from "@/components/titles/curse-card"
+import { BannerRaise } from "@/components/titles/equip-moment"
 import { PerkLine } from "@/components/titles/perk-line"
+import { PlayerName } from "@/components/titles/player-name"
+import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 import { HALL_COPY, signed } from "@/lib/titles/copy"
-import type { LedgerItem, OwnedTitleView, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
+import { involvement } from "@/lib/titles/help"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, PERK_CAP } from "@/lib/titles/rules"
+import type { EquippedTitle, LedgerItem, OwnedTitleView, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
+
+const BANNER_HELP: HelpEntry = {
+  title: "Your banner",
+  does: "The one title you wear. Your name takes its colors and its epithet everywhere, and its perk pays out on its own after each game.",
+  cost: `${FREE} to raise, change or lower. Titles themselves are bought in the Armory or earned from milestones`,
+  reward: `Up to ${pts(PERK_CAP)} per game, depending on the title`,
+  limits: `One banner at a time. Pays after games where ${involvement("you")}. Sealed while a game is live.`,
+}
+
+const BRANDS_HELP: HelpEntry = {
+  title: "Brands on you",
+  does: "Curses the court bought for you. They mark your name everywhere and pay their bestower a tribute after your games.",
+  cost: "Each brand takes its toll per game, shown on its card",
+  limits: `A brand burns for ${CURSE_GAMES} games, ${MAX_ACTIVE_CURSES} at most. Buy back your dignity for ${DIGNITY_MULTIPLIER}x its price to burn it early.`,
+}
+
+const LEDGER_HELP: HelpEntry = {
+  title: "Perk ledger",
+  does: "Every point your titles moved this act: perks paid, brands charged, and tribute collected from the people you branded.",
+  cost: FREE,
+  limits: "Resets when a new act begins.",
+}
 
 interface BannerPanelProps {
   catalog: TitlesCatalogResponse | undefined
@@ -22,18 +50,61 @@ interface BannerPanelProps {
   unequipping: boolean
   onBrowse: (tab: "collection" | "armory") => void
   onDignity: (title: TitleView, owned: OwnedTitleView) => void
+  wearer?: string | null
+  // The banner just raised from this page: it gets the title moment.
+  raisedId?: string | null
 }
 
-function Section({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Section({ label, help, children, className }: { label: string; help?: HelpEntry; children: React.ReactNode; className?: string }) {
   return (
     <section className={cn("space-y-2.5", className)}>
-      <h2 className="text-[10px] font-bold tracking-[0.18em] text-[var(--color-gold)]/70 uppercase">{label}</h2>
+      <div className="flex items-center gap-1">
+        <h2 className="text-[10px] font-bold tracking-[0.18em] text-[var(--color-gold)]/70 uppercase">{label}</h2>
+        {help ? <InfoTip help={help} side="top" align="start" /> : null}
+      </div>
       {children}
     </section>
   )
 }
 
-export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip, unequipping, onBrowse, onDignity }: BannerPanelProps) {
+// How the rest of the court sees the viewer, built from the catalog so it follows an equip instantly.
+function selfEntry(banner: TitleView | undefined, owned: OwnedTitleView | undefined, brands: { title: TitleView; owned: OwnedTitleView }[]): EquippedTitle | null {
+  if (!banner && brands.length === 0) return null
+  const curses = brands.map(({ title, owned: brand }) => ({
+    title: title.name,
+    perk: brand.perk?.summary ?? "",
+    bestowedBy: brand.bestowed_by?.name ?? null,
+    gamesLeft: brand.curse?.left ?? 0,
+    price: title.price,
+    dignityCost: brand.curse?.dignity_cost,
+  }))
+  const lead = banner ?? brands[0].title
+  const wornBrand = !banner || !banner.for_self
+  return {
+    userId: "self",
+    playerId: null,
+    title: lead.name,
+    category: lead.category,
+    perk: owned?.perk?.summary ?? null,
+    kind: wornBrand ? "curse" : owned?.perk ? owned.perk.kind : "cosmetic",
+    rarity: lead.rarity,
+    price: lead.price,
+    curses,
+  }
+}
+
+export function BannerPanel({
+  catalog,
+  isLoading,
+  signedIn,
+  onSignIn,
+  onUnequip,
+  unequipping,
+  onBrowse,
+  onDignity,
+  wearer,
+  raisedId,
+}: BannerPanelProps) {
   const reduce = useReducedMotion()
 
   if (!signedIn) {
@@ -65,6 +136,11 @@ export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip,
   const equipped = catalog.collection.find((c) => c.is_active)
   const equippedTitle = equipped ? titleById.get(equipped.title_id) : undefined
   const brands = catalog.collection.filter((c) => c.curse?.active)
+  const brandViews = brands.flatMap((owned) => {
+    const title = titleById.get(owned.title_id)
+    return title ? [{ title, owned }] : []
+  })
+  const me = selfEntry(equippedTitle, equipped, brandViews)
 
   return (
     <div className="space-y-5 rounded-xl border border-[var(--color-gold)]/20 bg-gradient-to-b from-[var(--color-navy-light)] to-[var(--color-navy)] p-4 shadow-[inset_0_1px_0_0_color-mix(in_oklab,var(--color-gold)_15%,transparent)]">
@@ -75,7 +151,7 @@ export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip,
         </Alert>
       )}
 
-      <Section label="Your banner">
+      <Section label="Your banner" help={BANNER_HELP}>
         <AnimatePresence mode="wait" initial={false}>
           {equipped && equippedTitle ? (
             <motion.div
@@ -83,8 +159,9 @@ export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip,
               initial={reduce ? false : { opacity: 0, y: 6, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, y: -6 }}
-              className="space-y-2.5"
+              className="relative -m-2 space-y-2.5 rounded-lg p-2"
             >
+              {raisedId === equippedTitle.id && <BannerRaise key={raisedId} />}
               <TitleBadge
                 name={equippedTitle.name}
                 category={equippedTitle.category}
@@ -122,10 +199,16 @@ export function BannerPanel({ catalog, isLoading, signedIn, onSignIn, onUnequip,
             </motion.div>
           )}
         </AnimatePresence>
+        {wearer && me && (
+          <div className="mt-3 min-w-0 rounded-lg border border-border/70 bg-[var(--color-navy)]/60 px-2.5 py-2">
+            <p className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">How the court sees you</p>
+            <PlayerName name={wearer} title={me} epithet className="mt-0.5 text-sm font-semibold" />
+          </div>
+        )}
       </Section>
 
       {brands.length > 0 && (
-        <Section label={`Brands on you (${brands.length})`}>
+        <Section label={`Brands on you (${brands.length})`} help={BRANDS_HELP}>
           <AnimatePresence initial={false}>
             {brands.map((owned) => {
               const title = titleById.get(owned.title_id)
@@ -153,7 +236,7 @@ const LEDGER_ICON = { perk: Sparkles, curse: Skull, tribute: HandCoins }
 
 function Ledger({ perks, tributes, recent }: { perks: number; tributes: number; recent: LedgerItem[] }) {
   return (
-    <Section label="Perk ledger · this act">
+    <Section label="Perk ledger · this act" help={LEDGER_HELP}>
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg border border-border bg-[var(--color-navy)]/70 p-3">
           <p className="text-[10px] tracking-wider text-muted-foreground uppercase">Perks & curses</p>

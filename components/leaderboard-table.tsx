@@ -8,6 +8,7 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { ChangeFlash } from "@/components/pages/change-flash"
 import { formatNumber, formatSigned } from "@/components/pages/format"
 import { Delta, RankShift, toneOf } from "@/components/pages/indicators"
+import { PlayerName } from "@/components/titles/player-name"
 import { PlayerTitles } from "@/components/titles/player-titles"
 import type { LeaderboardEntry, PlayerRef } from "@/lib/pages/types"
 import { reasonLabel, reasonMeta } from "@/lib/reasons"
@@ -70,12 +71,12 @@ function Row({ entry, reduced, onOpen }: { entry: LeaderboardEntry; reduced: boo
                 <button
                   type="button"
                   onClick={() => onOpen(player)}
-                  className="truncate rounded-sm text-left text-sm font-semibold text-[var(--color-gold-light)] outline-none hover:text-[var(--color-gold)] focus-visible:ring-2 focus-visible:ring-ring/50"
+                  className="flex min-w-0 rounded-sm text-left text-sm font-semibold text-[var(--color-gold-light)] outline-none hover:text-[var(--color-gold)] focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
-                  {name}
+                  <PlayerName name={name} userId={entry.user_id} />
                 </button>
               ) : (
-                <span className="truncate text-sm font-semibold text-[var(--color-gold-light)]">{name}</span>
+                <PlayerName name={name} userId={entry.user_id} className="text-sm font-semibold text-[var(--color-gold-light)]" />
               )}
               {entry.is_current_user ? (
                 <span className="shrink-0 rounded-full bg-[var(--color-gold)]/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-[var(--color-gold)]">
@@ -88,7 +89,7 @@ function Row({ entry, reduced, onOpen }: { entry: LeaderboardEntry; reduced: boo
                 </span>
               ) : null}
             </span>
-            <PlayerTitles userId={entry.user_id} className="mt-0.5" />
+            <PlayerTitles userId={entry.user_id} className="mt-0.5" interactive />
             {record ? <span className="block text-[11px] text-muted-foreground tabular-nums md:hidden">{record}</span> : null}
           </span>
         </span>

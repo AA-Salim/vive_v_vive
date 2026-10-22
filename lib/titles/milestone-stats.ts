@@ -3,7 +3,7 @@ import type { MilestoneStat } from "@/lib/milestones"
 
 export type MilestoneStats = Record<MilestoneStat, number>
 
-const WIN_RATE_MIN_GAMES = 10
+export const WIN_RATE_MIN_GAMES = 10
 
 export async function computeMilestoneStats(supabase: SupabaseClient, userId: string): Promise<MilestoneStats> {
   const { data: profile } = await supabase.from("user_profiles").select("player_id").eq("id", userId).maybeSingle()

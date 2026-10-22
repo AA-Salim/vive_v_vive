@@ -6,6 +6,7 @@ import { Coins, Search, Skull, Stamp } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { HelpRows } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TitleBadge } from "@/components/title-badge"
@@ -13,6 +14,7 @@ import { PerkLine } from "@/components/titles/perk-line"
 import { cn } from "@/lib/utils"
 import { perkInfo } from "@/lib/titles/catalog"
 import { proclamation, roastFor } from "@/lib/titles/copy"
+import { titleHelp } from "@/lib/titles/help"
 import { CURSE_GAMES, MAX_ACTIVE_CURSES } from "@/lib/titles/rules"
 import { useCourt } from "@/lib/titles/use-titles"
 import type { CourtMember, TitleView } from "@/lib/titles/types"
@@ -74,6 +76,9 @@ function BestowBody({ title, me, balance, migrated, pending, onOpenChange, onCon
       <div className="space-y-2 rounded-xl border border-rose-500/20 bg-rose-500/[0.05] p-3">
         <TitleBadge name={title.name} category={title.category} rarity={title.rarity} size="md" interactive={false} />
         <PerkLine perk={curse} />
+        <div className="border-t border-rose-500/15 pt-2">
+          <HelpRows help={titleHelp({ name: title.name, category: title.category, perk: curse, price: title.price })} />
+        </div>
       </div>
 
       <div className="space-y-2">

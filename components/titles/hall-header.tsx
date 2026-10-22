@@ -1,18 +1,21 @@
 "use client"
 
 import { Coins } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { useAct } from "@/hooks/use-act"
 import { AnimatedNumber } from "@/components/titles/animated-number"
 import { PerksExplainer } from "@/components/titles/perks-explainer"
 import { cn } from "@/lib/utils"
 import { HALL_COPY } from "@/lib/titles/copy"
+import { hallHelp } from "@/lib/titles/help"
 
 interface HallHeaderProps {
   balance: number | null
   signedIn: boolean
+  prices?: number[]
 }
 
-export function HallHeader({ balance, signedIn }: HallHeaderProps) {
+export function HallHeader({ balance, signedIn, prices = [] }: HallHeaderProps) {
   const { act } = useAct()
 
   return (
@@ -45,6 +48,7 @@ export function HallHeader({ balance, signedIn }: HallHeaderProps) {
             </span>
           )}
           <PerksExplainer />
+          <InfoTip help={hallHelp(prices)} side="bottom" align="start" className="mx-1" />
         </div>
       </div>
     </header>

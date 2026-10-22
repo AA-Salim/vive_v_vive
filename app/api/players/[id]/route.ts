@@ -1,9 +1,17 @@
 import { z } from "zod"
 import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
 import { emitLive, getActor } from "@/lib/live/server"
 import { ADMIN_ONLY, AUTH_REQUIRED, fail, invalid, ok, readJson } from "@/lib/lobby/server/http"
 import { removeFromQueue } from "@/lib/lobby/server/queue"
-import { PLAYER_COLUMNS, findPlayerByName, playerHasHistory, toRosterPlayer } from "@/lib/lobby/server/roster"
+import {
+  PLAYER_COLUMNS,
+  findPlayerByName,
+  playerHasHistory,
+  rosterRefusal,
+  toRosterPlayer,
+  type PlayerRecord,
+} from "@/lib/lobby/server/roster"
 import { getLobbyViewer } from "@/lib/lobby/server/viewer"
 import { UpdatePlayerSchema } from "@/lib/lobby/types"
 
@@ -32,11 +40,22 @@ export async function PATCH(request: Request, { params }: Params) {
     return fail(409, `${patch.name} is already on the roster.`, "duplicate")
   }
 
-  const { data, error } = await supabase.from("players").update(patch).eq("id", id).select(PLAYER_COLUMNS).single()
-  if (error) {
-    if (error.code === "23505") return fail(409, `${patch.name} is already on the roster.`, "duplicate")
-    return fail(500, "Could not update the player. Try again.")
+  const updated = await supabase.rpc("admin_update_player", {
+    p_player_id: id,
+    p_name: patch.name ?? null,
+    p_is_active: patch.is_active ?? null,
+  })
+  let data = updated.data as PlayerRecord | null
+  if (updated.error) {
+    if (!isMissingSchema(updated.error)) return rosterRefusal(updated.error, patch.name ?? current.name)
+    const legacy = await supabase.from("players").update(patch).eq("id", id).select(PLAYER_COLUMNS).single()
+    if (legacy.error) {
+      if (legacy.error.code === "23505") return fail(409, `${patch.name} is already on the roster.`, "duplicate")
+      return fail(500, "Could not update the player. Try again.")
+    }
+    data = legacy.data as PlayerRecord
   }
+  if (!data) return fail(500, "Could not update the player. Try again.")
 
   const benched = patch.is_active === false && current.is_active
   const activated = patch.is_active === true && !current.is_active
@@ -71,8 +90,12 @@ export async function DELETE(_request: Request, { params }: Params) {
   const hasHistory = () => fail(409, `${player.name} has history in the archives. Bench them instead.`, "has_history")
   if ((player.games_played ?? 0) > 0 || references.history) return hasHistory()
 
-  const { error } = await supabase.from("players").delete().eq("id", id)
-  if (error) return error.code === "23503" ? hasHistory() : fail(500, "Could not remove the player. Try again.")
+  const removed = await supabase.rpc("admin_delete_player", { p_player_id: id })
+  if (removed.error && !isMissingSchema(removed.error)) return rosterRefusal(removed.error, player.name)
+  if (removed.error) {
+    const { error } = await supabase.from("players").delete().eq("id", id)
+    if (error) return error.code === "23503" ? hasHistory() : fail(500, "Could not remove the player. Try again.")
+  }
 
   emitLive("roster.changed", {
     actor: await getActor(supabase, viewer.userId),

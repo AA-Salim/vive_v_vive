@@ -9,14 +9,12 @@ type RpcResult = { data: unknown; error: RpcError }
 
 const V2_ATTEMPTS = 3
 
-async function pendingCount(supabase: SupabaseClient, sessionId: string, scheme?: "v2"): Promise<number | null> {
-  let query = supabase
+async function pendingCount(supabase: SupabaseClient, sessionId: string): Promise<number | null> {
+  const { count, error } = await supabase
     .from("bets")
     .select("id", { count: "exact", head: true })
     .eq("session_id", sessionId)
     .eq("status", "pending")
-  if (scheme) query = query.eq("scheme", scheme)
-  const { count, error } = await query
   return error ? null : count ?? 0
 }
 
@@ -26,9 +24,9 @@ function settledCount(data: unknown, field: "settled" | "refunded"): number | nu
 }
 
 // Returns how many bets this call settled (null when unknown), so a retried declaration does not announce twice.
-// v2 settles new and legacy rows alike; without the migration the legacy function runs. A rule violation
-// (bet:not_authorized, bet:invalid_state...) is never bypassed. A transient failure is retried, and only falls
-// back to the legacy function when no v2 row is pending: legacy terms would misprice v2 premiums and boosts.
+// v2 settles new and legacy rows alike; only without the migration does the legacy function run (it is revoked
+// from clients by phase11_lockdown.sql). A rule violation (bet:not_authorized, bet:invalid_state...) is never
+// bypassed, and a transient failure is retried, then reported.
 async function settle(
   supabase: SupabaseClient,
   sessionId: string,
@@ -51,10 +49,7 @@ async function settle(
     if (betErrorCode(error.message)) throw new Error(error.message ?? "Bet settlement refused")
     lastError = error
   }
-  if ((await pendingCount(supabase, sessionId, "v2")) !== 0) {
-    throw new Error(lastError?.message ?? "Bet settlement failed")
-  }
-  return runLegacy()
+  throw new Error(lastError?.message ?? "Bet settlement failed")
 }
 
 export const betsHook: GameHook = {

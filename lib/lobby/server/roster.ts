@@ -1,10 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { isMissingSchema } from "@/lib/db-errors"
 import { FORM_LENGTH, HISTORY_GAMES, RECENT_WINDOW_DAYS } from "@/lib/lobby/constants"
+import { ADMIN_ONLY, fail } from "@/lib/lobby/server/http"
 import type { GameResult, RosterPlayer } from "@/lib/lobby/types"
 import type { Side } from "@/lib/types"
 
-interface PlayerRow {
+export interface PlayerRecord {
   id: string
   name: string
   is_active: boolean
@@ -36,7 +37,7 @@ interface Activity {
 
 export const PLAYER_COLUMNS = "id, name, is_active, is_admin, wins, losses, games_played, created_at, auth_user_id"
 
-export function toRosterPlayer(row: PlayerRow, activity?: Activity): RosterPlayer {
+export function toRosterPlayer(row: PlayerRecord, activity?: Activity): RosterPlayer {
   return {
     id: row.id,
     name: row.name,
@@ -98,7 +99,28 @@ export async function loadRoster(supabase: SupabaseClient): Promise<{ players: R
     loadActivity(supabase).catch(() => new Map<string, Activity>()),
   ])
   if (error) return { players: [], error: error.message }
-  return { players: ((data ?? []) as PlayerRow[]).map((row) => toRosterPlayer(row, activity.get(row.id))), error: null }
+  return { players: ((data ?? []) as PlayerRecord[]).map((row) => toRosterPlayer(row, activity.get(row.id))), error: null }
+}
+
+// Refusals from the admin roster functions (phase10_hardening.sql), in the routes' own words.
+export function rosterRefusal(error: { code?: string; message?: string }, name: string) {
+  const code = error.code === "23505" ? "roster:duplicate" : error.message?.match(/roster:[a-z_]+/)?.[0]
+  switch (code) {
+    case "roster:duplicate":
+      return fail(409, `${name} is already on the roster.`, "duplicate")
+    case "roster:forbidden":
+      return ADMIN_ONLY()
+    case "roster:not_found":
+      return fail(404, "That player does not exist.")
+    case "roster:invalid_name":
+      return fail(400, "That name does not fit on the roster.", "invalid")
+    case "roster:claimed":
+      return fail(409, `${name} is claimed by a Discord account. Bench them instead.`, "claimed")
+    case "roster:has_history":
+      return fail(409, `${name} has history in the archives. Bench them instead.`, "has_history")
+    default:
+      return fail(500, "The roster scroll would not take the ink. Try again.")
+  }
 }
 
 // Compared here rather than with ilike: PostgREST reads "*" in a pattern as a wildcard.

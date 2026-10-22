@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
 import { emitLive } from "@/lib/live/server"
 import { DAILY_STIPEND } from "@/lib/lore/daily"
 
@@ -13,9 +14,11 @@ export async function POST() {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
   }
 
-  const { data: newBalance, error } = await supabase.rpc("claim_daily_bonus", {
-    p_user_id: user.id,
-  })
+  // claim_my_daily_bonus (phase10_hardening.sql) only ever claims for the caller.
+  let { data: newBalance, error } = await supabase.rpc("claim_my_daily_bonus")
+  if (error && isMissingSchema(error)) {
+    ;({ data: newBalance, error } = await supabase.rpc("claim_daily_bonus", { p_user_id: user.id }))
+  }
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

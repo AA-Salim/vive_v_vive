@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
 import { NextResponse } from "next/server"
 import { emitLive, getActor } from "@/lib/live/server"
 
@@ -261,12 +262,22 @@ export async function POST(request: Request) {
     return true
   })
 
-  // Insert awards
-  for (const award of uniqueAwards) {
-    await supabase.from("act_awards").insert({
-      act_id: activeAct.id,
-      ...award,
-    })
+  // Awards hold claimable points: admin_record_act_awards (phase10_hardening.sql) is their only writer once the
+  // lockdown runs. The direct inserts are the pre-hardening path.
+  const { error: awardsError } = await supabase.rpc("admin_record_act_awards", {
+    p_act_id: activeAct.id,
+    p_awards: uniqueAwards,
+  })
+  if (awardsError && !isMissingSchema(awardsError)) {
+    return NextResponse.json({ error: "The awards could not be engraved. Nothing was archived." }, { status: 500 })
+  }
+  if (awardsError) {
+    for (const award of uniqueAwards) {
+      await supabase.from("act_awards").insert({
+        act_id: activeAct.id,
+        ...award,
+      })
+    }
   }
 
   // ---- Snapshot all users ----

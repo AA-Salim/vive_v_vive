@@ -122,7 +122,7 @@ async function legacyPurchase(
     p_reason: "title_bought",
     p_reference_id: title.id,
   })
-  if (chargeError) return { error: titleErrorKey(chargeError) ?? "insufficient" }
+  if (chargeError) return { error: titleErrorKey(chargeError) ?? (chargeError.code === "42501" ? "unknown" : "insufficient") }
 
   const { error: insertError } = await supabase.from("user_titles").insert({
     user_id: recipient,

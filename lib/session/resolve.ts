@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isMissingSchema } from "@/lib/db-errors"
 import { runGameCanceledHooks, runGameResolvedHooks } from "@/lib/game-hooks"
 import type { HookAssignment } from "@/lib/game-hooks/types"
 import type { Side } from "@/lib/types"
@@ -121,8 +122,45 @@ async function creditOnce(supabase: SupabaseClient, sessionId: string, userId: s
   if (credited && !credited.has(userId)) await supabase.rpc("adjust_balance", args)
 }
 
-// Fearless, counters and points. Counters only move together with the game_players insert; points go to whoever
-// the ledger has not credited yet, so a retried declaration completes a crashed one without paying anyone twice.
+async function recordFearless(supabase: SupabaseClient, session: SessionRow) {
+  const today = new Date().toISOString().split("T")[0]
+  const champions = [...new Set(session.session_assignments.map((a) => a.champion))]
+  await supabase
+    .from("daily_fearless")
+    .upsert(champions.map((champion_name) => ({ champion_name, date: today })), { onConflict: "date,champion_name" })
+}
+
+const OUTCOME_ERRORS: Record<string, string> = {
+  "game:forbidden": "Only the host or an admin can record this game.",
+  "game:not_in_game": "This game is no longer being played.",
+  "game:not_linked": "The recorded game is missing. Try again.",
+  "game:game_mismatch": "The recorded game does not belong to this session.",
+  "game:game_already_recorded": "The recorded game does not belong to this session.",
+  "game:invalid_roster": "This game has no valid roster to record.",
+}
+
+type OutcomeStep = "recorded" | "missing" | { error: string; unlink: boolean }
+
+// record_game_outcome (phase10_hardening.sql) writes the seats, counters and game points in one guarded
+// transaction, at most once per game. A failed call may still have committed (lost response): the guard row
+// decides, and the game is only unlinked when it is certain nothing landed.
+async function recordOutcome(supabase: SupabaseClient, sessionId: string): Promise<OutcomeStep> {
+  const { error } = await supabase.rpc("record_game_outcome", { p_session_id: sessionId })
+  if (!error) return "recorded"
+  if (isMissingSchema(error)) return "missing"
+  const { data, error: checkError } = await supabase
+    .from("game_outcome_records")
+    .select("game_id")
+    .eq("session_id", sessionId)
+    .maybeSingle()
+  if (data) return "recorded"
+  const code = error.message?.match(/game:[a-z_]+/)?.[0]
+  return { error: (code && OUTCOME_ERRORS[code]) || "Could not record the game. Try again.", unlink: !checkError }
+}
+
+// Pre-hardening path: fearless, counters and points. Counters only move together with the game_players insert;
+// points go to whoever the ledger has not credited yet, so a retried declaration completes a crashed one
+// without paying anyone twice.
 async function finishRecord(
   supabase: SupabaseClient,
   session: SessionRow,
@@ -131,11 +169,7 @@ async function finishRecord(
   { countersDue, fresh }: { countersDue: boolean; fresh: boolean }
 ) {
   const assignments = session.session_assignments
-  const today = new Date().toISOString().split("T")[0]
-  const champions = [...new Set(assignments.map((a) => a.champion))]
-  await supabase
-    .from("daily_fearless")
-    .upsert(champions.map((champion_name) => ({ champion_name, date: today })), { onConflict: "date,champion_name" })
+  await recordFearless(supabase, session)
 
   const linkedUsers = roster.map((p) => p.auth_user_id).filter((id): id is string => !!id)
   const credited = fresh ? new Set<string>() : await creditedUsers(supabase, session.id, linkedUsers)
@@ -192,6 +226,16 @@ async function recordGame(
     await supabase.from("games").delete().eq("id", gameId)
   }
 
+  const outcome = await recordOutcome(supabase, session.id)
+  if (outcome === "recorded") {
+    await recordFearless(supabase, session)
+    return { gameId }
+  }
+  if (outcome !== "missing") {
+    if (outcome.unlink) await unlink()
+    return { error: outcome.error }
+  }
+
   const roster = await loadRoster(supabase, session)
   if ("error" in roster) {
     await unlink()
@@ -209,6 +253,13 @@ async function recordGame(
 
 // Retry of a declaration whose request died after linking the game: redo only what never landed.
 async function repairRecord(supabase: SupabaseClient, session: SessionRow, gameId: string, winnerSide: Side): Promise<StepResult> {
+  const outcome = await recordOutcome(supabase, session.id)
+  if (outcome === "recorded") {
+    await recordFearless(supabase, session)
+    return null
+  }
+  if (outcome !== "missing") return { error: outcome.error }
+
   const roster = await loadRoster(supabase, session)
   if ("error" in roster) return roster
   const { count, error } = await supabase

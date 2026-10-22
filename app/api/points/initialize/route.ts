@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase"
+import { isMissingSchema } from "@/lib/db-errors"
 import { NextResponse } from "next/server"
 
 export async function POST() {
@@ -9,6 +10,13 @@ export async function POST() {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  }
+
+  // init_my_point_balance (phase10_hardening.sql) opens the caller's own treasury once, with a ledger row.
+  const { data: opened, error: openError } = await supabase.rpc("init_my_point_balance")
+  if (!openError) return NextResponse.json(opened)
+  if (!isMissingSchema(openError)) {
+    return NextResponse.json({ error: openError.message }, { status: 500 })
   }
 
   const { data: existing } = await supabase

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto"
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { isMissingSchema } from "@/lib/db-errors"
 import { roman } from "@/lib/lore/herald/kit"
 import { consolationDescription, consolationTitle, rewardCopy } from "@/lib/lore/rewards"
 
@@ -123,18 +124,32 @@ async function engrave(supabase: SupabaseClient, userId: string, name: string, d
   return !error || error.code === "23505"
 }
 
-// Every claim leaves an act_carryover row through adjust_balance (a zero-amount one when there is no bonus):
-// that row is what marks the reward as claimed.
-async function pay(supabase: SupabaseClient, userId: string, amount: number, reference: string): Promise<ClaimResult | null> {
+type Payment = { kind: "award"; awardId: string; bonus: number } | { kind: "consolation"; actId: number; marker: string }
+
+function payFailure(error: { code?: string; message?: string }): ClaimResult {
+  if (error.code === "23505" || /already_claimed/.test(error.message ?? "")) return { ok: false, status: 409, error: "Already claimed" }
+  if (/award:(not_found|not_eligible)/.test(error.message ?? "")) return { ok: false, status: 403, error: "Not eligible" }
+  return { ok: false, status: 500, error: "The treasury jammed. Try again." }
+}
+
+// Every claim leaves an act_carryover row (a zero-amount one when there is no bonus): that row is what marks the
+// reward as claimed. claim_act_award / claim_act_consolation (phase10_hardening.sql) check the reward belongs to
+// the caller and pay it once; adjust_balance is the pre-hardening path.
+async function pay(supabase: SupabaseClient, userId: string, payment: Payment): Promise<ClaimResult | null> {
+  const guarded =
+    payment.kind === "award"
+      ? await supabase.rpc("claim_act_award", { p_award_id: payment.awardId })
+      : await supabase.rpc("claim_act_consolation", { p_act_id: payment.actId })
+  if (!guarded.error) return null
+  if (!isMissingSchema(guarded.error)) return payFailure(guarded.error)
+
   const { error } = await supabase.rpc("adjust_balance", {
     p_user_id: userId,
-    p_amount: Math.max(0, amount),
+    p_amount: payment.kind === "award" ? Math.max(0, payment.bonus) : 0,
     p_reason: CLAIM_REASON,
-    p_reference_id: reference,
+    p_reference_id: payment.kind === "award" ? payment.awardId : payment.marker,
   })
-  if (!error) return null
-  if (error.code === "23505") return { ok: false, status: 409, error: "Already claimed" }
-  return { ok: false, status: 500, error: "The treasury jammed. Try again." }
+  return error ? payFailure(error) : null
 }
 
 export async function claimAward(supabase: SupabaseClient, userId: string, awardId: string): Promise<ClaimResult> {
@@ -155,7 +170,7 @@ export async function claimAward(supabase: SupabaseClient, userId: string, award
   const actNumber = one(award.acts)?.act_number ?? 1
   const description = `Engraved for ${rewardCopy(award.category).label} in Act ${roman(actNumber)}.`
   if (!(await engrave(supabase, userId, award.title, description))) return ENGRAVER_FAILED
-  const failed = await pay(supabase, userId, award.carry_over_bonus, award.id)
+  const failed = await pay(supabase, userId, { kind: "award", awardId: award.id, bonus: award.carry_over_bonus })
   if (failed) return failed
   return { ok: true, title: award.title, bonus: Math.max(0, award.carry_over_bonus), consolation: false }
 }
@@ -178,7 +193,7 @@ export async function claimConsolation(supabase: SupabaseClient, userId: string,
   if (markers.has(marker) || owned.has(title)) return { ok: false, status: 409, error: "Already claimed" }
 
   if (!(await engrave(supabase, userId, title, consolationDescription(act.act_number)))) return ENGRAVER_FAILED
-  const failed = await pay(supabase, userId, 0, marker)
+  const failed = await pay(supabase, userId, { kind: "consolation", actId: act.id, marker })
   if (failed) return failed
   return { ok: true, title, bonus: 0, consolation: true }
 }

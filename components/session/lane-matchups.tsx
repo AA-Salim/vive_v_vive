@@ -1,6 +1,7 @@
 "use client"
 
 import { CrownIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { LaneIcon } from "@/components/lane-icon"
 import { TitleBadge } from "@/components/title-badge"
 import { YouChip, championLabel } from "@/components/player-card"
@@ -14,6 +15,7 @@ import {
   type BoardViewProps,
 } from "@/components/session/board-types"
 import { SIDE_NAME } from "@/components/session/copy"
+import { LOCK_HELP } from "@/components/session/help"
 import { ROLE_LABELS } from "@/lib/champions"
 import type { RoomAssignment } from "@/lib/session/types"
 import { cn } from "@/lib/utils"
@@ -79,7 +81,7 @@ function MatchupSide({
 }
 
 export function LaneMatchups(props: BoardViewProps) {
-  const { assignments, frame, winner } = props
+  const { assignments, frame, winner, draft } = props
   const blue = new Map(assignments.filter((a) => a.side === "blue").map((a) => [a.lane, a]))
   const red = new Map(assignments.filter((a) => a.side === "red").map((a) => [a.lane, a]))
 
@@ -89,6 +91,7 @@ export function LaneMatchups(props: BoardViewProps) {
         <span className="flex items-center gap-1 text-[var(--color-blue-team)]">
           {SIDE_NAME.blue}
           {winner === "blue" && <CrownIcon className="size-3 text-[var(--color-gold)]" aria-label="Winner" />}
+          {draft && <InfoTip help={LOCK_HELP} align="start" className="-my-1" />}
         </span>
         <span className="text-muted-foreground">vs</span>
         <span className="flex items-center justify-end gap-1 text-[var(--color-red-team)]">

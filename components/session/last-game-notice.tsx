@@ -2,8 +2,10 @@
 
 import { BanIcon, CrownIcon, EyeIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { useServerNow } from "@/components/session/use-clock"
 import { SIDE_NAME, cancelLine, relativeTime } from "@/components/session/copy"
+import { CANCELED_HELP, RESULT_POINTS_HELP } from "@/components/session/help"
 import { winnerOf } from "@/lib/session/constants"
 import type { RoomSession } from "@/lib/session/types"
 import { cn } from "@/lib/utils"
@@ -41,6 +43,7 @@ export function LastGameNotice({ session, serverTimeDelta, onView, onDismiss }: 
         <p className="font-medium text-foreground">
           {winner ? `Last game: ${SIDE_NAME[winner]} won` : `Game canceled${who ? ` by ${who}` : ""}`}
           {when && <span className="font-normal text-muted-foreground"> · {when}</span>}
+          <InfoTip help={winner ? RESULT_POINTS_HELP : CANCELED_HELP} className="ml-1 align-middle" />
         </p>
         {!winner && <p className="text-muted-foreground">{cancelLine(session.id)}</p>}
       </div>

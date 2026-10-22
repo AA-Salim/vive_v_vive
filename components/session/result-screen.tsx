@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react"
 import confetti from "canvas-confetti"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import { ArrowRightIcon, CrownIcon } from "lucide-react"
+import { ArrowRightIcon, CoinsIcon, CrownIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { ChampionAvatar } from "@/components/session/champion-avatar"
 import { PhaseStepper } from "@/components/session/phase-stepper"
 import { byLane } from "@/components/session/board-types"
 import { useServerNow } from "@/components/session/use-clock"
 import { SIDE_NAME, relativeTime, victoryLine } from "@/components/session/copy"
+import { GAME_POINTS_LINE, RESULT_POINTS_HELP } from "@/components/session/help"
 import { winnerOf } from "@/lib/session/constants"
 import type { RoomSession } from "@/lib/session/types"
 import type { Side } from "@/lib/types"
@@ -149,6 +151,11 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
               </motion.li>
             ))}
           </ul>
+          <p className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-gold)]/25 bg-[var(--color-gold)]/10 py-1 pr-1 pl-3 text-xs font-medium text-[var(--color-gold-light)]">
+            <CoinsIcon className="size-3.5 shrink-0 text-[var(--color-gold)]" aria-hidden />
+            {GAME_POINTS_LINE}
+            <InfoTip help={RESULT_POINTS_HELP} />
+          </p>
           <p className="text-xs text-muted-foreground">
             {session.resolver ? `Declared by ${session.resolver.name}` : "Result recorded"}
             {serverNow !== null && !Number.isNaN(endedAt) ? ` · ${relativeTime(endedAt, serverNow)}` : ""}

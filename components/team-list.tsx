@@ -2,9 +2,11 @@
 
 import { motion } from "motion/react"
 import { CrownIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { PlayerCard } from "@/components/player-card"
 import { byLane, outcomeFor, slotShuffle, slotState, type BoardViewProps } from "@/components/session/board-types"
 import { SIDE_NAME } from "@/components/session/copy"
+import { LOCK_HELP } from "@/components/session/help"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -35,6 +37,7 @@ export function TeamList({
     <section aria-label={SIDE_NAME[side]} className="flex min-w-0 flex-col gap-2">
       <header className={cn("flex items-center gap-2 px-1", mirrored && "flex-row-reverse")}>
         <h2 className={cn("font-display text-sm font-semibold uppercase tracking-[0.22em]", color)}>{SIDE_NAME[side]}</h2>
+        {draft && !mirrored && <InfoTip help={LOCK_HELP} align="start" />}
         {outcome === "won" && (
           <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-gold)]">
             <CrownIcon className="size-3" aria-hidden /> Victory

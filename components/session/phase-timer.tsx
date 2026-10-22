@@ -2,8 +2,10 @@
 
 import { useEffect, useEffectEvent } from "react"
 import { HourglassIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { useServerNow } from "@/components/session/use-clock"
 import { formatCountdown } from "@/components/session/copy"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface PhaseTimerProps {
@@ -11,6 +13,7 @@ interface PhaseTimerProps {
   durationMs: number
   serverTimeDelta: number
   label: string
+  help?: HelpEntry
   onExpired?: () => void
   className?: string
 }
@@ -18,7 +21,7 @@ interface PhaseTimerProps {
 const URGENT_MS = 10_000
 const MAX_EXPIRY_POKES = 6
 
-export function PhaseTimer({ endsAt, durationMs, serverTimeDelta, label, onExpired, className }: PhaseTimerProps) {
+export function PhaseTimer({ endsAt, durationMs, serverTimeDelta, label, help, onExpired, className }: PhaseTimerProps) {
   const serverNow = useServerNow(serverTimeDelta, 250)
   const remaining = serverNow === null ? null : Math.max(0, endsAt - serverNow)
   const expired = remaining !== null && remaining <= 0
@@ -46,6 +49,7 @@ export function PhaseTimer({ endsAt, durationMs, serverTimeDelta, label, onExpir
       <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
         <HourglassIcon className={cn("size-3.5", urgent && "text-[var(--color-red-team)]")} aria-hidden />
         {expired ? "Time is up" : label}
+        {help && <InfoTip help={help} align="end" className="-my-1" />}
       </span>
       <span
         className={cn(

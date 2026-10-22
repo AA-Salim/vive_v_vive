@@ -4,18 +4,30 @@ import type { ReactNode } from "react"
 import { CoinsIcon, HandCoinsIcon, LogInIcon, ScrollIcon } from "lucide-react"
 import { DEBT_FLOOR } from "@/lib/chaos/catalog"
 import { sideName } from "@/lib/chaos/rules"
-import type { ChaosDecreeEntry } from "@/lib/chaos/types"
+import type { ChaosDecreeEntry, ChaosSchema, DecreeRuleBook } from "@/lib/chaos/types"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AnimatedNumber } from "@/components/chaos/animated-number"
+import { PURSE_HELP, wagerHelp } from "@/components/chaos/help"
 
-function Stat({ icon, label, children, hint }: { icon: ReactNode; label: string; children: ReactNode; hint?: string | null }) {
+interface StatProps {
+  icon: ReactNode
+  label: string
+  help?: HelpEntry
+  children: ReactNode
+  hint?: string | null
+}
+
+function Stat({ icon, label, help, children, hint }: StatProps) {
   return (
     <div className="min-w-0 rounded-lg bg-[var(--color-navy)]/60 px-2.5 py-2">
       <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-gold-light)]/50">
         {icon}
         <span className="truncate">{label}</span>
+        {help && <InfoTip help={help} className="-my-1 -mr-2 ml-auto [&_svg]:size-3.5" />}
       </div>
       <div className="mt-0.5 text-lg font-bold leading-tight">{children}</div>
       {hint && <div className="truncate text-[10px] text-[var(--color-gold-light)]/45">{hint}</div>}
@@ -27,10 +39,12 @@ interface TreasuryStripProps {
   signedIn: boolean
   balance: number | null
   mine: ChaosDecreeEntry[]
+  rules: DecreeRuleBook
+  schema: ChaosSchema
   onSignIn: () => void
 }
 
-export function TreasuryStrip({ signedIn, balance, mine, onSignIn }: TreasuryStripProps) {
+export function TreasuryStrip({ signedIn, balance, mine, rules, schema, onSignIn }: TreasuryStripProps) {
   if (!signedIn) {
     return (
       <div className="flex flex-col items-start gap-2 rounded-xl border border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 p-3 @md:flex-row @md:items-center @md:justify-between">
@@ -68,6 +82,7 @@ export function TreasuryStrip({ signedIn, balance, mine, onSignIn }: TreasuryStr
       <Stat
         icon={<CoinsIcon aria-hidden className="size-3" />}
         label="Purse"
+        help={PURSE_HELP}
         hint={balance != null && balance < 0 ? `Floor ${DEBT_FLOOR}` : "points"}
       >
         {balance == null ? (
@@ -79,6 +94,7 @@ export function TreasuryStrip({ signedIn, balance, mine, onSignIn }: TreasuryStr
       <Stat
         icon={<HandCoinsIcon aria-hidden className="size-3" />}
         label="Wagers"
+        help={wagerHelp(rules, schema)}
         hint={wagerHint}
       >
         {pending.length > 0 || won.length > 0 ? (

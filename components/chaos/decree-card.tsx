@@ -4,7 +4,9 @@ import { motion, useReducedMotion } from "motion/react"
 import { CoinsIcon, CrosshairIcon, LockIcon } from "lucide-react"
 import { TARGETING_LABELS, TIER_LABELS, type DecreeDef, type DecreeType } from "@/lib/chaos/catalog"
 import type { DecreeBlock } from "@/lib/chaos/rules"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
+import { InfoTip } from "@/components/ui/info-tip"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
 import { TIER_STYLES } from "@/components/chaos/tier-styles"
 
@@ -15,6 +17,7 @@ export interface DecreeCardModel {
   max: number
   block: DecreeBlock | null
   debt: boolean
+  help: HelpEntry | null
 }
 
 interface DecreeCardProps extends DecreeCardModel {
@@ -29,32 +32,29 @@ function statusLabel({ block, used, max, debt }: Pick<DecreeCardModel, "block" |
   return "Ready"
 }
 
-export function DecreeCard({ def, cost, used, max, block, debt, index, onSelect }: DecreeCardProps) {
+// The whole card is one stretched button; the info bubble sits above it so it still opens on disabled cards.
+export function DecreeCard({ def, cost, used, max, block, debt, help, index, onSelect }: DecreeCardProps) {
   const reduceMotion = useReducedMotion()
   const style = TIER_STYLES[def.tier]
   const disabled = !!block
   const statusId = `decree-status-${def.type}`
+  const detailsId = `decree-details-${def.type}`
 
   return (
-    <motion.button
-      type="button"
+    <motion.div
       initial={reduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: reduceMotion ? 0 : index * 0.03 }}
       whileHover={disabled || reduceMotion ? undefined : { y: -2 }}
-      whileTap={disabled || reduceMotion ? undefined : { scale: 0.98 }}
-      onClick={() => onSelect(def.type)}
-      disabled={disabled}
-      aria-describedby={statusId}
       className={cn(
         "group relative flex min-h-[172px] w-full flex-col rounded-xl border bg-linear-to-b to-transparent p-3 text-left",
-        "bg-[var(--color-navy)]/70 outline-none transition-colors focus-visible:ring-2",
+        "bg-[var(--color-navy)]/70 transition-[background-color,box-shadow,scale] has-[>button:focus-visible]:ring-2",
         style.border,
         style.wash,
-        style.focus,
+        style.ring,
         disabled
-          ? "cursor-not-allowed opacity-55 saturate-[0.6]"
-          : "hover:bg-[var(--color-navy-light)] hover:shadow-[0_0_24px_-12px_currentColor]"
+          ? "opacity-55 saturate-[0.6]"
+          : "hover:bg-[var(--color-navy-light)] hover:shadow-[0_0_24px_-12px_currentColor] has-[>button:active]:scale-[0.98] motion-reduce:has-[>button:active]:scale-100"
       )}
     >
       <div className="flex items-start justify-between gap-2">
@@ -72,21 +72,34 @@ export function DecreeCard({ def, cost, used, max, block, debt, index, onSelect 
         </span>
       </div>
 
-      <span className="mt-3 font-display text-[15px] font-semibold leading-tight text-[var(--color-gold-light)]">
+      <button
+        type="button"
+        onClick={() => onSelect(def.type)}
+        disabled={disabled}
+        aria-describedby={`${detailsId} ${statusId}`}
+        className="mt-3 text-left font-display text-[15px] font-semibold leading-tight text-[var(--color-gold-light)] outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] disabled:cursor-not-allowed"
+      >
         {def.name}
+      </button>
+      <span id={detailsId} className="mt-1 text-xs leading-snug text-[var(--color-gold-light)]/60">
+        {def.short}
+        <span className="sr-only">
+          {" "}
+          Target: {TARGETING_LABELS[def.targeting]}. Costs {cost} points.
+        </span>
       </span>
-      <span className="mt-1 text-xs leading-snug text-[var(--color-gold-light)]/60">{def.short}</span>
-      <span className="mt-2 flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-[var(--color-gold-light)]/40">
-        <CrosshairIcon aria-hidden className="size-3" />
-        <span className="sr-only">Target: </span>
-        {TARGETING_LABELS[def.targeting]}
+      <span className="mt-1.5 flex items-center justify-between gap-0.5">
+        <span aria-hidden className="flex min-w-0 items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-[var(--color-gold-light)]/40">
+          <CrosshairIcon className="size-3 shrink-0" />
+          <span className="truncate">{TARGETING_LABELS[def.targeting]}</span>
+        </span>
+        {help && <InfoTip help={help} side="top" className="z-10 -my-1 -mr-2 [&_svg]:size-3.5" />}
       </span>
 
-      <span className="mt-auto flex items-end justify-between gap-2 pt-3">
-        <span className="flex items-center gap-1 text-sm font-bold tabular-nums text-[var(--color-gold)]">
-          <CoinsIcon aria-hidden className="size-3.5" />
+      <span className="mt-auto flex items-end justify-between gap-2 pt-2">
+        <span aria-hidden className="flex items-center gap-1 text-sm font-bold tabular-nums text-[var(--color-gold)]">
+          <CoinsIcon className="size-3.5" />
           {cost}
-          <span className="sr-only"> points</span>
         </span>
         <span
           id={statusId}
@@ -99,6 +112,6 @@ export function DecreeCard({ def, cost, used, max, block, debt, index, onSelect 
           {statusLabel({ block, used, max, debt })}
         </span>
       </span>
-    </motion.button>
+    </motion.div>
   )
 }

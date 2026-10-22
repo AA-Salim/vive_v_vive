@@ -2,17 +2,13 @@
 
 import { ArrowRightIcon } from "lucide-react"
 import { ROLE_LABELS } from "@/lib/champions"
-import {
-  WAGER_BASE_MULTIPLIER,
-  WAGER_DEFIANCE_STEP,
-  WAGER_MAX_DEFIANCE,
-  type DecreeType,
-} from "@/lib/chaos/catalog"
+import { WAGER_DEFIANCE_STEP, type DecreeType } from "@/lib/chaos/catalog"
 import { seatLabel } from "@/lib/chaos/format"
 import { pardonedPlayerIds, ruleFor, sideName, viewerSeat, type DecreeContext } from "@/lib/chaos/rules"
 import type { BoardAssignment } from "@/lib/chaos/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { wagerPayouts } from "@/components/chaos/help"
 import { SIDE_STYLES } from "@/components/chaos/tier-styles"
 
 export interface DecreeSelection {
@@ -48,8 +44,7 @@ export function buildPreview(type: DecreeType, selection: DecreeSelection, ctx: 
   switch (type) {
     case "double_or_nothing": {
       if (!selection.side) return null
-      const base = Math.floor(cost * WAGER_BASE_MULTIPLIER)
-      const max = Math.floor(cost * (WAGER_BASE_MULTIPLIER + WAGER_DEFIANCE_STEP * WAGER_MAX_DEFIANCE))
+      const { base, top: max } = wagerPayouts(cost)
       return {
         summary:
           ctx.schema === "v2"

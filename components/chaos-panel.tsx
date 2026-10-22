@@ -26,6 +26,8 @@ import type { LiveEventPayloads } from "@/lib/live/events"
 import type { SessionWithAssignments } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
+import { DECREE_WINDOW_HELP, decreeHelp, decreesPanelHelp } from "@/components/chaos/help"
 import { DecreeDialog } from "@/components/chaos/decree-dialog"
 import { DecreeLedger, DecreeLedgerSkeleton } from "@/components/chaos/decree-ledger"
 import { EdictBoard, EdictBoardSkeleton } from "@/components/chaos/edict-board"
@@ -47,20 +49,22 @@ interface DialogState {
 
 function WindowChip({ open, remainingMs }: { open: boolean; remainingMs: number | null }) {
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums",
-        open
-          ? "border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/10 text-red-200"
-          : "border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 text-[var(--color-gold-light)]/55"
-      )}
-    >
+    <InfoTip help={DECREE_WINDOW_HELP} align="end" className="size-auto">
       <span
-        aria-hidden
-        className={cn("size-1.5 rounded-full", open ? "animate-pulse bg-[var(--color-red-team)]" : "bg-[var(--color-gold-light)]/40")}
-      />
-      {open ? (remainingMs !== null ? `Open · ${formatClock(remainingMs)}` : "Open") : "Closed"}
-    </span>
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tabular-nums",
+          open
+            ? "border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/10 text-red-200"
+            : "border-[var(--color-gold)]/15 bg-[var(--color-navy)]/60 text-[var(--color-gold-light)]/55"
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn("size-1.5 rounded-full", open ? "animate-pulse bg-[var(--color-red-team)]" : "bg-[var(--color-gold-light)]/40")}
+        />
+        {open ? (remainingMs !== null ? `Open · ${formatClock(remainingMs)}` : "Open") : "Closed"}
+      </span>
+    </InfoTip>
   )
 }
 
@@ -99,6 +103,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
       max,
       block: decreeBlock(def.type, ctx),
       debt: goesIntoDebt(def.type, ctx),
+      help: decreeHelp(def.type, ctx),
     }
   })
 
@@ -167,6 +172,7 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
               >
                 <ScrollTextIcon aria-hidden className="size-5 shrink-0" />
                 Royal Decrees
+                <InfoTip help={decreesPanelHelp(ctx.rules, ctx.schema)} align="start" />
               </h2>
               <p className="mt-0.5 text-xs text-[var(--color-gold-light)]/55">
                 {windowOpen
@@ -198,7 +204,14 @@ export function ChaosPanel({ session, isOpen }: ChaosPanelProps) {
           ) : (
             <>
               {(ctx.viewer || !roundOver) && (
-                <TreasuryStrip signedIn={!!ctx.viewer} balance={ctx.viewer?.balance ?? null} mine={mine} onSignIn={signIn} />
+                <TreasuryStrip
+                  signedIn={!!ctx.viewer}
+                  balance={ctx.viewer?.balance ?? null}
+                  mine={mine}
+                  rules={ctx.rules}
+                  schema={ctx.schema}
+                  onSignIn={signIn}
+                />
               )}
               {!roundOver && (
                 <>

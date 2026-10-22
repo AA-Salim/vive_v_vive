@@ -4,11 +4,14 @@ import type { ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { AlertTriangleIcon, LogInIcon, RadioTowerIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { SessionControls } from "@/components/session-controls"
 import { PhaseStepper } from "@/components/session/phase-stepper"
 import { GameClock, PhaseTimer } from "@/components/session/phase-timer"
 import { useServerNow } from "@/components/session/use-clock"
 import { PHASE_COPY, relativeTime, waitingLine, type RoomPhase } from "@/components/session/copy"
+import { BET_WINDOW_HELP, PHASE_HELP } from "@/components/session/help"
+import { DECREE_WINDOW_HELP } from "@/components/chaos/help"
 import { STALE_CLAIM_MS, STALE_GAME_MS, phaseDurationMs, phaseEndsAt } from "@/lib/session/constants"
 import type { RoomSession } from "@/lib/session/types"
 import { cn } from "@/lib/utils"
@@ -70,6 +73,7 @@ export function StageHeader({
         durationMs={duration}
         serverTimeDelta={serverTimeDelta}
         label={session.status === "chaos" ? "Decrees close in" : "Bets lock in"}
+        help={session.status === "chaos" ? DECREE_WINDOW_HELP : BET_WINDOW_HELP}
         onExpired={onExpired}
         className="lg:items-end lg:text-right"
       />
@@ -129,9 +133,10 @@ export function StageHeader({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.25 }}
-                className="font-display text-3xl leading-tight font-semibold text-foreground sm:text-4xl"
+                className="flex items-center gap-2 font-display text-3xl leading-tight font-semibold text-foreground sm:text-4xl"
               >
                 {copy.title}
+                <InfoTip help={PHASE_HELP[phase]} side="bottom" align="start" />
               </motion.h1>
             </AnimatePresence>
             <p className={cn("max-w-xl text-sm text-muted-foreground", timer && "hidden sm:block")}>{copy.line}</p>

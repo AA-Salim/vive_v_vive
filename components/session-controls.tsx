@@ -1,12 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import { CrownIcon, DicesIcon, Loader2Icon, LockIcon, PlayIcon, ScrollTextIcon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { HelpRows, InfoTip } from "@/components/ui/info-tip"
 import { ConfirmDialog } from "@/components/session/confirm-dialog"
 import { DeclareWinnerDialog } from "@/components/session/declare-winner-dialog"
+import {
+  CLOSE_DECREES_HELP,
+  DECLARE_HELP,
+  LOCK_BETS_HELP,
+  START_HELP,
+  cancelHelp,
+  rerollHelp,
+} from "@/components/session/help"
 import { useSessionActions } from "@/components/session/use-session-actions"
+import type { HelpEntry } from "@/lib/help"
 import { STALE_CLAIM_MS } from "@/lib/session/constants"
 import type { RoomSession, SessionActionName } from "@/lib/session/types"
 import type { SessionStatus } from "@/lib/types"
@@ -25,6 +35,15 @@ interface SessionControlsProps {
 type DialogKind = "cancel" | "close_chaos" | "close_betting" | "declare"
 
 const BIG = "h-11 px-4 text-sm sm:h-10"
+
+function WithHelp({ help, children }: { help: HelpEntry; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {children}
+      <InfoTip help={help} />
+    </span>
+  )
+}
 
 export function SessionControls({ session, canControl, isAdmin = false, serverNow = null, onSignIn, onAction, className }: SessionControlsProps) {
   const { runAsync, pending } = useSessionActions(session, onSignIn)
@@ -57,57 +76,70 @@ export function SessionControls({ session, canControl, isAdmin = false, serverNo
   const spinner = (name: SessionActionName, Icon: typeof PlayIcon) =>
     pending === name ? <Loader2Icon className="animate-spin" aria-hidden /> : <Icon aria-hidden />
 
+  const cancelHelpEntry = cancelHelp(session.status)
   const cancelButton = (
-    <Button
-      variant="ghost"
-      className={cn(BIG, "text-muted-foreground hover:text-[var(--color-red-team)]")}
-      onClick={() => setDialog("cancel")}
-      disabled={busy || resolving || (stalled && !isAdmin)}
-    >
-      <XIcon aria-hidden />
-      {session.status === "coach_draft" ? "Cancel draft" : "Cancel game"}
-    </Button>
+    <WithHelp help={cancelHelpEntry}>
+      <Button
+        variant="ghost"
+        className={cn(BIG, "text-muted-foreground hover:text-[var(--color-red-team)]")}
+        onClick={() => setDialog("cancel")}
+        disabled={busy || resolving || (stalled && !isAdmin)}
+      >
+        <XIcon aria-hidden />
+        {session.status === "coach_draft" ? "Cancel draft" : "Cancel game"}
+      </Button>
+    </WithHelp>
   )
 
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       {session.status === "draft" && (
         <>
-          <Button className={cn(BIG, "font-semibold")} onClick={() => run("start_game")} disabled={busy}>
-            {spinner("start_game", PlayIcon)}
-            {label("start_game", "Start game", "Opening decrees...")}
-          </Button>
-          <Button variant="outline" className={BIG} onClick={() => run("reroll")} disabled={busy || unlocked === 0}>
-            {spinner("reroll", DicesIcon)}
-            {label("reroll", "Re-roll", "Rolling...")}
-            {pending !== "reroll" && unlocked < 10 && (
-              <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground" aria-label={`${unlocked} unlocked`}>
-                {unlocked}
-              </span>
-            )}
-          </Button>
+          <WithHelp help={START_HELP}>
+            <Button className={cn(BIG, "font-semibold")} onClick={() => run("start_game")} disabled={busy}>
+              {spinner("start_game", PlayIcon)}
+              {label("start_game", "Start game", "Opening decrees...")}
+            </Button>
+          </WithHelp>
+          <WithHelp help={rerollHelp(unlocked, session.session_assignments.length)}>
+            <Button variant="outline" className={BIG} onClick={() => run("reroll")} disabled={busy || unlocked === 0}>
+              {spinner("reroll", DicesIcon)}
+              {label("reroll", "Re-roll", "Rolling...")}
+              {pending !== "reroll" && unlocked < 10 && (
+                <span className="rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground" aria-label={`${unlocked} unlocked`}>
+                  {unlocked}
+                </span>
+              )}
+            </Button>
+          </WithHelp>
         </>
       )}
 
       {session.status === "chaos" && (
-        <Button variant="outline" className={BIG} onClick={() => setDialog("close_chaos")} disabled={busy}>
-          {spinner("close_chaos", ScrollTextIcon)}
-          Close decrees now
-        </Button>
+        <WithHelp help={CLOSE_DECREES_HELP}>
+          <Button variant="outline" className={BIG} onClick={() => setDialog("close_chaos")} disabled={busy}>
+            {spinner("close_chaos", ScrollTextIcon)}
+            Close decrees now
+          </Button>
+        </WithHelp>
       )}
 
       {session.status === "betting" && (
-        <Button variant="outline" className={BIG} onClick={() => setDialog("close_betting")} disabled={busy}>
-          {spinner("close_betting", LockIcon)}
-          Lock bets now
-        </Button>
+        <WithHelp help={LOCK_BETS_HELP}>
+          <Button variant="outline" className={BIG} onClick={() => setDialog("close_betting")} disabled={busy}>
+            {spinner("close_betting", LockIcon)}
+            Lock bets now
+          </Button>
+        </WithHelp>
       )}
 
       {session.status === "in_game" && (
-        <Button className={cn(BIG, "font-semibold")} onClick={() => setDialog("declare")} disabled={busy || resolving}>
-          {resolving || pending === "declare_winner" ? <Loader2Icon className="animate-spin" aria-hidden /> : <CrownIcon aria-hidden />}
-          {resolving ? "Settling the gold..." : stalled ? "Retry declaration" : "Declare winner"}
-        </Button>
+        <WithHelp help={DECLARE_HELP}>
+          <Button className={cn(BIG, "font-semibold")} onClick={() => setDialog("declare")} disabled={busy || resolving}>
+            {resolving || pending === "declare_winner" ? <Loader2Icon className="animate-spin" aria-hidden /> : <CrownIcon aria-hidden />}
+            {resolving ? "Settling the gold..." : stalled ? "Retry declaration" : "Declare winner"}
+          </Button>
+        </WithHelp>
       )}
 
       {cancelButton}
@@ -116,31 +148,37 @@ export function SessionControls({ session, canControl, isAdmin = false, serverNo
         open={dialog === "cancel"}
         onOpenChange={(open) => setDialog(open ? "cancel" : null)}
         title={session.status === "coach_draft" ? "Scrap the coach draft?" : "Cancel this game?"}
-        description="Nothing gets recorded. Every bet, insurance premium, decree and duel stake goes straight back to its owner."
+        description={cancelHelpEntry.does}
         confirmLabel={pending === "cancel" ? "Canceling..." : "Cancel the game"}
         cancelLabel="Keep playing"
         destructive
         pending={pending === "cancel"}
         onConfirm={() => run("cancel", () => toast("Game canceled. Every wager was refunded."))}
-      />
+      >
+        <HelpRows help={cancelHelpEntry} />
+      </ConfirmDialog>
       <ConfirmDialog
         open={dialog === "close_chaos"}
         onOpenChange={(open) => setDialog(open ? "close_chaos" : null)}
         title="Close the decree window?"
-        description="Nobody can cast a decree after this. Betting opens right away for five minutes."
+        description={CLOSE_DECREES_HELP.does}
         confirmLabel="Close decrees"
         pending={pending === "close_chaos"}
         onConfirm={() => run("close_chaos")}
-      />
+      >
+        <HelpRows help={CLOSE_DECREES_HELP} />
+      </ConfirmDialog>
       <ConfirmDialog
         open={dialog === "close_betting"}
         onOpenChange={(open) => setDialog(open ? "close_betting" : null)}
         title="Lock all bets now?"
-        description="Nobody can bet or buy insurance after this, even with time left on the clock."
+        description={LOCK_BETS_HELP.does}
         confirmLabel="Lock bets"
         pending={pending === "close_betting"}
         onConfirm={() => run("close_betting")}
-      />
+      >
+        <HelpRows help={LOCK_BETS_HELP} />
+      </ConfirmDialog>
       {session.status === "in_game" && (
         <DeclareWinnerDialog
           session={session}

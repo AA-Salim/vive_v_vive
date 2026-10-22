@@ -5,6 +5,7 @@ import Image from "next/image"
 import { CrownIcon, LockIcon, LockOpenIcon, ShieldAlertIcon, SparklesIcon } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { LaneIcon } from "@/components/lane-icon"
 import { TitleBadge } from "@/components/title-badge"
 import type { EquippedTitle } from "@/app/api/titles/equipped/route"
@@ -12,6 +13,7 @@ import { getChampionSplashUrl, ROLE_LABELS } from "@/lib/champions"
 import type { RoomAssignment } from "@/lib/session/types"
 import { cn } from "@/lib/utils"
 import { SIDE_NAME } from "@/components/session/copy"
+import { LOCK_HELP } from "@/components/session/help"
 import { useMediaQuery } from "@/components/session/use-browser-state"
 
 export interface PlayerDetailsProps {
@@ -97,16 +99,19 @@ export function PlayerDetails({
             </p>
           )}
           {canLock && onToggleLock && (
-            <Button
-              variant={assignment.locked ? "secondary" : "outline"}
-              className="h-10 w-full"
-              onClick={onToggleLock}
-              disabled={lockPending}
-              aria-pressed={assignment.locked}
-            >
-              {assignment.locked ? <LockOpenIcon aria-hidden /> : <LockIcon aria-hidden />}
-              {assignment.locked ? "Unlock for re-rolls" : "Lock this champion"}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={assignment.locked ? "secondary" : "outline"}
+                className="h-10 flex-1"
+                onClick={onToggleLock}
+                disabled={lockPending}
+                aria-pressed={assignment.locked}
+              >
+                {assignment.locked ? <LockOpenIcon aria-hidden /> : <LockIcon aria-hidden />}
+                {assignment.locked ? "Unlock for re-rolls" : "Lock this champion"}
+              </Button>
+              <InfoTip help={LOCK_HELP} side="top" align="end" />
+            </div>
           )}
         </div>
       </PopoverContent>

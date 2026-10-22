@@ -7,7 +7,9 @@ import { changeLines, decreeHeadline } from "@/lib/chaos/format"
 import type { ChaosDecreeEntry } from "@/lib/chaos/types"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { LEDGER_HELP } from "@/components/chaos/help"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
 import { SIDE_STYLES, TIER_STYLES } from "@/components/chaos/tier-styles"
 import { useNow } from "@/components/chaos/use-now"
@@ -146,6 +148,7 @@ export function DecreeLedger({ entries, viewerId, windowOpen }: DecreeLedgerProp
         <h3 id="decree-ledger-heading" className="flex items-center gap-2 font-display text-sm font-semibold tracking-wide text-[var(--color-gold)]">
           <ScrollTextIcon aria-hidden className="size-4" />
           Decree ledger
+          <InfoTip help={LEDGER_HELP} align="start" />
         </h3>
         <span className="text-[11px] tabular-nums text-[var(--color-gold-light)]/50">
           {entries.length} {entries.length === 1 ? "decree" : "decrees"}

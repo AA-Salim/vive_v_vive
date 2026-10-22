@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { CoinsIcon, HourglassIcon, LoaderCircleIcon, TriangleAlertIcon } from "lucide-react"
-import { getDecree, TIER_LABELS, type DecreeType } from "@/lib/chaos/catalog"
+import { DEBT_FLOOR, getDecree, TIER_LABELS, type DecreeType } from "@/lib/chaos/catalog"
 import {
   decreeBlock,
   pardonedPlayerIds,
@@ -18,7 +18,9 @@ import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
+import { decreeHelp } from "@/components/chaos/help"
 import { DecreeIcon } from "@/components/chaos/decree-icon"
 import { buildPreview, DecreePreview, type DecreeSelection } from "@/components/chaos/decree-preview"
 import { PlayerChoice, SideChoice, type PlayerOption, type SideOption } from "@/components/chaos/target-pickers"
@@ -135,6 +137,7 @@ export function DecreeDialog({
   const pledged = !needsPledge || pledge.trim().toLowerCase() === pledgePhrase.toLowerCase()
   const closed = remainingMs !== null && remainingMs <= 0
   const canSeal = !!request && !block && !targetBlock && pledged && !pending && !closed
+  const help = decreeHelp(type, ctx)
 
   const toggleSeat = (id: string) => {
     setSelection((prev) => {
@@ -243,8 +246,9 @@ export function DecreeDialog({
                   </>
                 )}
               </span>
+              {help && <InfoTip help={help} align="start" className="-my-1" />}
             </div>
-            {block?.code === "funds" && <div className="text-amber-300">{block.label} to stay above the -300 debt floor.</div>}
+            {block?.code === "funds" && <div className="text-amber-300">{block.label} to stay above the {DEBT_FLOOR} debt floor.</div>}
             {remainingMs !== null && (
               <div
                 className={cn(

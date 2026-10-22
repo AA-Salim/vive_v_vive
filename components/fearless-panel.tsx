@@ -6,8 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { FlameIcon, PencilIcon, RotateCcwIcon, Trash2Icon, XIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { HelpRows, InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/session/confirm-dialog"
+import { UNBAN_HELP, WIPE_FEARLESS_HELP, fearlessHelp } from "@/components/session/help"
 import { findChampion, getChampionImageUrl } from "@/lib/champions"
 import { cn } from "@/lib/utils"
 
@@ -76,6 +78,7 @@ export function FearlessPanel({ refreshKey, signedIn = false, isAdmin = false }:
   const champions = query.data ?? []
   const visible = expanded ? champions : champions.slice(0, PREVIEW_COUNT)
   const canEdit = signedIn && champions.length > 0
+  const fearless = fearlessHelp()
 
   return (
     <section aria-labelledby="fearless-title" className="rounded-xl border border-border bg-card p-4">
@@ -116,10 +119,16 @@ export function FearlessPanel({ refreshKey, signedIn = false, isAdmin = false }:
           </Button>
         </div>
       ) : champions.length === 0 ? (
-        <p className="mt-3 text-sm text-muted-foreground">No bans yet today. Every champion is fair game until someone plays it.</p>
+        <p className="mt-3 flex items-start gap-1 text-sm text-muted-foreground">
+          No bans yet today. Every champion is fair game until someone plays it.
+          <InfoTip help={fearless} align="end" />
+        </p>
       ) : (
         <>
-          <p className="mt-1 text-xs text-muted-foreground">Played today, so they cannot be rolled again until tomorrow.</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            Played today, so they cannot be rolled again until tomorrow.
+            <InfoTip help={fearless} align="end" />
+          </p>
           <ul className="mt-3 flex flex-wrap gap-2">
             {visible.map((name) => {
               const internal = findChampion(name)?.internal ?? name.replace(/[^A-Za-z]/g, "")
@@ -156,6 +165,12 @@ export function FearlessPanel({ refreshKey, signedIn = false, isAdmin = false }:
                 {expanded ? "Show less" : `Show all ${champions.length}`}
               </Button>
             )}
+            {editing && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                Tap a cross to unban a champion.
+                <InfoTip help={UNBAN_HELP} />
+              </span>
+            )}
             {editing && isAdmin && (
               <Button
                 variant="destructive"
@@ -180,7 +195,9 @@ export function FearlessPanel({ refreshKey, signedIn = false, isAdmin = false }:
         destructive
         pending={remove.isPending}
         onConfirm={() => remove.mutate(null)}
-      />
+      >
+        <HelpRows help={WIPE_FEARLESS_HELP} />
+      </ConfirmDialog>
     </section>
   )
 }

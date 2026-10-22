@@ -1,124 +1,138 @@
 "use client"
 
-import { useAuth } from "@/hooks/use-auth"
+import { useState } from "react"
+import Link from "next/link"
+import { ChevronDownIcon, CrownIcon, LogOutIcon, RefreshCwIcon, UserPlusIcon, UserRoundIcon } from "lucide-react"
+import { toast } from "sonner"
+import { ClaimPlayerDialog } from "@/components/claim-player-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { DiscordIcon } from "@/components/ui/discord-icon"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuLinkItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ClaimPlayerDialog } from "@/components/claim-player-dialog"
-import { useState } from "react"
-import Image from "next/image"
-import { LogOutIcon, RefreshCwIcon, UserIcon } from "lucide-react"
-import { toast } from "sonner"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useAuth } from "@/hooks/use-auth"
 import { cn } from "@/lib/utils"
 
-export function AuthButton() {
-  const { user, profile, isLoading, signIn, signOut } = useAuth()
-  const [claimOpen, setClaimOpen] = useState(false)
-  const [isSyncing, setIsSyncing] = useState(false)
+function initialOf(name: string) {
+  return name.trim().charAt(0).toUpperCase() || "?"
+}
 
-  const syncChampions = async () => {
-    setIsSyncing(true)
-    const t = toast.loading("Syncing champions from Meraki API...")
-    try {
-      const res = await fetch("/api/champions/sync", { method: "POST" })
-      const data = await res.json()
-      if (res.ok) {
-        toast.success(`Synced ${data.count} champions`, { id: t })
-      } else {
-        toast.error(data.error || "Sync failed", { id: t })
-      }
-    } catch (err) {
-      toast.error("Network error during sync", { id: t })
-    } finally {
-      setIsSyncing(false)
-    }
+async function syncChampions() {
+  const id = toast.loading("Summoning the champion roster from Meraki...")
+  try {
+    const res = await fetch("/api/champions/sync", { method: "POST" })
+    const data = (await res.json().catch(() => null)) as { count?: number; error?: string } | null
+    if (res.ok) toast.success(`${data?.count ?? "All"} champions answered the call`, { id })
+    else toast.error(data?.error ?? "The sync failed. The champions are sulking.", { id })
+  } catch {
+    toast.error("Network error. The Rift is unreachable.", { id })
   }
+}
+
+export function AuthButton({ className }: { className?: string }) {
+  const { user, profile, isAdmin, isLoading, signIn, signOut } = useAuth()
+  const [claimOpen, setClaimOpen] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   if (isLoading) {
-    return (
-      <div className="h-8 w-20 animate-pulse rounded-md bg-[var(--color-navy-lighter)]" />
-    )
+    return <Skeleton className={cn("size-10 rounded-full lg:w-32", className)} />
   }
 
   if (!user) {
     return (
-      <Button
-        onClick={signIn}
-        size="sm"
-        variant="outline"
-        className="border-[var(--color-gold)]/20 text-[var(--color-gold-light)]"
-      >
-        Login with Discord
+      <Button variant="royal" size="lg" onClick={() => void signIn()} className={cn("h-10 px-3.5 sm:px-4", className)}>
+        <DiscordIcon className="size-[18px]" />
+        <span className="sm:hidden">Sign in</span>
+        <span className="hidden sm:inline">Sign in with Discord</span>
       </Button>
     )
+  }
+
+  const name = profile?.discord_username ?? "Summoner"
+  const playerName = profile?.players?.name ?? null
+  const runSync = async () => {
+    setSyncing(true)
+    await syncChampions()
+    setSyncing(false)
   }
 
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-[var(--color-navy-lighter)]">
-          {profile?.discord_avatar_url ? (
-            <Image
-              src={profile.discord_avatar_url}
-              alt=""
-              width={28}
-              height={28}
-              className="rounded-full"
-              unoptimized
-            />
-          ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--color-gold)]/20">
-              <UserIcon className="h-4 w-4 text-[var(--color-gold)]" />
-            </div>
+        <DropdownMenuTrigger
+          aria-label={`Account menu for ${name}`}
+          className={cn(
+            "group inline-flex h-10 min-w-10 items-center gap-2 rounded-full border border-transparent p-0.5 outline-none transition-colors hover:border-[var(--color-gold)]/30 hover:bg-[var(--color-gold)]/8 focus-visible:ring-3 focus-visible:ring-ring/45 data-popup-open:border-[var(--color-gold)]/40 data-popup-open:bg-[var(--color-gold)]/10 lg:pr-3",
+            className
           )}
-          <span className="text-sm text-[var(--color-gold-light)]">
-            {profile?.discord_username ?? "User"}
-          </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className="border-[var(--color-gold)]/20 bg-[var(--color-navy-light)]"
         >
-          {!profile?.player_id && (
-            <>
-              <DropdownMenuItem
-                onClick={() => setClaimOpen(true)}
-                className="text-[var(--color-gold-light)] focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
-              >
-                <UserIcon className="mr-2 h-4 w-4" />
-                Claim Player
+          <Avatar className="size-9 ring-1 ring-[var(--color-gold)]/40 group-hover:ring-[var(--color-gold)]/70">
+            {profile?.discord_avatar_url && <AvatarImage src={profile.discord_avatar_url} alt="" />}
+            <AvatarFallback>{initialOf(name)}</AvatarFallback>
+          </Avatar>
+          <span className="hidden max-w-32 truncate text-sm font-medium text-[var(--color-gold-light)] lg:inline">
+            {playerName ?? name}
+          </span>
+          <ChevronDownIcon
+            className="hidden size-3.5 text-muted-foreground transition-transform group-data-popup-open:rotate-180 lg:inline"
+            aria-hidden
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={8} className="w-64">
+          <div className="flex items-center gap-3 px-2 pt-2 pb-2.5">
+            <Avatar className="size-10 ring-1 ring-[var(--color-gold)]/40">
+              {profile?.discord_avatar_url && <AvatarImage src={profile.discord_avatar_url} alt="" />}
+              <AvatarFallback>{initialOf(name)}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 truncate font-medium text-[var(--color-gold-light)]">
+                <span className="truncate">{name}</span>
+                {isAdmin && <CrownIcon className="size-3.5 shrink-0 text-[var(--color-gold)]" aria-label="Admin" />}
+              </p>
+              <p className="truncate text-xs text-muted-foreground">
+                {playerName ? `Plays as ${playerName}` : "No player claimed yet"}
+              </p>
+            </div>
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLinkItem render={<Link href="/profile" />}>
+              <UserRoundIcon className="text-[var(--color-gold)]/80" />
+              Profile and purse
+            </DropdownMenuLinkItem>
+            {!profile?.player_id && (
+              <DropdownMenuItem onClick={() => setClaimOpen(true)}>
+                <UserPlusIcon className="text-[var(--color-gold)]/80" />
+                Claim your player
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-[var(--color-gold)]/10" />
-            </>
-          )}
-          <DropdownMenuItem
-            onClick={() => signOut()}
-            className="text-[var(--color-gold-light)] focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
-          >
-            <LogOutIcon className="mr-2 h-4 w-4" />
-            Sign Out
-          </DropdownMenuItem>
-          <DropdownMenuSeparator className="bg-[var(--color-gold)]/10" />
-          <DropdownMenuItem
-            onClick={() => syncChampions()}
-            disabled={isSyncing}
-            className="text-[var(--color-gold-light)]/50 focus:bg-[var(--color-navy-lighter)] focus:text-[var(--color-gold)]"
-          >
-            <RefreshCwIcon className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} />
-            Sync Champions
+            )}
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Maintenance</DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => void runSync()} disabled={syncing} closeOnClick={false}>
+              <RefreshCwIcon className={cn("text-muted-foreground", syncing && "animate-spin")} />
+              <span className="text-muted-foreground">{syncing ? "Syncing champions..." : "Sync champions"}</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onClick={() => void signOut()}>
+            <LogOutIcon />
+            Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ClaimPlayerDialog
-        open={claimOpen}
-        onOpenChange={setClaimOpen}
-      />
+      <ClaimPlayerDialog open={claimOpen} onOpenChange={setClaimOpen} />
     </>
   )
 }

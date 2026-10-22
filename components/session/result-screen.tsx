@@ -5,7 +5,6 @@ import confetti from "canvas-confetti"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { ArrowRightIcon, CrownIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { LiveIndicator } from "@/components/live/live-indicator"
 import { ChampionAvatar } from "@/components/session/champion-avatar"
 import { PhaseStepper } from "@/components/session/phase-stepper"
 import { byLane } from "@/components/session/board-types"
@@ -119,8 +118,7 @@ export function ResultScreen({ session, serverTimeDelta, onDismiss }: ResultScre
         <div className="relative flex flex-col items-center gap-5 px-4 py-6 text-center sm:px-8 sm:py-8">
           <div className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2">
             <PhaseStepper phase="result" coachMode={session.game_mode === "coach_draft"} />
-            <LiveIndicator />
-          </div>
+            </div>
           <motion.span
             initial={reduced ? false : { rotate: -18, scale: 0.4, opacity: 0 }}
             animate={{ rotate: 0, scale: 1, opacity: 1 }}

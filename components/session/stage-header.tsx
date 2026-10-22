@@ -4,7 +4,6 @@ import type { ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { AlertTriangleIcon, LogInIcon, RadioTowerIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { LiveIndicator } from "@/components/live/live-indicator"
 import { SessionControls } from "@/components/session-controls"
 import { PhaseStepper } from "@/components/session/phase-stepper"
 import { GameClock, PhaseTimer } from "@/components/session/phase-timer"
@@ -107,7 +106,6 @@ export function StageHeader({
           ) : (
             <PhaseStepper phase={phase} coachMode={session?.game_mode === "coach_draft"} />
           )}
-          <LiveIndicator />
         </div>
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

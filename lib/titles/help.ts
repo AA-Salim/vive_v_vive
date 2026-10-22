@@ -2,20 +2,33 @@ import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { MILESTONES } from "@/lib/milestones"
 import { CATEGORY_META, isCurseCategory, seededPrice, tierOf } from "@/lib/titles/catalog"
 import { EFFECT_KEYS, titleEffects, type TitleEffectLine } from "@/lib/titles/effects"
-import { FACTION_REASON, LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL, TITLE_CONFLICTS, slotOf, type LoadoutSlot } from "@/lib/titles/loadout"
+import { gamesLeftLabel } from "@/lib/titles/expiry"
+import {
+  FACTION_REASON,
+  LOADOUT_SLOTS,
+  MAX_EQUIPPED,
+  SLOT_COUNT,
+  SLOT_LABEL,
+  TITLE_CONFLICTS,
+  factionRule,
+  slotOf,
+  type LoadoutSlot,
+} from "@/lib/titles/loadout"
 import { WIN_RATE_MIN_GAMES } from "@/lib/titles/milestone-stats"
 import { actAwardKind, isConsolationTitle } from "@/lib/titles/perks"
-import { HAND_KISS_NOTE, TIER_LABEL, multiplierLabel, type PriceTier } from "@/lib/titles/pricing"
+import { HAND_KISS_NOTE, PRICE_TIERS, TIER_GAMES, TIER_LABEL, multiplierLabel, titleGames, type PriceTier } from "@/lib/titles/pricing"
 import {
   CURSE_GAMES,
   DIGNITY_MULTIPLIER,
   MAX_ACTIVE_CURSES,
   MIN_STAKE,
-  PERK_CAP,
   PERK_PENALTY_CAP,
-  USER_PERK_CAP,
   dignityCost,
+  perkCap,
+  userPerkCap,
 } from "@/lib/titles/rules"
+import { titleRulesV2 } from "@/lib/titles/rules-version"
+import { liveSets, setsOf, type TitleSet } from "@/lib/titles/sets"
 import type { PerkInfo, TitleCategory } from "@/lib/titles/types"
 
 // Bubble copy for titles, built from the perk table, the effect table and the rules, never retyped.
@@ -39,6 +52,8 @@ export interface TitleHelpInput {
   for_self?: boolean
   effects?: TitleEffectLine[]
   dignity_cost?: number | null
+  // Games left on the viewer's own copy of a bought title (0 = expired), when known.
+  gamesLeft?: number | null
 }
 
 const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`)
@@ -85,7 +100,7 @@ function stackingOf(effects: TitleEffectLine[]): string {
 }
 
 function perkReward(perk: PerkInfo): string {
-  const cap = Math.min(perk.cap, PERK_CAP)
+  const cap = Math.min(perk.cap, perkCap())
   const base = `Up to ${pts(cap)} per game, paid automatically after it`
   return perk.downside ? `${base}. A bad roll can cost you ${pts(Math.min(perk.downside, PERK_PENALTY_CAP))}` : base
 }
@@ -112,7 +127,7 @@ function curseHelp(input: TitleHelpInput): HelpEntry {
     }
   }
 
-  const cap = pts(Math.min(perk.cap, PERK_CAP))
+  const cap = pts(Math.min(perk.cap, perkCap()))
   if (facts) {
     const left = typeof facts.gamesLeft === "number" ? `${facts.gamesLeft} of ${CURSE_GAMES} games left. ` : ""
     return {
@@ -127,7 +142,7 @@ function curseHelp(input: TitleHelpInput): HelpEntry {
   return {
     title: input.name,
     does: `A curse you buy for someone else. ${sentence(perk.summary)}${now} It marks their name everywhere for ${games(CURSE_GAMES)}.`,
-    cost: priced ? `${priced} Bestowed once` : "Bought once in the Armory",
+    cost: priced ? `${priced} Bestowed once` : "Bought once in the Titles Shop",
     reward: `You collect up to ${cap} per game as tribute, for ${games(CURSE_GAMES)}`,
     limits: `Bites only in games where ${involvement("they")}. ${MAX_ACTIVE_CURSES} brands per subject at most, never in a slot.${stacking}${burnOff}`,
   }
@@ -135,6 +150,47 @@ function curseHelp(input: TitleHelpInput): HelpEntry {
 
 function slotLine(slot: LoadoutSlot): string {
   return `Takes one of your ${SLOT_COUNT[slot]} ${SLOT_LABEL[slot]} slots`
+}
+
+function setsLine(name: string): string | null {
+  const sets = setsOf(name)
+  return sets.length ? `Counts towards ${sets.map((set) => `${set.name} (${set.needs} needed)`).join(" and ")}` : null
+}
+
+const setBonus = (set: TitleSet) =>
+  titleEffects(set.name)
+    .map((e) => e.chip)
+    .join(", ")
+
+// One set bonus: what it needs, what it adds, how far the viewer is.
+export function setHelp(set: TitleSet, count?: number): HelpEntry {
+  const progress = typeof count === "number" ? ` You wear ${Math.min(count, set.needs)} of ${set.needs}.` : ""
+  return {
+    title: set.name,
+    does: `${set.blurb} Wear ${set.needs} of ${set.members.join(", ")} and the set adds: ${titleEffects(set.name)
+      .map((e) => sentence(e.text))
+      .join(" ")}${progress}`,
+    cost: `${FREE}: it comes with the titles`,
+    reward: setBonus(set),
+    limits: "Stacks with the titles' own effects, inside the same caps. Only equipped titles with games left count.",
+  }
+}
+
+// The "How titles work" bubble of the shop.
+export function shopHelp(): HelpEntry {
+  const v2 = titleRulesV2()
+  const sets = liveSets()
+  return {
+    title: "How titles work",
+    does: `Buy a title, equip it and it bends the rules the moment you act (decrees, bets, praise, stipends, duels), then its perk pays after each game.${
+      sets.length ? ` Wear enough titles of a set and its bonus stacks on top: ${sets.map((set) => `${set.name} (${set.needs})`).join(", ")}.` : ""
+    }`,
+    cost: v2
+      ? `Legendary 1,500, Epic 1,000, Rare 600, Common 300. A bought title runs for ${PRICE_TIERS.map((t) => `${TIER_GAMES[t]}`).join(" / ")} games you take part in while wearing it (Legendary to Common), then renews at full price. Honors are free and never expire.`
+      : "Legendary 1,500, Epic 1,000, Rare 600, Common 300, once. Honors are free.",
+    reward: `Effects stack up to each one's cap. Perks: up to ${pts(perkCap())} per title, ${pts(userPerkCap())} for the whole loadout, per game`,
+    limits: `${loadoutRule}. ${factionRule() ? `${FACTION_REASON} ` : ""}Two broken pairs never mix. Sealed while a game is live. Curses are bought for someone else and burn for ${games(CURSE_GAMES)}.`,
+  }
 }
 
 // Everything a title does and costs, for its bubble.
@@ -146,11 +202,15 @@ export function titleHelp(input: TitleHelpInput): HelpEntry {
   const price = priceOf(input)
   const tier = tierFor(input)
   const effects = effectsOf(input)
+  const lasts = price !== null && price > 0 ? titleGames(tier, input.category, price) : null
+  const owned = typeof input.gamesLeft === "number" ? ` Yours: ${gamesLeftLabel(input.gamesLeft)}.` : ""
   const cost = award
     ? awardCost(input.name)
     : price !== null && price > 0
-      ? `${priceLine(tier, price)}, once. Equipping it is free. ${HAND_KISS_NOTE}`
-      : "Bought once in the Armory. Equipping it is free"
+      ? lasts
+        ? `${priceLine(tier, price)} for ${games(lasts)} you take part in while wearing it, then renew it at the same price. Equipping it is free. ${HAND_KISS_NOTE}${owned}`
+        : `${priceLine(tier, price)}, once. Equipping it is free. ${HAND_KISS_NOTE}`
+      : "Bought once in the Titles Shop. Equipping it is free"
   const perk = input.perk
   const crown = (perk && CROWN_TRIGGERS.has(perk.trigger)) || input.category === "rebellion" || input.category === "loyalty"
   const tagline = CATEGORY_META[input.category as TitleCategory]?.tagline
@@ -160,7 +220,8 @@ export function titleHelp(input: TitleHelpInput): HelpEntry {
   const loadout = [
     slotLine(slot),
     clashes.length ? `Never worn with ${clashes.join(" or ")}` : null,
-    (input.category === "rebellion" || input.category === "loyalty") && slot === "super_rare" ? FACTION_REASON : null,
+    factionRule() && (input.category === "rebellion" || input.category === "loyalty") && slot === "super_rare" ? FACTION_REASON : null,
+    setsLine(input.name),
   ]
     .filter(Boolean)
     .map((line) => sentence(line as string))
@@ -181,7 +242,7 @@ export function titleHelp(input: TitleHelpInput): HelpEntry {
     does: `${now ? `While equipped: ${now} After each game: ` : ""}${sentence(perk.summary)} Your name wears its colors everywhere while it is equipped.`,
     cost,
     reward: perkReward(perk),
-    limits: `${loadout}${stacking} Pays after games where ${involvement("you")}. Max ${pts(PERK_CAP)} a game for any title, ${pts(USER_PERK_CAP)} for all your titles together.${
+    limits: `${loadout}${stacking} Pays after games where ${involvement("you")}. Max ${pts(perkCap())} a game for any title, ${pts(userPerkCap())} for all your titles together.${
       crown ? " Needs Salaxe in the game; the King cannot cash it on himself." : ""
     } Sealed while a game is live.`,
   }
@@ -224,8 +285,8 @@ export function categoryHelp(category: TitleCategory, prices: number[]): HelpEnt
         ? `${FREE}: earned, never bought`
         : range
           ? `${range}, once${curse ? " per brand" : ". Equipping is free"}. ${HAND_KISS_NOTE}`
-          : "Sold in the Armory",
-    reward: curse ? `Tribute to you after each of their games, for ${games(CURSE_GAMES)}` : `Up to ${pts(PERK_CAP)} per game, depending on the title`,
+          : "Sold in the Titles Shop",
+    reward: curse ? `Tribute to you after each of their games, for ${games(CURSE_GAMES)}` : `Up to ${pts(perkCap())} per game, depending on the title`,
     limits: curse
       ? `${MAX_ACTIVE_CURSES} brands per subject, never in a slot. They can buy back their dignity for ${DIGNITY_MULTIPLIER}x the price.`
       : `${loadoutRule}. Perks pay after games where ${involvement("you")}.`,
@@ -235,10 +296,12 @@ export function categoryHelp(category: TitleCategory, prices: number[]): HelpEnt
 export function hallHelp(prices: number[]): HelpEntry {
   const range = priceRange(prices)
   return {
-    title: "The Hall of Titles",
+    title: "Titles Shop",
     does: "Buy or earn titles, build a loadout and curse your friends. Titles bend decrees, bets, praise, stipends and duels the moment you act, dress your name everywhere and pay after each game.",
-    cost: range ? `Titles cost ${range}. Honors are free. ${HAND_KISS_NOTE}` : "Honors are free, the rest is sold in the Armory",
-    reward: `Up to ${pts(USER_PERK_CAP)} per game from your loadout's perks, plus tribute from every brand you bestowed`,
+    cost: range
+      ? `Titles cost ${range}${titleRulesV2() ? `, each good for ${TIER_GAMES.common} to ${TIER_GAMES.legendary} games, then renewable` : ""}. Honors are free. ${HAND_KISS_NOTE}`
+      : "Honors are free, the rest is sold in the shop",
+    reward: `Up to ${pts(userPerkCap())} per game from your loadout's perks, plus tribute from every brand you bestowed`,
     limits: `${loadoutRule}, sealed while a game is live. Brands burn for ${games(CURSE_GAMES)}.`,
   }
 }

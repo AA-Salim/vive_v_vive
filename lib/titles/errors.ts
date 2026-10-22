@@ -24,6 +24,7 @@ const TITLE_ERRORS: Record<string, TitleError> = {
   slot_full_common: { status: 409, message: "Your Common slots are full. Take a Common title off first." },
   loadout_full: { status: 409, message: "That is more titles than any loadout can hold." },
   title_conflict: { status: 409, message: "Those two titles cannot be worn together. The court has seen that trick before." },
+  title_expired: { status: 409, message: "That title ran out of games. Renew it in the shop to wear it again." },
   faction_conflict: {
     status: 409,
     message: "Rebels and loyalists never share the super rare slots: you cannot slay the King and polish his throne.",

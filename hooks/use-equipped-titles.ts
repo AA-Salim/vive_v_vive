@@ -1,6 +1,7 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
+import { TITLE_RULES_HEADER, parseTitleRules, setTitleRulesVersion } from "@/lib/titles/rules-version"
 import type { EquippedTitle, LoadoutEntry } from "@/lib/titles/types"
 
 export const EQUIPPED_TITLES_KEY = ["titles", "equipped"] as const
@@ -40,6 +41,7 @@ export function useEquippedTitles(): EquippedIndex {
     queryFn: async (): Promise<EquippedTitle[]> => {
       const res = await fetch("/api/titles/equipped")
       if (!res.ok) return []
+      setTitleRulesVersion(parseTitleRules(res.headers.get(TITLE_RULES_HEADER)))
       const body: unknown = await res.json()
       return Array.isArray(body) ? (body as EquippedTitle[]) : []
     },

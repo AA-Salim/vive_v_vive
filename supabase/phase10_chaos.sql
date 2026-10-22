@@ -148,13 +148,13 @@ $$;
 -- Double or nothing pays 2x. Wagers placed through chaos_issue_decree (rules_version 2) gain +0.5x once a
 -- hostile decree another user lands on the backed side after the wager, capped at 2.5x: defiance pays, but
 -- 3x printed points. Mirrored in lib/chaos/catalog.ts (WAGER_* constants).
--- Title effects (phase10_title-effects.sql): Baron Caller stores a higher starting multiplier in details; the
--- 2.5x cap still holds.
+-- Title effects (phase10_title-effects.sql): Baron Caller stores a higher starting multiplier in details (2.3x at
+-- most), so only his wagers can pass 2.5x: the cap is 2.8x (WAGER_TITLE_MAX_MULTIPLIER in lib/titles/effects.ts).
 CREATE OR REPLACE FUNCTION chaos_wager_multiplier(p_wager chaos_actions) RETURNS NUMERIC
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT CASE
     WHEN p_wager.rules_version < 2 THEN 2.0
-    ELSE LEAST(2.5, COALESCE((p_wager.details->>'base_multiplier')::NUMERIC, 2.0) + 0.5 * LEAST(1, (
+    ELSE LEAST(2.8, COALESCE((p_wager.details->>'base_multiplier')::NUMERIC, 2.0) + 0.5 * LEAST(1, (
       SELECT count(*)
       FROM chaos_actions h
       WHERE h.session_id = p_wager.session_id

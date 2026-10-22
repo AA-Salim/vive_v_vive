@@ -38,7 +38,7 @@ import { DAILY_STIPEND } from "@/lib/lore/daily"
 import { CROWNS_PER_DAY, PRAISE_PER_DAY, PRAISE_REWARDS, RIDDLE_FIRST_TRY_BONUS, ROYAL_FAVOR } from "@/lib/praise/rules"
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, PERK_PENALTY_CAP } from "@/lib/titles/rules"
 
 export type ReasonGroup =
   | "games"
@@ -278,7 +278,7 @@ export const REASONS: Readonly<Record<string, Definition>> = {
   title_perk: def(
     "Title perk",
     "Your banner went to work.",
-    `What one of your equipped titles paid after a game: never more than +${PERK_CAP} per title, +${USER_PERK_CAP} for all of them, never worse than -${PERK_PENALTY_CAP}.`,
+    `What one of your equipped titles paid after a game: capped per title and for all of them together, never worse than -${PERK_PENALTY_CAP}.`,
     "titles",
     "signed",
     SparklesIcon

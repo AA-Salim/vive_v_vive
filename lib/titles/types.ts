@@ -2,6 +2,7 @@ import type { MilestoneDefinition } from "@/lib/milestones"
 import type { EffectDomain, TitleEffectLine } from "@/lib/titles/effects"
 import type { LoadoutSlot } from "@/lib/titles/loadout"
 import type { PriceTier } from "@/lib/titles/pricing"
+import type { TitleRulesVersion } from "@/lib/titles/rules-version"
 
 export type { EffectDomain, TitleEffectLine } from "@/lib/titles/effects"
 export type { LoadoutSlot } from "@/lib/titles/loadout"
@@ -64,6 +65,10 @@ export interface TitleView {
   domain: EffectDomain | null
   // Curses only: what burning the brand off costs the branded.
   dignity_cost: number | null
+  // Games one purchase (or renewal) lasts; null when it never expires. Absent before titles expire.
+  games?: number | null
+  // Set bonuses it counts towards (lib/titles/sets.ts).
+  sets?: string[]
 }
 
 export interface CourtMemberRef {
@@ -79,6 +84,9 @@ export interface OwnedTitleView {
   bestowed_by: CourtMemberRef | null
   curse: CurseState | null
   perk: PerkInfo | null
+  // Games left on a bought title: 0 when it expired and needs renewing, null when it never expires. Absent before
+  // titles expire.
+  games_left?: number | null
 }
 
 export interface LedgerItem {
@@ -110,6 +118,8 @@ export interface TitlesCatalogResponse {
   locked: boolean
   ledger: PerkLedger | null
   migrated: boolean
+  // The title rules the database runs (lib/titles/rules-version.ts). Absent from older servers: version 1.
+  rules?: TitleRulesVersion
 }
 
 export interface CourtMember {
@@ -151,6 +161,8 @@ export interface LoadoutEntry {
   effect: string | null
   perk: string | null
   primary: boolean
+  // Games left on a bought title, null when it never expires. Absent before titles expire.
+  gamesLeft?: number | null
 }
 
 // Extends the original { userId, playerId, title, category, perk } contract with optional fields only. The top-level

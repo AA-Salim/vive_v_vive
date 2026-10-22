@@ -133,12 +133,12 @@ You start each act with a purse. You can go down to **-300** (debt) by signing t
 | Royal Decrees | 49 to 139 |
 | A bounty on someone | 20 or more |
 | The pillory (shame someone for 24 h) | 40 |
-| Titles | 300 to 1,500 |
+| Titles | 300 to 1,500, each good for 8 to 20 games |
 
 ### Sing His Praises
 
 Up to **4 times a day**, kiss the hand: sing Salaxe one short line of worship. **4 kisses a day: 200, 150, 100, 50**
-points in that order, 500 a day (title boosts such as Last Loyalist apply to each kiss, at most +40%). The rules: **8 to 25 characters**, at least 2 words, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass,
+points in that order, 500 a day (title boosts such as Last Loyalist apply to each kiss: +40% alone, up to +75% with a full combo). The rules: **8 to 25 characters**, at least 2 words, name him (Salaxe, SLX, Chklat, Chalaksse, Chklass,
 Goblino...), no keyboard mash or repeated words, and a line nobody sang before. Tap **words of worship** to build it:
 Eternal King, GOAT, Lion of the Rift, Mon Roi, Sa Majeste, Sidna, Lmalik, Sba3, Ma3lem, Tbarkellah...
 
@@ -164,51 +164,91 @@ were missed; the Hall of Kisses shows both, for glory only.
 ## Titles
 
 Titles change the game. Each one has an **effect** that works the moment you act (cheaper decrees, better insurance,
-bigger praise...) plus a small **perk** after each game. Open a title's bubble to see exactly what it does.
+bigger praise...) plus a small **perk** after each game. They live in the **Shop** tab (Titles Shop on desktop):
+browse by tier or by set, buy, renew, equip, and bestow curses from there. Open a title's bubble to see exactly
+what it does.
 
-| Tier | Price | Slots |
-| --- | --- | --- |
-| Legendary | 1,500 (15 hand kisses) | super rare (2 slots, shared with Epic) |
-| Epic | 1,000 (10 hand kisses) | super rare |
-| Rare | 600 (6 hand kisses) | bronze (3 slots) |
-| Common | 300 (3 hand kisses) | basic (4 slots) |
+| Tier | Price | Lasts | Slots |
+| --- | --- | --- | --- |
+| Legendary | 1,500 (15 hand kisses) | 20 games | super rare (2 slots, shared with Epic) |
+| Epic | 1,000 (10 hand kisses) | 16 games | super rare |
+| Rare | 600 (6 hand kisses) | 12 games | bronze (3 slots) |
+| Common | 300 (3 hand kisses) | 8 games | basic (4 slots) |
 
 A hand kiss is 100 points, what one praise paid when the prices were set. Praise now pays 300; prices stayed.
 
+**Bought titles run out.** A game counts when you play it, or bet, cast a decree, duel or seal a prophecy on it,
+while wearing the title. The game that spends its last charge still gets the full effect and perk; then the title
+comes off and stays in your collection as "Expired". **Renew** it in the shop for its full price and the count
+starts over. Titles you own but do not wear never count down. Free honors (milestones, act awards) never expire.
+Titles bought before this rule got their full run from the day it started. The shop, your loadout, your profile and
+the title bubbles all show "N games left".
+
 | Title | Tier | Effect, the moment you act |
 | --- | --- | --- |
-| The Usurper | Legendary | +1 use of every limited Royal Decree per game |
-| Kingslayer | Legendary | decrees aimed at Salaxe or his team cost 20% less |
-| Copium Dealer | Legendary | Guardian Angel covers 75% of the stake instead of 60% |
-| Last Loyalist | Epic | praise pays +25% (375 instead of 300) |
+| The Usurper | Legendary | +2 uses of every limited Royal Decree per game |
+| Kingslayer | Legendary | decrees aimed at Salaxe or his team cost 35% less |
+| Copium Dealer | Legendary | Guardian Angel covers 85% of the stake instead of 60% |
+| Last Loyalist | Epic | every kiss pays +40% (280 instead of 200 on the first) |
 | The One Who Stopped Kneeling | Epic | your champion cannot be exiled |
-| Delayed Victory Specialist | Epic | a lost duel gives back 20% of the stake |
-| Crown Thief | Rare | early-conviction bet window lasts 90 s instead of 60 s |
-| The Disrespector | Rare | bestowing a curse costs 20% less |
-| The Holdout | Rare | Guardian Angel costs 25% less on Salaxe's side |
-| Baron Caller (Derogatory) | Rare | King's Wager starts at x2.2 (still capped at x2.5) |
-| El Goblino Pequeno | Rare | duel tithe halved |
+| Delayed Victory Specialist | Epic | a lost duel gives back 35% of the stake |
+| Crown Thief | Rare | early-conviction bet window lasts 120 s instead of 60 s |
+| The Disrespector | Rare | bestowing a curse costs 35% less |
+| The Holdout | Rare | Guardian Angel costs 40% less on Salaxe's side |
+| Baron Caller (Derogatory) | Rare | King's Wager starts at x2.3 and can reach x2.8 with defiance |
+| El Goblino Pequeno | Rare | no duel tithe at all |
 | Main Character (Self-Diagnosed) | Rare | the Herald announces every bet, decree and duel you make |
-| The 0/8 Powerspike | Rare | all-in bonus is +25% of the profit instead of +15% |
-| Still Kneeling | Common | daily stipend doubled |
-| Throne Polisher | Common | Royal Favor pays +50% (75 instead of 50) |
+| The 0/8 Powerspike | Rare | all-in bonus is +35% of the profit instead of +15% |
+| Still Kneeling | Common | daily stipend tripled |
+| Throne Polisher | Common | Royal Favor pays +100% (100 instead of 50) |
 | Court Jester (curse) | Legendary | bets capped at 50 points per game |
 | The Crawling One (curse) | Epic | no Guardian Angel insurance |
 | Boot Licker (curse) | Rare | your decrees cost 20% more |
 | Royal Carpet (curse) | Rare | decrees aimed at you cost others 20% less |
 | Salaxe's Emotional Support (curse) | Common | your daily stipend goes to Salaxe |
 
-The decree and devotion milestone titles also stack small bonuses (decrees -3/-5/-7%, praise +5/+5/+10%, so
-+15/+15/+30 on a 300-point praise).
+The decree and devotion milestone honors stack too: Mischief Maker, Chaos Enjoyer and Chaos Incarnate cut decrees by
+5, 8 and 12%; Salaxe Appreciator, Devoted Servant and Down Horrendous For Salaxe add +8, +8 and +15% to praise.
+
+**Sets.** Wear enough titles of a set and its bonus joins the stack (the loadout and the shop show "2/3 for Rebel
+Court"):
+
+| Set | Needs | Members | Bonus |
+| --- | --- | --- | --- |
+| Rebel Court | 3 | The Usurper, Kingslayer, The One Who Stopped Kneeling, Crown Thief, The Disrespector | decrees -10%, +1 use of every limited decree |
+| Loyal Court | 3 | Copium Dealer, Last Loyalist, The Holdout, Still Kneeling, Throne Polisher, Salaxe Appreciator, Devoted Servant, Down Horrendous For Salaxe | praise +20%, Royal Favor +50% |
+| High Roller | 2 | Copium Dealer, The 0/8 Powerspike, Baron Caller, Crown Thief, The Holdout | all-in bonus +5%, early window +15 s |
+| Chaos Crew | 3 | Mischief Maker, Chaos Enjoyer, Chaos Incarnate | decrees -10% |
+
+**Caps.** Everything that feeds one effect adds up, then stops at its cap, so nothing ever becomes free:
+
+| Effect | Cap |
+| --- | --- |
+| Decree price (all discounts and markups together) | -45% to +50% |
+| Decrees aimed at Salaxe | -35% |
+| Extra decree uses | +3 |
+| King's Wager | x2.3 start, x2.8 top (x2.5 without Baron Caller) |
+| Early-conviction window | +75 s |
+| All-in bonus | +25 points (40% of the profit) |
+| Guardian Angel coverage | 85% |
+| Guardian Angel premium on Salaxe's side | -40% |
+| Praise | +75% (525 points) |
+| Royal Favor | +150% (125 points) |
+| Daily stipend | x3 |
+| Curse price | -35% |
+| Duel tithe | waived at best, never a bonus |
+| Lost duel refund | 35% of the stake |
 
 - **Loadout**: wear up to 9 titles at once and build combos: 2 super rare slots (Legendary or Epic), 3 bronze slots
   (Rare) and 4 basic slots (Common). Two pairs never mix (Copium Dealer and The Holdout, El Goblino Pequeno and
-  Delayed Victory Specialist), and rebels and loyalists cannot share the super rare slots. Every effect has a cap
-  (decree discounts stop at 30% off, praise at +40% or 420 points, coverage at 75%), and all your post-game perks together pay at
-  most 60 points a game. Your loadout is public: friends see your build on your profile ("See their strategy").
+  Delayed Victory Specialist); everything else goes, rebels and loyalists side by side included. Your loadout is
+  public: friends see your build on your profile ("See their strategy").
+- **Perks**: each title pays its own perk after the games you take part in: at most 90 for one title and 100 for
+  the whole loadout per game. Perks that pay a share (of a bet profit, a loss, the pool, decree spend or a bounty)
+  have 1.5x higher caps than before; fixed amounts did not change.
 - **Curses**: mockery titles (Court Jester, Boot Licker...) are bought for someone else. They hurt the wearer for 8
   games, take no slot and pay the person who bought them. The victim can buy back their dignity for exactly the
-  curse's price.
+  curse's price. Curses kept their numbers.
 - Free titles come from milestones (games played, wins, bets, praises...) and act awards.
 - Your titles show on your player card during the draft and the game, next to your name everywhere, and in the live
   feed.

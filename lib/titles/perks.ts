@@ -18,6 +18,7 @@ import {
   onWin,
   profit,
   share,
+  shareCap,
   staked,
   tribute,
   type PerkDefinition,
@@ -27,7 +28,8 @@ import type { TitleCategory } from "@/lib/titles/types"
 export type { PerkDefinition, PerkGame, PerkHit, PerkSubject } from "@/lib/titles/perk-kit"
 
 // Every cap below is seeded into title_perk_caps (supabase/phase10_titles.sql), and apply_title_perk() clamps each
-// payout to it: change a cap, a title name or an award kind in both places.
+// payout to it: change a cap, a title name or an award kind in both places. Caps of share-based perks go through
+// shareCap() (1.5x under the second title rules).
 const BARON_WIN = 10
 const BARON_LOSS = 4
 const PLOT_TWIST = 5
@@ -36,7 +38,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   Kingslayer: {
     kind: "perk",
     trigger: "crown_falls",
-    cap: 60,
+    get cap() {
+      return shareCap(60)
+    },
     describe: fixed("When Salaxe's side falls: +25% bet profit, +12 if you played"),
     evaluate: (s, g) => {
       if (!crownPlays(s, g) || crownWon(g)) return null
@@ -51,7 +55,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "The Disrespector": {
     kind: "perk",
     trigger: "bet_loss",
-    cap: 40,
+    get cap() {
+      return shareCap(40)
+    },
     describe: fixed(`Bet ${MIN_STAKE}+ against Salaxe's side: +4, and 30% back if it loses`),
     evaluate: (s, g) => {
       if (!crownPlays(s, g) || !s.bet || !staked(s) || s.bet.side === g.salaxeSide) return null
@@ -83,7 +89,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "The Holdout": {
     kind: "perk",
     trigger: "bet_loss",
-    cap: 40,
+    get cap() {
+      return shareCap(40)
+    },
     describe: fixed(`Bet ${MIN_STAKE}+ on Salaxe's side: +4, and 30% back if he loses`),
     evaluate: (s, g) => {
       if (!crownPlays(s, g) || !s.bet || !staked(s) || s.bet.side !== g.salaxeSide) return null
@@ -93,7 +101,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "Last Loyalist": {
     kind: "perk",
     trigger: "bet_win",
-    cap: 60,
+    get cap() {
+      return shareCap(60)
+    },
     describe: fixed(`Bet ${MIN_STAKE}+ on Salaxe's side: +3, plus 40% of the profit if he wins`),
     evaluate: (s, g) => {
       if (!crownPlays(s, g) || !s.bet || !staked(s) || s.bet.side !== g.salaxeSide) return null
@@ -103,8 +113,10 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "Copium Dealer": {
     kind: "perk",
     trigger: "crown_falls",
-    cap: 24,
-    describe: fixed("Salaxe's side loses: +3 per bettor who backed him (max 24)"),
+    get cap() {
+      return shareCap(24)
+    },
+    describe: () => `Salaxe's side loses: +3 per bettor who backed him (max ${shareCap(24)})`,
     evaluate: (s, g) => {
       if (!crownPlays(s, g) || crownWon(g) || g.salaxeSide === null) return null
       const self = s.bet?.side === g.salaxeSide ? 1 : 0
@@ -125,7 +137,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "The 0/8 Powerspike": {
     kind: "perk",
     trigger: "bet_loss",
-    cap: 30,
+    get cap() {
+      return shareCap(30)
+    },
     describe: fixed("Lose a bet: 15% back. Lose a game: +3"),
     evaluate: (s) => hit(share(loss(s), 15) + (s.play && !s.play.won ? 3 : 0), "The powerspike is coming. Any minute now."),
   },
@@ -133,7 +147,9 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "Main Character (Self-Diagnosed)": {
     kind: "perk",
     trigger: "bet_win",
-    cap: 60,
+    get cap() {
+      return shareCap(60)
+    },
     downside: PLOT_TWIST,
     describe: fixed(`Bet on your own team: +30% profit if it wins, -${PLOT_TWIST} if it loses`),
     evaluate: (s) => {
@@ -144,8 +160,10 @@ const SHOP_PERKS: Record<string, PerkDefinition> = {
   "El Goblino Pequeno": {
     kind: "perk",
     trigger: "pool",
-    cap: 15,
-    describe: fixed("Skim 1% of the betting pool every game (max 15)"),
+    get cap() {
+      return shareCap(15)
+    },
+    describe: () => `Skim 1% of the betting pool every game (max ${shareCap(15)})`,
     evaluate: (_s, g) => hit(share(g.pool, 1), "Skimmed the pot like a true goblin"),
   },
 

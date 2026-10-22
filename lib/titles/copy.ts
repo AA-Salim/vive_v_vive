@@ -1,15 +1,18 @@
 import { pts, type HelpEntry } from "@/lib/help"
-import { DECREE_COST_RANGE } from "@/lib/titles/effects"
-import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
-import { HAND_KISS_NOTE, PRICE_TIERS, TIER_LABEL, TIER_MULTIPLIER, formatPrice, tierPrice } from "@/lib/titles/pricing"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
+import { decreeCostRange } from "@/lib/titles/effects"
+import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL, factionRule } from "@/lib/titles/loadout"
+import { HAND_KISS_NOTE, PRICE_TIERS, TIER_GAMES, TIER_LABEL, TIER_MULTIPLIER, formatPrice, tierPrice } from "@/lib/titles/pricing"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_PENALTY_CAP, perkCap, userPerkCap } from "@/lib/titles/rules"
+import { titleRulesV2 } from "@/lib/titles/rules-version"
+import { liveSets } from "@/lib/titles/sets"
 import type { PerkInfo } from "@/lib/titles/types"
 
 const slotList = LOADOUT_SLOTS.map((s) => `${SLOT_COUNT[s]} ${SLOT_LABEL[s]}`).join(", ")
 const priceList = PRICE_TIERS.map((t) => `${TIER_LABEL[t]} x${TIER_MULTIPLIER[t]} (${formatPrice(tierPrice(t))})`).join(", ")
+export const DURATION_LIST = PRICE_TIERS.map((t) => `${TIER_LABEL[t]} ${TIER_GAMES[t]}`).join(", ")
 
 export const HALL_COPY = {
-  title: "The Hall of Titles",
+  title: "Titles Shop",
   tagline:
     "Every title bends the rules the moment you act: cheaper decrees, better insurance, fatter praise. Then its perk pays after the game. Every brand bleeds its wearer. Choose wisely, or at least loudly.",
   lockNotice: "The game is live. Titles are sealed until a winner is declared.",
@@ -19,36 +22,78 @@ export const HALL_COPY = {
   emptyCollection: "Your collection is empty. The shop is open, the milestones are waiting, and Salaxe is judging.",
 }
 
-export const EXPLAINER = [
+export type ExplainerIcon = "loadout" | "expiry" | "effects" | "sets" | "perks" | "price" | "curses" | "dignity" | "sealed"
+
+export interface ExplainerRule {
+  icon: ExplainerIcon
+  title: string
+  body: string
+}
+
+const EXPLAINER_TAIL: ExplainerRule[] = [
   {
-    title: "A loadout, not a banner",
-    body: `Wear up to ${MAX_EQUIPPED} titles at once: ${slotList}. Rebels and loyalists never share the super rare slots, and a few broken pairs never mix.`,
-  },
-  {
-    title: "Effects bite the moment you act",
-    body: `Decree prices, bet terms, praise rewards, stipends and duel tithes change right away, shown on every price you see. Effects stack, each with a hard cap (decree discounts stop at ${Math.abs(DECREE_COST_RANGE.min)}% off).`,
-  },
-  {
-    title: "Perks pay after the game",
-    body: `After every game you take part in (you played, bet ${MIN_STAKE}+, cast a decree or cashed a bounty), each perk pays on its own: at most ${PERK_CAP} per perk, ${USER_PERK_CAP} for all your titles together. The treasury enforces it, whoever declares the winner.`,
-  },
-  {
-    title: "Priced in hand kisses",
-    body: `${HAND_KISS_NOTE} Titles cost ${priceList}. Honors are earned, never bought.`,
-  },
-  {
+    icon: "curses",
     title: "Curses",
     body: `Mockery titles are bought for someone else. The brand burns for ${CURSE_GAMES} games, works against its wearer the moment it lands and pays you tribute. ${MAX_ACTIVE_CURSES} brands per subject, maximum.`,
   },
   {
+    icon: "dignity",
     title: "Buy back your dignity",
     body: `The branded can burn a brand off early for ${DIGNITY_MULTIPLIER === 1 ? "exactly its price" : `${DIGNITY_MULTIPLIER}x its price`}. The Crown keeps the money. The bestower keeps the memories.`,
   },
   {
+    icon: "sealed",
     title: "Sealed when live",
     body: "Titles lock the moment a game goes live and unlock when the winner is declared. No mid-game costume changes.",
   },
 ]
+
+// Built on demand: the numbers follow the title rules the database runs.
+export function explainer(): ExplainerRule[] {
+  const v2 = titleRulesV2()
+  const sets = liveSets()
+  return [
+    {
+      icon: "loadout",
+      title: "A loadout, not a banner",
+      body: `Wear up to ${MAX_EQUIPPED} titles at once: ${slotList}. ${factionRule() ? "Rebels and loyalists never share the super rare slots, and a" : "A"} few broken pairs never mix.`,
+    },
+    ...(v2
+      ? [
+          {
+            icon: "expiry" as const,
+            title: "Bought titles run for a number of games",
+            body: `A bought title lasts a number of games you take part in while wearing it: ${DURATION_LIST}. Then it comes off and stays in your collection until you renew it for its full price. Honors never expire.`,
+          },
+        ]
+      : []),
+    {
+      icon: "effects",
+      title: "Effects bite the moment you act",
+      body: `Decree prices, bet terms, praise rewards, stipends and duel tithes change right away, shown on every price you see. Effects stack, each with a hard cap (decree discounts stop at ${Math.abs(decreeCostRange().min)}% off).`,
+    },
+    ...(sets.length
+      ? [
+          {
+            icon: "sets" as const,
+            title: "Sets stack on top",
+            body: `Wear enough titles of one set and its bonus joins the stack: ${sets.map((set) => `${set.name} (${set.needs})`).join(", ")}.`,
+          },
+        ]
+      : []),
+    {
+      icon: "perks",
+      title: "Perks pay after the game",
+      body: `After every game you take part in (you played, bet ${MIN_STAKE}+, cast a decree or cashed a bounty), each perk pays on its own: at most ${perkCap()} per perk, ${userPerkCap()} for all your titles together. The treasury enforces it, whoever declares the winner.`,
+    },
+    {
+      icon: "price",
+      title: "Priced in hand kisses",
+      body: `${HAND_KISS_NOTE} Titles cost ${priceList}. Honors are earned, never bought.`,
+    },
+    ...EXPLAINER_TAIL,
+  ]
+}
 
 const ROASTS: Record<string, string> = {
   "Court Jester": "shall juggle for the court. Funny hat mandatory, bets capped, tips confiscated.",
@@ -78,7 +123,7 @@ export function perkHelp(perk: PerkInfo): HelpEntry {
     does: `${sentence(perk.summary)} Paid on its own after every game you take part in (${TAKES_PART}), while this title is equipped.`,
     cost: `Free to equip. A perk that backfires costs you ${pts(PERK_PENALTY_CAP)} at most.`,
     reward: `Up to ${pts(perk.cap)} a game.`,
-    limits: `All your perks together pay at most ${pts(USER_PERK_CAP)} a game. Sealed while a game is live.`,
+    limits: `All your perks together pay at most ${pts(userPerkCap())} a game. Sealed while a game is live.`,
   }
 }
 

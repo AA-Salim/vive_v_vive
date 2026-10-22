@@ -6,7 +6,7 @@ import type { LiveEventPayloads } from "@/lib/live/events"
 import type { Side } from "@/lib/types"
 import { computePerkApplications, emptySubject, type PerkApplication, type PerkWearer } from "@/lib/titles/engine"
 import type { PerkGame, PerkSubject } from "@/lib/titles/perk-kit"
-import { brandState, earliest, isBrand, loadIdentities, loadLiveOwnership, loadResolvedGames } from "@/lib/titles/server"
+import { brandState, earliest, isBrand, loadIdentities, loadLiveOwnership, loadResolvedGames, titleWorks } from "@/lib/titles/server"
 
 const DEBT_FLOOR = -300
 const PUBLIC_PERK_EVENTS = 4
@@ -44,7 +44,7 @@ export async function settleTitlePerks(ctx: GameResolvedContext): Promise<void> 
   // Every title of a loadout pays its own perk; the engine caps a wearer's total per game.
   const wearers: PerkWearer[] = []
   for (const row of [...ownership].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))) {
-    if (!row.is_active || !row.title.for_self) continue
+    if (!row.is_active || !row.title.for_self || !titleWorks(row, sessionId)) continue
     wearers.push({ userId: row.user_id, title: row.title.name, category: row.title.category, kind: "perk", bestowedBy: null })
   }
   for (const brand of brands) {

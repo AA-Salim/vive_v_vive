@@ -29,6 +29,7 @@ export function slotItemOf(worn: WornTitle): SlotItem {
     price: worn.title.price,
     perk: worn.owned.perk,
     description: worn.title.description,
+    gamesLeft: worn.owned.games_left,
   }
 }
 
@@ -55,7 +56,7 @@ export function LoadoutEditor({ loadout, pending, onRemove, onClear, onBrowse, o
         onEmpty={(slot) => onBrowse(slot === "common" ? "collection" : "armory")}
       />
 
-      <ComboSummary fx={loadout.fx} />
+      <ComboSummary fx={loadout.fx} worn={loadout.worn.filter((w) => w.title.for_self).map((w) => w.title.name)} />
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" className="h-10 flex-1" disabled={loadout.locked} onClick={() => onBrowse("collection")}>

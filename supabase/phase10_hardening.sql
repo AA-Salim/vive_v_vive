@@ -111,7 +111,8 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON game_outcome_records FROM anon, authe
 -- Called by the declare flow (lib/session/resolve.ts) once the game row is linked and before the status flips.
 -- Writes the game_players seats, bumps wins/losses/games_played and pays every linked player with a treasury
 -- (game_win +10, game_participation +2, reference_id = session id), all in one transaction. A second call for the
--- same session or game is a no-op, so the two minute retry of a dead declaration can never count twice.
+-- same session or game is a no-op, so the two minute retry of a dead declaration can never count twice. It also
+-- takes one game off the equipped bought titles of everyone who took part (vvv_title_games_tick).
 -- When an earlier app version already wrote the seats, it also moved the counters: only missing points are paid.
 CREATE OR REPLACE FUNCTION record_game_outcome(p_session_id UUID) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -124,6 +125,7 @@ DECLARE
   v_sides INTEGER;
   v_counted BOOLEAN := false;
   v_credited INTEGER := 0;
+  v_ticked INTEGER := 0;
   v_seat RECORD;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'game:not_authenticated'; END IF;
@@ -202,9 +204,14 @@ BEGIN
   INSERT INTO game_outcome_records (game_id, session_id, winner_side, counted, credited, recorded_by)
   VALUES (v_game.id, p_session_id, v_game.winner_side, v_counted, v_credited, v_uid);
 
+  -- Bought titles lose one game here, exactly once per recorded game (phase10_title-effects.sql).
+  IF to_regprocedure('public.vvv_title_games_tick(uuid)') IS NOT NULL THEN
+    v_ticked := vvv_title_games_tick(p_session_id);
+  END IF;
+
   RETURN jsonb_build_object(
     'recorded', true, 'already', false, 'game_id', v_game.id,
-    'winner_side', v_game.winner_side, 'counted', v_counted, 'credited', v_credited
+    'winner_side', v_game.winner_side, 'counted', v_counted, 'credited', v_credited, 'titles_ticked', v_ticked
   );
 END;
 $$;

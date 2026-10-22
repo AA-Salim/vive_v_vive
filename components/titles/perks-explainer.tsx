@@ -1,11 +1,21 @@
 "use client"
 
-import { Banknote, Coins, Crown, Flame, Lock, ScrollText, Skull, Zap } from "lucide-react"
+import { Banknote, Coins, Crown, Flame, Hourglass, Layers, Lock, ScrollText, Skull, Zap, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { EXPLAINER } from "@/lib/titles/copy"
+import { explainer, type ExplainerIcon } from "@/lib/titles/copy"
 
-const ICONS = [Crown, Zap, Banknote, Coins, Skull, Flame, Lock]
+const ICONS: Record<ExplainerIcon, LucideIcon> = {
+  loadout: Crown,
+  expiry: Hourglass,
+  effects: Zap,
+  sets: Layers,
+  perks: Banknote,
+  price: Coins,
+  curses: Skull,
+  dignity: Flame,
+  sealed: Lock,
+}
 
 export function PerksExplainer() {
   return (
@@ -20,8 +30,8 @@ export function PerksExplainer() {
           <DialogDescription>Read it once. Salaxe never did.</DialogDescription>
         </DialogHeader>
         <ol className="space-y-3">
-          {EXPLAINER.map((rule, index) => {
-            const Icon = ICONS[index % ICONS.length]
+          {explainer().map((rule) => {
+            const Icon = ICONS[rule.icon]
             return (
               <li key={rule.title} className="flex gap-3 rounded-lg border border-border/60 bg-[var(--color-navy)]/60 p-3">
                 <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-[var(--color-gold)]/30 bg-[var(--color-gold)]/10 text-[var(--color-gold)]">

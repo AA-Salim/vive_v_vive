@@ -48,6 +48,7 @@ export function loadoutHelp(entry: LoadoutEntry): HelpEntry {
     perk: forSelf ? perkInfo(entry.title, entry.category) : null,
     effects: forSelf ? titleEffects(entry.title) : [],
     dignity_cost: forSelf ? null : dignityCost(price),
+    gamesLeft: entry.gamesLeft,
   })
 }
 

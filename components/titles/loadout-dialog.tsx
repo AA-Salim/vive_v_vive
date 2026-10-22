@@ -250,10 +250,10 @@ function EditBody({ slot }: { slot: LoadoutSlot | null }) {
         </section>
       )}
 
-      <ComboSummary fx={loadout.fx} />
+      <ComboSummary fx={loadout.fx} worn={loadout.worn.filter((w) => w.title.for_self).map((w) => w.title.name)} />
 
       <Link href="/titles" className="inline-flex h-10 items-center gap-1.5 text-sm font-medium text-[var(--color-gold)] hover:underline">
-        More titles in the Hall of Titles
+        More titles in the Titles Shop
         <ArrowRight aria-hidden className="size-4" />
       </Link>
     </div>
@@ -274,6 +274,7 @@ function ViewBody({ userId, name }: { userId: string | null; name: string | null
     price: t.category === "award" ? 0 : shopPrice(t.title, 0),
     perk: t.perk,
     help: loadoutHelp(t),
+    gamesLeft: t.gamesLeft,
   }))
   const curses = entry?.curses ?? []
   const fx = effectsOfEquipped(entry)
@@ -315,6 +316,7 @@ function ViewBody({ userId, name }: { userId: string | null; name: string | null
 
       <ComboSummary
         fx={fx}
+        worn={items.filter((i) => i.category !== "mockery").map((i) => i.name)}
         heading={name ? `${possessive(name)} combo` : "Their combo"}
         emptyLabel="No title acts on them right now."
       />

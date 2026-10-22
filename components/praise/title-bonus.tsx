@@ -41,9 +41,11 @@ export function usePraiseTerms(base: number = PRAISE_REWARD): PraiseTerms {
   }
 }
 
-const CAPPED: Partial<Record<EffectKey, string>> = {
-  praise_bonus_pct: `capped at +${EFFECT_KEYS.praise_bonus_pct.max}%`,
-  favor_bonus_pct: `capped at +${EFFECT_KEYS.favor_bonus_pct.max}%`,
+const CAPPED_KEYS: EffectKey[] = ["praise_bonus_pct", "favor_bonus_pct"]
+
+// Read at render time: the cap depends on the title rules version the server reports.
+function cappedLabel(key: EffectKey): string | null {
+  return CAPPED_KEYS.includes(key) ? `capped at +${EFFECT_KEYS[key].max}%` : null
 }
 
 interface TitleBonusChipsProps {
@@ -67,7 +69,7 @@ export function TitleBonusChips({ notes, capped = false, className }: TitleBonus
           {noteChip(note)}
         </span>
       ))}
-      {capped && CAPPED[key] && <span className="text-[10px] text-muted-foreground">({CAPPED[key]})</span>}
+      {capped && cappedLabel(key) && <span className="text-[10px] text-muted-foreground">({cappedLabel(key)})</span>}
     </span>
   )
 }

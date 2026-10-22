@@ -12,7 +12,7 @@ import type { ChaosErrorCode } from "@/lib/chaos/errors"
 import type { DecreeRequest } from "@/lib/chaos/schema"
 import { decreeAimedSeats, decreePrice, seatExileImmune, type DecreeAim, type DecreePrice, type DecreeTitles } from "@/lib/chaos/title-terms"
 import { isSalaxe } from "@/lib/lore/salaxe"
-import { NO_EFFECTS, WAGER_MAX_MULTIPLIER, decreeMaxUses } from "@/lib/titles/effects"
+import { NO_EFFECTS, decreeMaxUses, wagerCap } from "@/lib/titles/effects"
 import type {
   BoardAssignment,
   ChaosDecreeEntry,
@@ -248,7 +248,7 @@ export function wagerMultiplier(wager: ChaosDecreeEntry, actions: ChaosDecreeEnt
       HOSTILE_TYPES.has(h.action_type) &&
       Date.parse(h.created_at) > placedAt
   ).length
-  return Math.min(WAGER_MAX_MULTIPLIER, base + WAGER_DEFIANCE_STEP * Math.min(WAGER_MAX_DEFIANCE, hits))
+  return Math.min(wagerCap(), base + WAGER_DEFIANCE_STEP * Math.min(WAGER_MAX_DEFIANCE, hits))
 }
 
 export function validateDecree(request: DecreeRequest, ctx: DecreeContext): ChaosErrorCode | null {

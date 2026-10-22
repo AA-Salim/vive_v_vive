@@ -5,8 +5,11 @@ import { isMissingSchema } from "@/lib/db-errors"
 import { isCurseCategory, perkInfo, rarityOf, tierOf } from "@/lib/titles/catalog"
 import { titleDomain, titleEffects } from "@/lib/titles/effects"
 import { loadoutSlotOf, primaryOf } from "@/lib/titles/loadout"
+import { titleGames } from "@/lib/titles/pricing"
 import { dignityCost } from "@/lib/titles/rules"
-import { brandState, earliest, isBrand, loadIdentities, loadOwnership, loadResolvedGames, loadTitles, titlesLocked } from "@/lib/titles/server"
+import { titleRulesVersion } from "@/lib/titles/rules-version"
+import { setsOf } from "@/lib/titles/sets"
+import { brandState, earliest, isBrand, loadIdentities, loadOwnership, loadResolvedGames, loadTitles, titleWorks, titlesLocked } from "@/lib/titles/server"
 import type { LedgerItem, OwnedTitleView, PerkLedger, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
 export async function GET() {
@@ -41,9 +44,10 @@ export async function GET() {
   const wearing = new Map<string, number>()
   for (const o of ownership) {
     holders.set(o.title_id, (holders.get(o.title_id) ?? 0) + 1)
-    if (o.is_active) wearing.set(o.title_id, (wearing.get(o.title_id) ?? 0) + 1)
+    if (o.is_active && titleWorks(o)) wearing.set(o.title_id, (wearing.get(o.title_id) ?? 0) + 1)
   }
 
+  const seasonal = titleRulesVersion() >= 2
   const views: TitleView[] = titles.map((t) => {
     const tier = tierOf(t.name, t.category, t.price)
     return {
@@ -63,6 +67,7 @@ export async function GET() {
       effects: titleEffects(t.name),
       domain: titleDomain(t.name),
       dignity_cost: t.for_self ? null : dignityCost(t.price),
+      ...(seasonal ? { games: t.for_self ? titleGames(tier, t.category, t.price) : null, sets: setsOf(t.name).map((s) => s.name) } : {}),
     }
   })
 
@@ -74,7 +79,7 @@ export async function GET() {
     return [
       {
         title_id: o.title_id,
-        is_active: o.is_active,
+        is_active: o.is_active && titleWorks(o),
         equipped_at: o.equipped_at ?? null,
         acquired_at: o.created_at,
         bestowed_by: o.assigned_by ? { id: o.assigned_by, name: bestower?.name ?? "A mystery noble" } : null,
@@ -84,13 +89,14 @@ export async function GET() {
             ? perkInfo(t.name, t.category, bestower?.name ?? "whoever branded you")
             : null
           : perkInfo(t.name, t.category),
+        ...(o.games_left !== undefined ? { games_left: o.games_left } : {}),
       },
     ]
   })
 
   const viewById = new Map(views.map((v) => [v.id, v]))
   const worn = mine.flatMap((o) => {
-    const v = o.is_active ? viewById.get(o.title_id) : undefined
+    const v = o.is_active && titleWorks(o) ? viewById.get(o.title_id) : undefined
     return v ? [{ id: v.id, name: v.name, category: v.category, tier: v.tier, equippedAt: o.equipped_at ?? null }] : []
   })
 
@@ -105,6 +111,7 @@ export async function GET() {
     locked,
     ledger: ledger.ledger,
     migrated: ledger.migrated,
+    rules: titleRulesVersion(),
   }
   return NextResponse.json(body)
 }

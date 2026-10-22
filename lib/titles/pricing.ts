@@ -1,4 +1,5 @@
 import { PRAISE_REWARD } from "@/lib/praise/rules"
+import { titleRulesV2 } from "@/lib/titles/rules-version"
 
 // Mirrored in supabase/phase10_title-effects.sql (title_tiers, vvv_title_tier_price): keep both in sync.
 // Prices are counted in hand kisses of 100 points (what one kiss, then one written praise, paid before the
@@ -25,6 +26,22 @@ export const TIER_LABEL: Record<PriceTier, string> = {
 
 export function tierPrice(tier: PriceTier): number {
   return TIER_MULTIPLIER[tier] * HAND_KISS
+}
+
+// How many games a bought self title lasts before it needs renewing (vvv_title_games in
+// supabase/phase10_title-effects.sql). A game counts when its owner played, bet, cast a decree, dueled or sealed a
+// prophecy on it while wearing the title. Free honors never expire; curses keep their own burn.
+export const TIER_GAMES: Record<PriceTier, number> = {
+  legendary: 20,
+  epic: 16,
+  rare: 12,
+  common: 8,
+}
+
+// Games a purchase buys, or null when the title never expires (honors, curses, or the first rules).
+export function titleGames(tier: PriceTier, category: string, price: number): number | null {
+  if (!titleRulesV2() || category === "award" || category === "mockery" || price <= 0) return null
+  return TIER_GAMES[tier]
 }
 
 // Every title sold in the armory, self titles and curses alike, ranked by what its immediate effect plus its

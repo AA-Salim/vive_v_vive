@@ -85,7 +85,7 @@ export function TitlesCard() {
 function HallLink() {
   return (
     <Link href="/titles" className="inline-flex h-10 items-center gap-1.5 text-sm font-medium text-[var(--color-gold)] hover:underline">
-      More titles in the Hall of Titles
+      More titles in the Titles Shop
       <ArrowRightIcon className="size-4" aria-hidden />
     </Link>
   )

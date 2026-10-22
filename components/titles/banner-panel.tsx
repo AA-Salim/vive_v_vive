@@ -21,14 +21,16 @@ import { cn } from "@/lib/utils"
 import { HALL_COPY, signed } from "@/lib/titles/copy"
 import { involvement } from "@/lib/titles/help"
 import { LOADOUT_SLOTS, MAX_EQUIPPED, SLOT_COUNT, SLOT_LABEL } from "@/lib/titles/loadout"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, PERK_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, perkCap, userPerkCap } from "@/lib/titles/rules"
 import type { EquippedTitle, LedgerItem, OwnedTitleView, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
 const BANNER_HELP: HelpEntry = {
   title: "Your loadout",
   does: "The titles you wear. Their immediate effects stack (each capped) the moment you act, your name takes your primary title's colors and epithet everywhere, and every perk pays out on its own after each game.",
   cost: `${FREE} to equip, change or take off. Titles themselves are bought in the Armory or earned from milestones`,
-  reward: `Up to ${pts(PERK_CAP)} per title and ${pts(USER_PERK_CAP)} for all of them, per game`,
+  get reward() {
+    return `Up to ${pts(perkCap())} per title and ${pts(userPerkCap())} for all of them, per game`
+  },
   limits: `${MAX_EQUIPPED} titles at most: ${LOADOUT_SLOTS.map((slot) => `${SLOT_COUNT[slot]} ${SLOT_LABEL[slot]}`).join(", ")}. Pays after games where ${involvement("you")}. Sealed while a game is live.`,
 }
 

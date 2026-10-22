@@ -1,4 +1,4 @@
-import { PERK_CAP, PERK_PENALTY_CAP, USER_PERK_CAP } from "@/lib/titles/rules"
+import { PERK_PENALTY_CAP, perkCap, userPerkCap } from "@/lib/titles/rules"
 import { isInvolved, type PerkGame, type PerkSubject } from "@/lib/titles/perk-kit"
 import { perkFor } from "@/lib/titles/perks"
 import type { PerkKind } from "@/lib/titles/types"
@@ -53,14 +53,14 @@ export function computePerkApplications(
     const result = def.evaluate(subject, game, perkRoll(game.sessionId, wearer.userId, wearer.title))
     if (!result) continue
 
-    const cap = Math.min(def.cap, PERK_CAP)
+    const cap = Math.min(def.cap, perkCap())
     let amount = Math.max(-cap, Math.min(cap, Math.round(result.amount)))
     if (wearer.kind === "curse") amount = -Math.abs(amount)
     else amount = Math.max(-PERK_PENALTY_CAP, amount)
-    // A loadout's perks share USER_PERK_CAP per game (vvv_title_perk_room in SQL enforces the same).
+    // A loadout's perks share userPerkCap() per game (vvv_title_perk_room in SQL enforces the same).
     if (wearer.kind === "perk" && amount > 0) {
       const sofar = paid.get(wearer.userId) ?? 0
-      amount = Math.min(amount, Math.max(0, USER_PERK_CAP - sofar))
+      amount = Math.min(amount, Math.max(0, userPerkCap() - sofar))
       paid.set(wearer.userId, sofar + amount)
     }
     if (amount === 0) continue

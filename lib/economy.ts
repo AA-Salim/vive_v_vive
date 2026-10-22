@@ -8,7 +8,9 @@ import { CROWNS_PER_DAY, kissScheduleLine, PRAISE_MAX_CHARS, PRAISE_PER_DAY, PRA
 import { MIN_VOTES_FOR_VERDICT, MVP_BONUS, STAKE_MAX, STAKE_MIN } from "@/lib/prophecy/constants"
 import { reasonLabel, reasonMeta, type ReasonGroup } from "@/lib/reasons"
 import { GAME_PARTICIPATION_POINTS, GAME_WIN_POINTS } from "@/lib/session/constants"
-import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_CAP, PERK_PENALTY_CAP } from "@/lib/titles/rules"
+import { CURSE_GAMES, DIGNITY_MULTIPLIER, MAX_ACTIVE_CURSES, MIN_STAKE, PERK_PENALTY_CAP, perkCap } from "@/lib/titles/rules"
+import { titleRulesV2, titleRulesVersion, type TitleRulesVersion } from "@/lib/titles/rules-version"
+import { TIER_GAMES } from "@/lib/titles/pricing"
 
 // Every feature checks the same floor: nothing that would take a purse below it goes through.
 export const DEBT_FLOOR = BET_RULES.debtFloor
@@ -177,12 +179,12 @@ export function economyEntries(ctx: EconomyContext = {}): EconomyEntry[] {
       key: "title_perks",
       group: "titles",
       flow: "earn",
-      amount: `up to ${plus(PERK_CAP)}`,
+      amount: `up to ${plus(perkCap())}`,
       help: {
         title: "Title perks",
         does: "Your equipped title pays out on its own after every game you take part in.",
         cost: "Free once you own the title",
-        reward: `Up to ${pts(PERK_CAP)} a game, depending on the title`,
+        reward: `Up to ${pts(perkCap())} a game, depending on the title`,
         limits: `One banner at a time. A few gamble titles can cost up to ${pts(PERK_PENALTY_CAP)} a game. Counts if you played, bet ${MIN_STAKE}+, cast a decree or cashed a bounty.`,
       },
     },
@@ -310,10 +312,12 @@ export function economyEntries(ctx: EconomyContext = {}): EconomyEntry[] {
       amount: titles ? span(titles) : "Shop price",
       help: {
         title: "Titles",
-        does: "Buy a title for your banner. Equipped, its perk pays after every game you take part in.",
-        cost: titles ? `${ptsRange(titles.min, titles.max)} in the Hall of Titles` : "The shop price in the Hall of Titles",
-        reward: `Its perk, up to ${pts(PERK_CAP)} a game`,
-        limits: "One banner at a time. Titles are sealed while a game is live.",
+        does: "Buy a title for your loadout. Equipped, its effect applies right away and its perk pays after every game you take part in.",
+        cost: titles ? `${ptsRange(titles.min, titles.max)} in the Titles Shop` : "The shop price in the Titles Shop",
+        reward: `Its effect, and its perk up to ${pts(perkCap())} a game`,
+        limits: titleRulesV2()
+          ? `A bought title lasts ${TIER_GAMES.common} to ${TIER_GAMES.legendary} games you take part in while wearing it, then renews at full price. Titles are sealed while a game is live.`
+          : "Titles are sealed while a game is live.",
       },
     },
     {
@@ -324,7 +328,7 @@ export function economyEntries(ctx: EconomyContext = {}): EconomyEntry[] {
       help: {
         title: "Brands",
         does: `Buy a mockery title for someone else. It burns for ${CURSE_GAMES} games and pays you tribute.`,
-        cost: brands ? ptsRange(brands.min, brands.max) : "The shop price in the Hall of Titles",
+        cost: brands ? ptsRange(brands.min, brands.max) : "The shop price in the Titles Shop",
         reward: "Tribute from the branded player while it burns",
         limits: `${MAX_ACTIVE_CURSES} brands per player at most. They can burn it off early for ${DIGNITY_MULTIPLIER}x its price.`,
       },
@@ -382,11 +386,20 @@ const GROUP_WHAT: Record<ReasonGroup, string> = {
   other: "Movements the royal scribes have not filed under a feature yet.",
 }
 
-const DEFAULT_LIST = economyEntries()
-const DEFAULT_ENTRIES = new Map(DEFAULT_LIST.map((e) => [e.key, e]))
+let defaults: { version: TitleRulesVersion; list: EconomyEntry[]; byKey: Map<EconomyKey, EconomyEntry> } | null = null
+
+// Rebuilt when the title rules change: title perks and prices are part of the copy.
+function defaultEntries() {
+  const version = titleRulesVersion()
+  if (defaults?.version !== version) {
+    const list = economyEntries()
+    defaults = { version, list, byKey: new Map(list.map((e) => [e.key, e])) }
+  }
+  return defaults
+}
 
 export function economyEntry(key: EconomyKey): EconomyEntry {
-  return DEFAULT_ENTRIES.get(key) as EconomyEntry
+  return defaultEntries().byKey.get(key) as EconomyEntry
 }
 
 // The bubble of one ledger line: what the line is, with the costs and rules of the feature behind it.
@@ -405,7 +418,7 @@ export function reasonHelp(code: string | null | undefined, amount?: number): He
 
 // What a whole income or spending group stands for, with every source and sink it gathers.
 export function groupHelp(group: ReasonGroup, label: string): HelpEntry {
-  const members = DEFAULT_LIST.filter((e) => e.group === group)
+  const members = defaultEntries().list.filter((e) => e.group === group)
   const mainKey = GROUP_ENTRY[group]
   const main = mainKey ? economyEntry(mainKey).help : null
   return {

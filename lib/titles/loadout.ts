@@ -1,4 +1,5 @@
 import type { PriceTier } from "@/lib/titles/pricing"
+import { titleRulesV2 } from "@/lib/titles/rules-version"
 
 // Mirrored in supabase/phase10_title-effects.sql (title_slot_rules, title_conflicts, vvv_loadout_violation): keep in sync.
 // Curses never take a slot: a burning brand is always active. A mockery title worn as a banner is only a scar and
@@ -45,7 +46,12 @@ export const TITLE_CONFLICTS: readonly TitleConflict[] = [
   },
 ]
 
+// First title rules only: the second ones let rebels and loyalists share the super rare slots.
 export const FACTION_REASON = "Rebels and loyalists never share the super rare slots: you cannot slay the King and polish his throne."
+
+export function factionRule(): boolean {
+  return !titleRulesV2()
+}
 
 export interface LoadoutItem {
   name: string
@@ -67,6 +73,7 @@ function conflictBetween(a: LoadoutItem, b: LoadoutItem): LoadoutError | null {
   if (pair) return { code: "title_conflict", with: b.name, message: `Clashes with ${b.name}. ${pair.reason}` }
   const factions = new Set([a.category, b.category])
   if (
+    factionRule() &&
     loadoutSlotOf(a) === "super_rare" &&
     loadoutSlotOf(b) === "super_rare" &&
     factions.has("rebellion") &&

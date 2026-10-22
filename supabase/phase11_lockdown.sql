@@ -374,8 +374,9 @@ CREATE TRIGGER vvv_admin_writes_guard
   FOR EACH ROW EXECUTE FUNCTION vvv_admin_writes_guard();
 
 -- Titles. Equipped titles pay perks and brands pay tribute through apply_title_perk(). The app engraves free
--- honors (category award, price 0) for the caller; buying, equipping, branding and lifting go through
--- buy_title(), equip_title() and lift_title_curse().
+-- honors (category award, price 0) for the caller; buying, renewing, equipping, branding and lifting go through
+-- buy_title(), equip_loadout(), equip_title() and lift_title_curse(). The games left on a bought title
+-- (user_titles.games_left) only move through buy_title() and record_game_outcome(): no client update reaches them.
 CREATE OR REPLACE FUNCTION vvv_titles_guard() RETURNS TRIGGER
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 BEGIN

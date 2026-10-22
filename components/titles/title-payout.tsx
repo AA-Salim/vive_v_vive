@@ -13,7 +13,7 @@ import { FREE, pts, type HelpEntry } from "@/lib/help"
 import { perkInfo } from "@/lib/titles/catalog"
 import { bannerOf, markFor } from "@/lib/titles/flair"
 import { involvement } from "@/lib/titles/help"
-import { PERK_CAP } from "@/lib/titles/rules"
+import { perkCap } from "@/lib/titles/rules"
 import { signed } from "@/lib/titles/copy"
 import type { TitlePayoutItem, TitlePayoutsResponse } from "@/lib/titles/types"
 import { cn } from "@/lib/utils"
@@ -22,7 +22,9 @@ const PAYOUT_HELP: HelpEntry = {
   title: "Your titles this game",
   does: "What your banner paid, what your brands took, and the tribute you collected from the people you branded.",
   cost: FREE,
-  reward: `A banner pays up to ${pts(PERK_CAP)} a game, and every brand you bestowed pays you its tribute`,
+  get reward() {
+    return `A banner pays up to ${pts(perkCap())} a game, and every brand you bestowed pays you its tribute`
+  },
   limits: `Settles a few seconds after the result, only for games where ${involvement("you")}.`,
 }
 

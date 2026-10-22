@@ -23,6 +23,7 @@ import {
   useLiftCurse,
   useMilestones,
   useSetLoadout,
+  useTitleRules,
   useTitlesCatalog,
   useTitlesLockSync,
   useWallet,
@@ -44,6 +45,7 @@ export default function TitlesPage() {
   const lift = useLiftCurse()
   const claim = useClaimMilestones()
   useTitlesLockSync()
+  useTitleRules()
 
   const [tab, setTab] = useState<HallTab>("armory")
   const [buyTarget, setBuyTarget] = useState<TitleView | null>(null)
@@ -105,7 +107,7 @@ export default function TitlesPage() {
 
       {catalog.error && (
         <Alert variant="destructive">
-          <AlertTitle>The Hall of Titles is closed for cleaning</AlertTitle>
+          <AlertTitle>The Titles Shop is closed for cleaning</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center gap-3">
             {catalog.error.message}
             <Button variant="outline" className="h-10 gap-2" onClick={() => catalog.refetch()}>
@@ -138,7 +140,7 @@ export default function TitlesPage() {
         <Tabs value={tab} onValueChange={(value) => setTab(value as HallTab)} className="min-w-0 gap-4 lg:order-1">
           <TabsList className="h-12 w-full bg-[var(--color-navy-light)] p-1 sm:w-fit">
             <TabsTrigger value="armory" className={TAB_TRIGGER}>
-              Armory
+              Shop
             </TabsTrigger>
             <TabsTrigger value="collection" className={TAB_TRIGGER} disabled={!signedIn}>
               Collection
@@ -212,7 +214,8 @@ export default function TitlesPage() {
         title={buyTarget}
         balance={balance}
         locked={locked}
-        equipBlock={buyTarget ? loadout.blockFor(buyTarget) : null}
+        equipBlock={buyTarget ? loadout.fitFor(buyTarget) : null}
+        renewing={!!buyTarget && data?.collection.some((c) => c.title_id === buyTarget.id && c.games_left === 0) === true}
         pending={buy.isPending}
         onOpenChange={(open) => !open && setBuyTarget(null)}
         onConfirm={confirmBuy}

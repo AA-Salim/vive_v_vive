@@ -23,6 +23,9 @@ interface Purchase {
   // What the buyer actually paid (The Disrespector curses for less).
   price: number
   notes: EffectNote[]
+  // An expired title bought again: its games start over.
+  renewed?: boolean
+  gamesLeft?: number | null
 }
 
 export async function POST(request: Request) {
@@ -55,13 +58,23 @@ export async function POST(request: Request) {
     if ("error" in legacy) return titleError(legacy.error)
     purchase = legacy
   } else {
-    const result = data as { recipient: string; rebranded: boolean; balance: number; price?: number; title_effects?: unknown }
+    const result = data as {
+      recipient: string
+      rebranded: boolean
+      balance: number
+      price?: number
+      title_effects?: unknown
+      renewed?: boolean
+      games_left?: number | null
+    }
     purchase = {
       recipient: result.recipient,
       rebranded: result.rebranded,
       balance: result.balance,
       price: result.price ?? title.price,
       notes: parseNotes(result.title_effects),
+      renewed: result.renewed ?? false,
+      gamesLeft: result.games_left ?? null,
     }
   }
 
@@ -97,6 +110,8 @@ export async function POST(request: Request) {
     price: purchase.price,
     list_price: title.price,
     title_effects: purchase.notes,
+    renewed: purchase.renewed ?? false,
+    games_left: purchase.gamesLeft ?? null,
   })
 }
 

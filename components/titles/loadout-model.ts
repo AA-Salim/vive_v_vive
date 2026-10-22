@@ -1,5 +1,7 @@
 import { combineEffects, type CombinedEffects, type EffectSource } from "@/lib/titles/effects"
+import { isExpired } from "@/lib/titles/expiry"
 import { LOADOUT_SLOTS, equipBlock, loadoutSlotOf, primaryOf, type LoadoutItem, type LoadoutSlot } from "@/lib/titles/loadout"
+import { setProgress, type SetProgress } from "@/lib/titles/sets"
 import type { OwnedTitleView, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
 export interface WornTitle extends LoadoutItem {
@@ -17,9 +19,13 @@ export interface LoadoutModel {
   bySlot: Record<LoadoutSlot, WornTitle[]>
   activeIds: string[]
   fx: CombinedEffects
+  // How far the loadout is into every set bonus (empty before sets exist).
+  sets: SetProgress[]
   isWorn: (titleId: string) => boolean
   // Why this title cannot join the loadout right now, or null.
   blockFor: (title: TitleView) => string | null
+  // Same, once the title is bought or renewed: slots and conflicts only.
+  fitFor: (title: TitleView) => string | null
   idsWith: (title: TitleView) => string[]
   idsWithout: (title: TitleView) => string[]
 }
@@ -33,7 +39,9 @@ export function buildLoadout(catalog: TitlesCatalogResponse | undefined): Loadou
 
   const rows = (catalog?.collection ?? []).flatMap((owned) => {
     const title = titleById.get(owned.title_id)
-    return title && owned.is_active ? [{ title, owned, ...itemOf(title), equippedAt: owned.equipped_at ?? null }] : []
+    return title && owned.is_active && !isExpired(owned.games_left)
+      ? [{ title, owned, ...itemOf(title), equippedAt: owned.equipped_at ?? null }]
+      : []
   })
   const primary = primaryOf(rows)
   const worn: WornTitle[] = [...rows]
@@ -55,6 +63,8 @@ export function buildLoadout(catalog: TitlesCatalogResponse | undefined): Loadou
     }),
   ]
 
+  const ownedById = new Map((catalog?.collection ?? []).map((owned) => [owned.title_id, owned]))
+
   return {
     enabled,
     locked,
@@ -62,8 +72,15 @@ export function buildLoadout(catalog: TitlesCatalogResponse | undefined): Loadou
     bySlot,
     activeIds,
     fx: combineEffects(sources),
+    sets: setProgress(worn.filter((w) => w.title.for_self).map((w) => w.title.name)),
     isWorn: (titleId) => active.has(titleId),
     blockFor: (title) => {
+      if (locked) return "Titles are sealed while a game is live."
+      if (isExpired(ownedById.get(title.id)?.games_left)) return "Out of games: renew it to wear it again."
+      if (!enabled || active.has(title.id)) return null
+      return equipBlock(worn, itemOf(title))?.message ?? null
+    },
+    fitFor: (title) => {
       if (locked) return "Titles are sealed while a game is live."
       if (!enabled || active.has(title.id)) return null
       return equipBlock(worn, itemOf(title))?.message ?? null

@@ -13,6 +13,7 @@ import { EffectBox, EffectLines } from "@/components/titles/effect-lines"
 import { PerkLine } from "@/components/titles/perk-line"
 import { TierChip } from "@/components/titles/tier-chip"
 import { cn } from "@/lib/utils"
+import { gamesLabel } from "@/lib/titles/expiry"
 import { titleHelp } from "@/lib/titles/help"
 import { SLOT_LABEL } from "@/lib/titles/loadout"
 import { HAND_KISS_NOTE, formatPrice, multiplierLabel } from "@/lib/titles/pricing"
@@ -25,11 +26,13 @@ interface BuyDialogProps {
   // Why the title could not join the loadout right after buying, or null.
   equipBlock: string | null
   pending: boolean
+  // The title is owned but out of games: buying it again restarts its run.
+  renewing?: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: (title: TitleView, equip: boolean) => void
 }
 
-export function BuyDialog({ title, balance, locked, equipBlock, pending, onOpenChange, onConfirm }: BuyDialogProps) {
+export function BuyDialog({ title, balance, locked, equipBlock, pending, renewing = false, onOpenChange, onConfirm }: BuyDialogProps) {
   const [equip, setEquip] = useState(true)
   const after = balance === null || !title ? null : balance - title.price
   const canEquip = !locked && !equipBlock
@@ -40,7 +43,7 @@ export function BuyDialog({ title, balance, locked, equipBlock, pending, onOpenC
         {title && (
           <>
             <DialogHeader>
-              <DialogTitle className="font-display text-xl text-[var(--color-gold)]">Claim this title?</DialogTitle>
+              <DialogTitle className="font-display text-xl text-[var(--color-gold)]">{renewing ? "Renew this title?" : "Claim this title?"}</DialogTitle>
               <DialogDescription>The Crown accepts points, not apologies. No refunds, only regrets.</DialogDescription>
             </DialogHeader>
 
@@ -59,7 +62,11 @@ export function BuyDialog({ title, balance, locked, equipBlock, pending, onOpenC
               <EffectBox label="After each game">
                 <PerkLine perk={title.perk} className="text-sm" />
               </EffectBox>
-              <p className="text-[11px] text-muted-foreground">Takes a {SLOT_LABEL[title.slot]} slot in your loadout.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Takes a {SLOT_LABEL[title.slot]} slot in your loadout.
+                {typeof title.games === "number" &&
+                  ` Good for ${gamesLabel(title.games)} you take part in while wearing it, then renew it at the same price.`}
+              </p>
               <div className="border-t border-border/60 pt-2.5">
                 <HelpRows help={titleHelp({ name: title.name, category: title.category, perk: title.perk, price: title.price, tier: title.tier })} />
               </div>
@@ -106,7 +113,7 @@ export function BuyDialog({ title, balance, locked, equipBlock, pending, onOpenC
               </Button>
               <Button className="h-10 gap-1.5" disabled={pending} onClick={() => onConfirm(title, equip && canEquip)}>
                 <Coins aria-hidden />
-                {pending ? "Engraving..." : `Buy for ${formatPrice(title.price)}`}
+                {pending ? "Engraving..." : `${renewing ? "Renew" : "Buy"} for ${formatPrice(title.price)}`}
               </Button>
             </DialogFooter>
           </>

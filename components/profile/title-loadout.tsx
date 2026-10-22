@@ -2,6 +2,7 @@
 
 import { CrownIcon, HourglassIcon, PlusIcon, SkullIcon, SparklesIcon, ZapIcon } from "lucide-react"
 import { curseHelp, loadoutHelp, loadoutOf } from "@/components/titles/loadout-chips"
+import { GamesLeftTag } from "@/components/titles/loadout-parts"
 import { CATEGORY_ICON, RARITY_BADGE, RARITY_TEXT, iconKeyFor } from "@/components/titles/title-visuals"
 import { InfoTip } from "@/components/ui/info-tip"
 import { PROFILE_HELP } from "@/lib/profiles/help"
@@ -85,6 +86,7 @@ function TitleSlot({ title, showRarity }: { title: LoadoutEntry; showRarity: boo
           <ZapIcon aria-hidden className="mt-px size-3 shrink-0 text-[var(--color-gold)]" />
           <span className="line-clamp-3">{effect ?? "No immediate effect: its perk pays after the game."}</span>
         </span>
+        <GamesLeftTag gamesLeft={title.gamesLeft} />
       </InfoTip>
     </li>
   )

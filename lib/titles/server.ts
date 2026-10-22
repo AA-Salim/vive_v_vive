@@ -3,6 +3,7 @@ import { isCurseCategory, perkInfo, rarityOf, tierOf } from "@/lib/titles/catalo
 import { curseState, type ResolvedGame } from "@/lib/titles/curses"
 import { combineEffects, effectSummary, type CombinedEffects, type EffectSource } from "@/lib/titles/effects"
 import { loadoutSlotOf, primaryOf } from "@/lib/titles/loadout"
+import { syncTitleRules } from "@/lib/titles/rules-probe"
 import { TITLE_LOCK_WINDOW_MS, dignityCost } from "@/lib/titles/rules"
 import type { CurseState, EquippedTitle, LoadoutEntry, TitleCategory } from "@/lib/titles/types"
 
@@ -25,6 +26,10 @@ export interface OwnershipRow {
   created_at: string
   // Added by supabase/phase10_title-effects.sql.
   equipped_at?: string | null
+  // Added with expiring titles (supabase/phase10_titles.sql): games left on a bought title, null when it never
+  // expires; the last game that spent one.
+  games_left?: number | null
+  ticked_session_id?: string | null
 }
 
 export interface OwnershipWithTitle extends OwnershipRow {
@@ -44,17 +49,16 @@ const TITLE_COLUMNS = "id, name, description, price, category, for_self, is_perm
 const OWNERSHIP_COLUMNS = "*"
 
 export async function loadTitles(supabase: SupabaseClient): Promise<TitleRow[]> {
-  const { data, error } = await supabase
-    .from("titles")
-    .select(TITLE_COLUMNS)
-    .order("category")
-    .order("price", { ascending: true })
+  const [{ data, error }] = await Promise.all([
+    supabase.from("titles").select(TITLE_COLUMNS).order("category").order("price", { ascending: true }),
+    syncTitleRules(supabase),
+  ])
   if (error) throw error
   return (data ?? []) as TitleRow[]
 }
 
 export async function loadOwnership(supabase: SupabaseClient): Promise<OwnershipRow[]> {
-  const { data, error } = await supabase.from("user_titles").select(OWNERSHIP_COLUMNS)
+  const [{ data, error }] = await Promise.all([supabase.from("user_titles").select(OWNERSHIP_COLUMNS), syncTitleRules(supabase)])
   if (error) throw error
   return (data ?? []) as OwnershipRow[]
 }
@@ -70,7 +74,7 @@ export async function loadLiveOwnership(supabase: SupabaseClient, userIds?: stri
     if (ids.length === 0) return []
     query = query.in("user_id", ids)
   }
-  const { data, error } = await query
+  const [{ data, error }] = await Promise.all([query, syncTitleRules(supabase)])
   if (error) throw error
   return (data ?? []).flatMap((row) => {
     const joined = (row as { titles?: unknown }).titles
@@ -147,6 +151,12 @@ export function earliest(dates: string[]): string | null {
   return dates.reduce((min, d) => (Date.parse(d) < Date.parse(min) ? d : min))
 }
 
+// An equipped title works while it has games left (or never expires). One spent by the game being settled still
+// pays that game's perks: settle passes the session (vvv_title_live in SQL).
+export function titleWorks(row: Pick<OwnershipRow, "games_left" | "ticked_session_id">, settlingSessionId?: string): boolean {
+  return row.games_left == null || row.games_left > 0 || (!!settlingSessionId && row.ticked_session_id === settlingSessionId)
+}
+
 export function isBrand(row: { assigned_by: string | null }, title: { category: string; for_self: boolean }): boolean {
   return !!row.assigned_by && !title.for_self && isCurseCategory(title.category)
 }
@@ -182,7 +192,7 @@ export async function loadLiveTitles(supabase: SupabaseClient, userIds?: string[
     return state
   }
   for (const row of rows) {
-    if (row.is_active) entry(row.user_id).equipped.push(row)
+    if (row.is_active && titleWorks(row)) entry(row.user_id).equipped.push(row)
     if (!isBrand(row, row.title)) continue
     const state = brandState(row, row.title.price, resolved)
     if (state.active) entry(row.user_id).curses.push({ ...row, left: state.left })
@@ -242,6 +252,7 @@ function loadoutEntries(equipped: OwnershipWithTitle[]): LoadoutEntry[] {
       effect: curse ? null : effectSummary(item.name),
       perk: info?.summary ?? null,
       primary: item === primary,
+      ...(item.row.games_left !== undefined ? { gamesLeft: item.row.games_left } : {}),
     }
   })
 }

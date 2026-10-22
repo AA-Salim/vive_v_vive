@@ -1,5 +1,6 @@
 import type { Role, Side } from "@/lib/types"
 import { MIN_STAKE } from "@/lib/titles/rules"
+import { byRules } from "@/lib/titles/rules-version"
 import type { PerkKind, PerkTrigger } from "@/lib/titles/types"
 
 export interface PerkSubject {
@@ -50,6 +51,10 @@ export function isInvolved(s: PerkSubject): boolean {
 
 export const fixed = (text: string) => () => text
 
+// Caps of perks that pay a share (of a profit, a loss, the pool, a decree spend or a bounty): 1.5x under the second
+// title rules. Fixed amounts keep their cap. Mirrored in title_perk_caps (supabase/phase10_titles.sql).
+export const shareCap = (base: number) => byRules(base, Math.round(base * 1.5))
+
 export function onWin(amount: number, detail: string): PerkDefinition {
   return {
     kind: "perk",
@@ -84,8 +89,10 @@ export function betProfitShare(percent: number, cap: number, detail: string): Pe
   return {
     kind: "perk",
     trigger: "bet_win",
-    cap,
-    describe: fixed(`Win a bet: +${percent}% of the profit (max ${cap})`),
+    get cap() {
+      return shareCap(cap)
+    },
+    describe: () => `Win a bet: +${percent}% of the profit (max ${shareCap(cap)})`,
     evaluate: (s) => hit(share(profit(s), percent), detail),
   }
 }
@@ -94,8 +101,10 @@ export function betLossRefund(percent: number, cap: number, detail: string): Per
   return {
     kind: "perk",
     trigger: "bet_loss",
-    cap,
-    describe: fixed(`Lose a bet: ${percent}% back (max ${cap})`),
+    get cap() {
+      return shareCap(cap)
+    },
+    describe: () => `Lose a bet: ${percent}% back (max ${shareCap(cap)})`,
     evaluate: (s) => hit(share(loss(s), percent), detail),
   }
 }
@@ -144,8 +153,10 @@ export function chaosRefund(percent: number, cap: number, detail: string): PerkD
   return {
     kind: "perk",
     trigger: "chaos",
-    cap,
-    describe: fixed(`${percent}% of your Royal Decree spend back (max ${cap})`),
+    get cap() {
+      return shareCap(cap)
+    },
+    describe: () => `${percent}% of your Royal Decree spend back (max ${shareCap(cap)})`,
     evaluate: (s) => hit(share(s.chaosSpent, percent), detail),
   }
 }
@@ -154,8 +165,10 @@ export function bountyBonus(percent: number, cap: number, detail: string): PerkD
   return {
     kind: "perk",
     trigger: "bounty",
-    cap,
-    describe: fixed(`Cash a bounty: +${percent}% on top (max ${cap})`),
+    get cap() {
+      return shareCap(cap)
+    },
+    describe: () => `Cash a bounty: +${percent}% on top (max ${shareCap(cap)})`,
     evaluate: (s) => hit(share(s.bountyClaimed, percent), detail),
   }
 }

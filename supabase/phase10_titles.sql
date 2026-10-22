@@ -2,12 +2,32 @@
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Requires phase10_foundation.sql (free-form point_transactions reasons).
 -- Rules mirrored in lib/titles/rules.ts: a curse brands its wearer for 8 resolved games, a wearer
--- carries at most 2 curses, dignity costs 1x the title price, one perk moves at most 60 points per game
+-- carries at most 2 curses, dignity costs 1x the title price, one perk moves at most 90 points per game
 -- and a perk can cost its own wearer at most 10. Each title also has its own cap (title_perk_caps, seeded
 -- from lib/titles/perks.ts), and a perk only pays someone who took part in the game. A loadout's perks share
--- 60 points per wearer per game (vvv_title_perk_room, phase10_title-effects.sql).
+-- 100 points per wearer per game (vvv_title_perk_room, phase10_title-effects.sql).
+-- Bought titles last a number of games (user_titles.games_left, NULL for free honors and brands): buy_title()
+-- sets it, vvv_title_games_tick() (phase10_title-effects.sql) spends it, and buying an expired title again at
+-- full price renews it.
 -- New point reasons: title_perk, title_curse (paid by a branded wearer), title_tribute (received by the
 -- bestower), title_dignity (brand bought back).
+
+-- ============================================================
+-- EXPIRING TITLES: games left on a bought title (NULL = permanent: free honors and brands) and the last game
+-- that spent one. A title spent in a game keeps working until that game is settled.
+-- ============================================================
+
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS games_left INTEGER;
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS ticked_session_id UUID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'public.user_titles'::regclass AND conname = 'user_titles_games_left_check'
+  ) THEN
+    ALTER TABLE user_titles ADD CONSTRAINT user_titles_games_left_check CHECK (games_left IS NULL OR games_left >= 0);
+  END IF;
+END $$;
 
 -- ============================================================
 -- PERK LEDGER: one row per (game, wearer, title), so every perk is one-shot.
@@ -35,7 +55,8 @@ CREATE POLICY "title_perk_applications_read" ON title_perk_applications FOR SELE
 
 -- ============================================================
 -- PERK CAPS: the most one title can move in one game. Mirrors perkFor() in lib/titles/perks.ts (each
--- definition's cap, never above the 60 point ceiling): change both together. Lookup order is the same as
+-- definition's cap, never above the 90 point ceiling): change both together. Perks paying a share (of a profit,
+-- a loss, the pool, a decree spend or a bounty) have caps 1.5x their first version; fixed amounts kept theirs. Lookup order is the same as
 -- perkFor(): the exact title name (shop, milestone and consolation titles), then the act award kind parsed
 -- from "Act <n> <Award>", then the title's category. Re-running this file resets the table to these values.
 -- ============================================================
@@ -44,9 +65,12 @@ CREATE TABLE IF NOT EXISTS title_perk_caps (
   scope TEXT NOT NULL CHECK (scope IN ('title', 'act_award', 'category')),
   key TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('perk', 'curse')),
-  cap INTEGER NOT NULL CHECK (cap BETWEEN 1 AND 60),
+  cap INTEGER NOT NULL,
   PRIMARY KEY (scope, key)
 );
+
+ALTER TABLE title_perk_caps DROP CONSTRAINT IF EXISTS title_perk_caps_cap_check;
+ALTER TABLE title_perk_caps ADD CONSTRAINT title_perk_caps_cap_check CHECK (cap BETWEEN 1 AND 100);
 
 ALTER TABLE title_perk_caps ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "title_perk_caps_read" ON title_perk_caps;
@@ -55,21 +79,21 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON title_perk_caps FROM anon, authentica
 
 WITH seed (scope, key, kind, cap) AS (
   VALUES
-    ('title', 'Kingslayer', 'perk', 60),
+    ('title', 'Kingslayer', 'perk', 90),
     ('title', 'The Usurper', 'perk', 8),
     ('title', 'Crown Thief', 'perk', 8),
-    ('title', 'The Disrespector', 'perk', 40),
+    ('title', 'The Disrespector', 'perk', 60),
     ('title', 'The One Who Stopped Kneeling', 'perk', 16),
     ('title', 'Still Kneeling', 'perk', 8),
     ('title', 'Throne Polisher', 'perk', 12),
-    ('title', 'The Holdout', 'perk', 40),
-    ('title', 'Last Loyalist', 'perk', 60),
-    ('title', 'Copium Dealer', 'perk', 24),
+    ('title', 'The Holdout', 'perk', 60),
+    ('title', 'Last Loyalist', 'perk', 90),
+    ('title', 'Copium Dealer', 'perk', 36),
     ('title', 'Baron Caller (Derogatory)', 'perk', 10),
-    ('title', 'The 0/8 Powerspike', 'perk', 30),
+    ('title', 'The 0/8 Powerspike', 'perk', 45),
     ('title', 'Delayed Victory Specialist', 'perk', 8),
-    ('title', 'Main Character (Self-Diagnosed)', 'perk', 60),
-    ('title', 'El Goblino Pequeno', 'perk', 15),
+    ('title', 'Main Character (Self-Diagnosed)', 'perk', 90),
+    ('title', 'El Goblino Pequeno', 'perk', 23),
     ('title', 'Court Jester', 'curse', 50),
     ('title', 'Boot Licker', 'curse', 6),
     ('title', 'Royal Carpet', 'curse', 10),
@@ -90,13 +114,13 @@ WITH seed (scope, key, kind, cap) AS (
     ('title', 'At Least You Tried', 'perk', 3),
     ('title', 'Coinflip Merchant', 'perk', 6),
     ('title', 'Random Champs, Calculated Wins', 'perk', 6),
-    ('title', 'Baby Gambler', 'perk', 10),
-    ('title', 'Degenerate In Training', 'perk', 15),
-    ('title', 'Can''t Help Myself', 'perk', 20),
-    ('title', 'The House Should Be Worried', 'perk', 25),
-    ('title', 'Lucky Guess', 'perk', 10),
-    ('title', 'Fortune''s Favorite', 'perk', 20),
-    ('title', 'The Oracle', 'perk', 30),
+    ('title', 'Baby Gambler', 'perk', 15),
+    ('title', 'Degenerate In Training', 'perk', 23),
+    ('title', 'Can''t Help Myself', 'perk', 30),
+    ('title', 'The House Should Be Worried', 'perk', 38),
+    ('title', 'Lucky Guess', 'perk', 15),
+    ('title', 'Fortune''s Favorite', 'perk', 30),
+    ('title', 'The Oracle', 'perk', 45),
     ('title', 'Pocket Change', 'perk', 1),
     ('title', 'Stacking Paper', 'perk', 2),
     ('title', 'Economy Enjoyer', 'perk', 3),
@@ -107,11 +131,11 @@ WITH seed (scope, key, kind, cap) AS (
     ('title', 'First Blood (Emotional)', 'perk', 3),
     ('title', 'Community Punching Bag', 'perk', 5),
     ('title', 'Shame Sponge', 'perk', 8),
-    ('title', 'Mischief Maker', 'perk', 6),
-    ('title', 'Chaos Enjoyer', 'perk', 10),
-    ('title', 'Chaos Incarnate', 'perk', 15),
-    ('title', 'Bounty Poster', 'perk', 20),
-    ('title', 'Most Wanted Printer', 'perk', 40),
+    ('title', 'Mischief Maker', 'perk', 9),
+    ('title', 'Chaos Enjoyer', 'perk', 15),
+    ('title', 'Chaos Incarnate', 'perk', 23),
+    ('title', 'Bounty Poster', 'perk', 30),
+    ('title', 'Most Wanted Printer', 'perk', 60),
     ('title', 'Salaxe''s Background Character', 'perk', 2),
     ('title', 'Court Jester (Unpaid)', 'perk', 2),
     ('title', 'Throne Room Tourist', 'perk', 2),
@@ -135,7 +159,7 @@ WITH seed (scope, key, kind, cap) AS (
     ('act_award', 'grand champion', 'perk', 5),
     ('act_award', 'warrior', 'perk', 5),
     ('act_award', 'iron man', 'perk', 3),
-    ('act_award', 'degenerate', 'perk', 30),
+    ('act_award', 'degenerate', 'perk', 45),
     ('act_award', 'devotee', 'perk', 8),
     ('act_award', 'punching bag', 'perk', 6),
     ('category', 'rebellion', 'perk', 4),
@@ -327,12 +351,20 @@ DECLARE
   v_row_id UUID;
   v_balance INTEGER;
   v_price INTEGER;
+  v_games INTEGER;
+  v_renewed BOOLEAN := false;
 BEGIN
   IF v_caller IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
 
   SELECT * INTO v_title FROM titles WHERE id = p_title_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'title_not_found'; END IF;
   IF v_title.category = 'award' OR v_title.price <= 0 THEN RAISE EXCEPTION 'not_for_sale'; END IF;
+
+  -- How many games a bought self title lasts (phase10_title-effects.sql). Separate statements: plpgsql plans a
+  -- whole expression at once, a missing function included.
+  IF v_title.for_self AND to_regprocedure('public.vvv_title_games(text, text, integer)') IS NOT NULL THEN
+    v_games := vvv_title_games(v_title.name, v_title.category, v_title.price);
+  END IF;
 
   v_is_curse := NOT v_title.for_self;
   v_recipient := CASE WHEN v_title.for_self THEN v_caller ELSE p_target_user_id END;
@@ -346,7 +378,10 @@ BEGIN
   SELECT * INTO v_existing FROM user_titles WHERE user_id = v_recipient AND title_id = p_title_id;
   v_has_existing := FOUND;
 
-  IF v_has_existing AND (
+  -- An expired self title (no games left) is renewed for its full price instead.
+  v_renewed := COALESCE(v_has_existing AND NOT v_is_curse AND v_existing.games_left = 0 AND v_games IS NOT NULL, false);
+
+  IF v_has_existing AND NOT v_renewed AND (
     NOT v_is_curse
     OR v_existing.assigned_by IS NULL
     OR vvv_curse_games_served(v_existing.created_at) < 8
@@ -369,14 +404,18 @@ BEGIN
   v_price := CASE WHEN v_is_curse THEN vvv_title_scaled(v_caller, 'bestow_cost_pct', v_title.price) ELSE v_title.price END;
   v_balance := adjust_balance(v_caller, -v_price, 'title_bought', p_title_id);
 
-  IF v_has_existing THEN
+  IF v_renewed THEN
+    UPDATE user_titles SET games_left = v_games, ticked_session_id = NULL
+    WHERE id = v_existing.id
+    RETURNING id INTO v_row_id;
+  ELSIF v_has_existing THEN
     -- An expired brand can be burned in again: the clock restarts and the tribute goes to the new bestower.
     UPDATE user_titles SET assigned_by = v_caller, created_at = now()
     WHERE id = v_existing.id
     RETURNING id INTO v_row_id;
   ELSE
-    INSERT INTO user_titles (user_id, title_id, assigned_by, is_active)
-    VALUES (v_recipient, p_title_id, CASE WHEN v_is_curse THEN v_caller END, false)
+    INSERT INTO user_titles (user_id, title_id, assigned_by, is_active, games_left)
+    VALUES (v_recipient, p_title_id, CASE WHEN v_is_curse THEN v_caller END, false, v_games)
     RETURNING id INTO v_row_id;
   END IF;
 
@@ -384,7 +423,9 @@ BEGIN
     'user_title_id', v_row_id,
     'title', v_title.name,
     'recipient', v_recipient,
-    'rebranded', v_has_existing,
+    'rebranded', v_has_existing AND NOT v_renewed,
+    'renewed', v_renewed,
+    'games_left', v_games,
     'price', v_price,
     'list_price', v_title.price,
     'balance', v_balance,
@@ -405,6 +446,7 @@ AS $$
 DECLARE
   v_caller UUID := auth.uid();
   v_name TEXT;
+  v_games_left INTEGER;
 BEGIN
   IF v_caller IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
   IF vvv_titles_locked() THEN RAISE EXCEPTION 'titles_locked'; END IF;
@@ -412,11 +454,12 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtext('vvv_titles:' || v_caller::TEXT));
 
   IF p_title_id IS NOT NULL THEN
-    SELECT t.name INTO v_name
+    SELECT t.name, ut.games_left INTO v_name, v_games_left
     FROM user_titles ut
     JOIN titles t ON t.id = ut.title_id
     WHERE ut.user_id = v_caller AND ut.title_id = p_title_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'not_owned'; END IF;
+    IF v_games_left = 0 THEN RAISE EXCEPTION 'title_expired'; END IF;
   END IF;
 
   UPDATE user_titles SET is_active = false
@@ -523,14 +566,18 @@ BEGIN
     RAISE EXCEPTION 'invalid_amount';
   END IF;
 
-  SELECT ut.created_at, ut.assigned_by, ut.is_active, t.for_self, t.category INTO v_row
+  SELECT ut.created_at, ut.assigned_by, ut.is_active, ut.games_left, ut.ticked_session_id, t.for_self, t.category INTO v_row
   FROM user_titles ut
   JOIN titles t ON t.id = ut.title_id
   WHERE ut.user_id = p_user_id AND t.name = p_title_name;
   IF NOT FOUND THEN RAISE EXCEPTION 'title_not_held'; END IF;
 
   IF p_kind = 'perk' THEN
-    IF NOT v_row.is_active OR NOT v_row.for_self THEN RAISE EXCEPTION 'title_not_equipped'; END IF;
+    -- A title whose last game is this one still pays for it; one that ran out earlier does not.
+    IF NOT v_row.is_active OR NOT v_row.for_self
+       OR (v_row.games_left = 0 AND v_row.ticked_session_id IS DISTINCT FROM p_session_id) THEN
+      RAISE EXCEPTION 'title_not_equipped';
+    END IF;
   ELSIF v_row.for_self
      OR v_row.assigned_by IS NULL
      OR p_amount > 0
@@ -566,7 +613,7 @@ BEGIN
 
   -- Charges never push a wearer past the -300 debt floor.
   IF v_amount < 0 THEN v_amount := LEAST(0, GREATEST(v_amount, -300 - v_balance)); END IF;
-  -- Title effects (phase10_title-effects.sql): a loadout's perks share 60 points per wearer per game.
+  -- Title effects (phase10_title-effects.sql): a loadout's perks share 100 points per wearer per game.
   IF p_kind = 'perk' AND v_amount > 0 THEN v_amount := vvv_title_perk_room(p_session_id, p_user_id, v_amount); END IF;
   IF v_amount = 0 THEN RETURN 0; END IF;
 

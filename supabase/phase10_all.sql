@@ -371,12 +371,32 @@ GRANT EXECUTE ON FUNCTION push_report(TEXT[], TEXT[]) TO authenticated, service_
 -- Additive and idempotent: safe to run while the previous app version is deployed.
 -- Requires phase10_foundation.sql (free-form point_transactions reasons).
 -- Rules mirrored in lib/titles/rules.ts: a curse brands its wearer for 8 resolved games, a wearer
--- carries at most 2 curses, dignity costs 1x the title price, one perk moves at most 60 points per game
+-- carries at most 2 curses, dignity costs 1x the title price, one perk moves at most 90 points per game
 -- and a perk can cost its own wearer at most 10. Each title also has its own cap (title_perk_caps, seeded
 -- from lib/titles/perks.ts), and a perk only pays someone who took part in the game. A loadout's perks share
--- 60 points per wearer per game (vvv_title_perk_room, phase10_title-effects.sql).
+-- 100 points per wearer per game (vvv_title_perk_room, phase10_title-effects.sql).
+-- Bought titles last a number of games (user_titles.games_left, NULL for free honors and brands): buy_title()
+-- sets it, vvv_title_games_tick() (phase10_title-effects.sql) spends it, and buying an expired title again at
+-- full price renews it.
 -- New point reasons: title_perk, title_curse (paid by a branded wearer), title_tribute (received by the
 -- bestower), title_dignity (brand bought back).
+
+-- ============================================================
+-- EXPIRING TITLES: games left on a bought title (NULL = permanent: free honors and brands) and the last game
+-- that spent one. A title spent in a game keeps working until that game is settled.
+-- ============================================================
+
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS games_left INTEGER;
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS ticked_session_id UUID;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conrelid = 'public.user_titles'::regclass AND conname = 'user_titles_games_left_check'
+  ) THEN
+    ALTER TABLE user_titles ADD CONSTRAINT user_titles_games_left_check CHECK (games_left IS NULL OR games_left >= 0);
+  END IF;
+END $$;
 
 -- ============================================================
 -- PERK LEDGER: one row per (game, wearer, title), so every perk is one-shot.
@@ -404,7 +424,8 @@ CREATE POLICY "title_perk_applications_read" ON title_perk_applications FOR SELE
 
 -- ============================================================
 -- PERK CAPS: the most one title can move in one game. Mirrors perkFor() in lib/titles/perks.ts (each
--- definition's cap, never above the 60 point ceiling): change both together. Lookup order is the same as
+-- definition's cap, never above the 90 point ceiling): change both together. Perks paying a share (of a profit,
+-- a loss, the pool, a decree spend or a bounty) have caps 1.5x their first version; fixed amounts kept theirs. Lookup order is the same as
 -- perkFor(): the exact title name (shop, milestone and consolation titles), then the act award kind parsed
 -- from "Act <n> <Award>", then the title's category. Re-running this file resets the table to these values.
 -- ============================================================
@@ -413,9 +434,12 @@ CREATE TABLE IF NOT EXISTS title_perk_caps (
   scope TEXT NOT NULL CHECK (scope IN ('title', 'act_award', 'category')),
   key TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('perk', 'curse')),
-  cap INTEGER NOT NULL CHECK (cap BETWEEN 1 AND 60),
+  cap INTEGER NOT NULL,
   PRIMARY KEY (scope, key)
 );
+
+ALTER TABLE title_perk_caps DROP CONSTRAINT IF EXISTS title_perk_caps_cap_check;
+ALTER TABLE title_perk_caps ADD CONSTRAINT title_perk_caps_cap_check CHECK (cap BETWEEN 1 AND 100);
 
 ALTER TABLE title_perk_caps ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "title_perk_caps_read" ON title_perk_caps;
@@ -424,21 +448,21 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON title_perk_caps FROM anon, authentica
 
 WITH seed (scope, key, kind, cap) AS (
   VALUES
-    ('title', 'Kingslayer', 'perk', 60),
+    ('title', 'Kingslayer', 'perk', 90),
     ('title', 'The Usurper', 'perk', 8),
     ('title', 'Crown Thief', 'perk', 8),
-    ('title', 'The Disrespector', 'perk', 40),
+    ('title', 'The Disrespector', 'perk', 60),
     ('title', 'The One Who Stopped Kneeling', 'perk', 16),
     ('title', 'Still Kneeling', 'perk', 8),
     ('title', 'Throne Polisher', 'perk', 12),
-    ('title', 'The Holdout', 'perk', 40),
-    ('title', 'Last Loyalist', 'perk', 60),
-    ('title', 'Copium Dealer', 'perk', 24),
+    ('title', 'The Holdout', 'perk', 60),
+    ('title', 'Last Loyalist', 'perk', 90),
+    ('title', 'Copium Dealer', 'perk', 36),
     ('title', 'Baron Caller (Derogatory)', 'perk', 10),
-    ('title', 'The 0/8 Powerspike', 'perk', 30),
+    ('title', 'The 0/8 Powerspike', 'perk', 45),
     ('title', 'Delayed Victory Specialist', 'perk', 8),
-    ('title', 'Main Character (Self-Diagnosed)', 'perk', 60),
-    ('title', 'El Goblino Pequeno', 'perk', 15),
+    ('title', 'Main Character (Self-Diagnosed)', 'perk', 90),
+    ('title', 'El Goblino Pequeno', 'perk', 23),
     ('title', 'Court Jester', 'curse', 50),
     ('title', 'Boot Licker', 'curse', 6),
     ('title', 'Royal Carpet', 'curse', 10),
@@ -459,13 +483,13 @@ WITH seed (scope, key, kind, cap) AS (
     ('title', 'At Least You Tried', 'perk', 3),
     ('title', 'Coinflip Merchant', 'perk', 6),
     ('title', 'Random Champs, Calculated Wins', 'perk', 6),
-    ('title', 'Baby Gambler', 'perk', 10),
-    ('title', 'Degenerate In Training', 'perk', 15),
-    ('title', 'Can''t Help Myself', 'perk', 20),
-    ('title', 'The House Should Be Worried', 'perk', 25),
-    ('title', 'Lucky Guess', 'perk', 10),
-    ('title', 'Fortune''s Favorite', 'perk', 20),
-    ('title', 'The Oracle', 'perk', 30),
+    ('title', 'Baby Gambler', 'perk', 15),
+    ('title', 'Degenerate In Training', 'perk', 23),
+    ('title', 'Can''t Help Myself', 'perk', 30),
+    ('title', 'The House Should Be Worried', 'perk', 38),
+    ('title', 'Lucky Guess', 'perk', 15),
+    ('title', 'Fortune''s Favorite', 'perk', 30),
+    ('title', 'The Oracle', 'perk', 45),
     ('title', 'Pocket Change', 'perk', 1),
     ('title', 'Stacking Paper', 'perk', 2),
     ('title', 'Economy Enjoyer', 'perk', 3),
@@ -476,11 +500,11 @@ WITH seed (scope, key, kind, cap) AS (
     ('title', 'First Blood (Emotional)', 'perk', 3),
     ('title', 'Community Punching Bag', 'perk', 5),
     ('title', 'Shame Sponge', 'perk', 8),
-    ('title', 'Mischief Maker', 'perk', 6),
-    ('title', 'Chaos Enjoyer', 'perk', 10),
-    ('title', 'Chaos Incarnate', 'perk', 15),
-    ('title', 'Bounty Poster', 'perk', 20),
-    ('title', 'Most Wanted Printer', 'perk', 40),
+    ('title', 'Mischief Maker', 'perk', 9),
+    ('title', 'Chaos Enjoyer', 'perk', 15),
+    ('title', 'Chaos Incarnate', 'perk', 23),
+    ('title', 'Bounty Poster', 'perk', 30),
+    ('title', 'Most Wanted Printer', 'perk', 60),
     ('title', 'Salaxe''s Background Character', 'perk', 2),
     ('title', 'Court Jester (Unpaid)', 'perk', 2),
     ('title', 'Throne Room Tourist', 'perk', 2),
@@ -504,7 +528,7 @@ WITH seed (scope, key, kind, cap) AS (
     ('act_award', 'grand champion', 'perk', 5),
     ('act_award', 'warrior', 'perk', 5),
     ('act_award', 'iron man', 'perk', 3),
-    ('act_award', 'degenerate', 'perk', 30),
+    ('act_award', 'degenerate', 'perk', 45),
     ('act_award', 'devotee', 'perk', 8),
     ('act_award', 'punching bag', 'perk', 6),
     ('category', 'rebellion', 'perk', 4),
@@ -696,12 +720,20 @@ DECLARE
   v_row_id UUID;
   v_balance INTEGER;
   v_price INTEGER;
+  v_games INTEGER;
+  v_renewed BOOLEAN := false;
 BEGIN
   IF v_caller IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
 
   SELECT * INTO v_title FROM titles WHERE id = p_title_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'title_not_found'; END IF;
   IF v_title.category = 'award' OR v_title.price <= 0 THEN RAISE EXCEPTION 'not_for_sale'; END IF;
+
+  -- How many games a bought self title lasts (phase10_title-effects.sql). Separate statements: plpgsql plans a
+  -- whole expression at once, a missing function included.
+  IF v_title.for_self AND to_regprocedure('public.vvv_title_games(text, text, integer)') IS NOT NULL THEN
+    v_games := vvv_title_games(v_title.name, v_title.category, v_title.price);
+  END IF;
 
   v_is_curse := NOT v_title.for_self;
   v_recipient := CASE WHEN v_title.for_self THEN v_caller ELSE p_target_user_id END;
@@ -715,7 +747,10 @@ BEGIN
   SELECT * INTO v_existing FROM user_titles WHERE user_id = v_recipient AND title_id = p_title_id;
   v_has_existing := FOUND;
 
-  IF v_has_existing AND (
+  -- An expired self title (no games left) is renewed for its full price instead.
+  v_renewed := COALESCE(v_has_existing AND NOT v_is_curse AND v_existing.games_left = 0 AND v_games IS NOT NULL, false);
+
+  IF v_has_existing AND NOT v_renewed AND (
     NOT v_is_curse
     OR v_existing.assigned_by IS NULL
     OR vvv_curse_games_served(v_existing.created_at) < 8
@@ -738,14 +773,18 @@ BEGIN
   v_price := CASE WHEN v_is_curse THEN vvv_title_scaled(v_caller, 'bestow_cost_pct', v_title.price) ELSE v_title.price END;
   v_balance := adjust_balance(v_caller, -v_price, 'title_bought', p_title_id);
 
-  IF v_has_existing THEN
+  IF v_renewed THEN
+    UPDATE user_titles SET games_left = v_games, ticked_session_id = NULL
+    WHERE id = v_existing.id
+    RETURNING id INTO v_row_id;
+  ELSIF v_has_existing THEN
     -- An expired brand can be burned in again: the clock restarts and the tribute goes to the new bestower.
     UPDATE user_titles SET assigned_by = v_caller, created_at = now()
     WHERE id = v_existing.id
     RETURNING id INTO v_row_id;
   ELSE
-    INSERT INTO user_titles (user_id, title_id, assigned_by, is_active)
-    VALUES (v_recipient, p_title_id, CASE WHEN v_is_curse THEN v_caller END, false)
+    INSERT INTO user_titles (user_id, title_id, assigned_by, is_active, games_left)
+    VALUES (v_recipient, p_title_id, CASE WHEN v_is_curse THEN v_caller END, false, v_games)
     RETURNING id INTO v_row_id;
   END IF;
 
@@ -753,7 +792,9 @@ BEGIN
     'user_title_id', v_row_id,
     'title', v_title.name,
     'recipient', v_recipient,
-    'rebranded', v_has_existing,
+    'rebranded', v_has_existing AND NOT v_renewed,
+    'renewed', v_renewed,
+    'games_left', v_games,
     'price', v_price,
     'list_price', v_title.price,
     'balance', v_balance,
@@ -774,6 +815,7 @@ AS $$
 DECLARE
   v_caller UUID := auth.uid();
   v_name TEXT;
+  v_games_left INTEGER;
 BEGIN
   IF v_caller IS NULL THEN RAISE EXCEPTION 'not_authenticated'; END IF;
   IF vvv_titles_locked() THEN RAISE EXCEPTION 'titles_locked'; END IF;
@@ -781,11 +823,12 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtext('vvv_titles:' || v_caller::TEXT));
 
   IF p_title_id IS NOT NULL THEN
-    SELECT t.name INTO v_name
+    SELECT t.name, ut.games_left INTO v_name, v_games_left
     FROM user_titles ut
     JOIN titles t ON t.id = ut.title_id
     WHERE ut.user_id = v_caller AND ut.title_id = p_title_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'not_owned'; END IF;
+    IF v_games_left = 0 THEN RAISE EXCEPTION 'title_expired'; END IF;
   END IF;
 
   UPDATE user_titles SET is_active = false
@@ -892,14 +935,18 @@ BEGIN
     RAISE EXCEPTION 'invalid_amount';
   END IF;
 
-  SELECT ut.created_at, ut.assigned_by, ut.is_active, t.for_self, t.category INTO v_row
+  SELECT ut.created_at, ut.assigned_by, ut.is_active, ut.games_left, ut.ticked_session_id, t.for_self, t.category INTO v_row
   FROM user_titles ut
   JOIN titles t ON t.id = ut.title_id
   WHERE ut.user_id = p_user_id AND t.name = p_title_name;
   IF NOT FOUND THEN RAISE EXCEPTION 'title_not_held'; END IF;
 
   IF p_kind = 'perk' THEN
-    IF NOT v_row.is_active OR NOT v_row.for_self THEN RAISE EXCEPTION 'title_not_equipped'; END IF;
+    -- A title whose last game is this one still pays for it; one that ran out earlier does not.
+    IF NOT v_row.is_active OR NOT v_row.for_self
+       OR (v_row.games_left = 0 AND v_row.ticked_session_id IS DISTINCT FROM p_session_id) THEN
+      RAISE EXCEPTION 'title_not_equipped';
+    END IF;
   ELSIF v_row.for_self
      OR v_row.assigned_by IS NULL
      OR p_amount > 0
@@ -935,7 +982,7 @@ BEGIN
 
   -- Charges never push a wearer past the -300 debt floor.
   IF v_amount < 0 THEN v_amount := LEAST(0, GREATEST(v_amount, -300 - v_balance)); END IF;
-  -- Title effects (phase10_title-effects.sql): a loadout's perks share 60 points per wearer per game.
+  -- Title effects (phase10_title-effects.sql): a loadout's perks share 100 points per wearer per game.
   IF p_kind = 'perk' AND v_amount > 0 THEN v_amount := vvv_title_perk_room(p_session_id, p_user_id, v_amount); END IF;
   IF v_amount = 0 THEN RETURN 0; END IF;
 
@@ -1648,13 +1695,13 @@ $$;
 -- Double or nothing pays 2x. Wagers placed through chaos_issue_decree (rules_version 2) gain +0.5x once a
 -- hostile decree another user lands on the backed side after the wager, capped at 2.5x: defiance pays, but
 -- 3x printed points. Mirrored in lib/chaos/catalog.ts (WAGER_* constants).
--- Title effects (phase10_title-effects.sql): Baron Caller stores a higher starting multiplier in details; the
--- 2.5x cap still holds.
+-- Title effects (phase10_title-effects.sql): Baron Caller stores a higher starting multiplier in details (2.3x at
+-- most), so only his wagers can pass 2.5x: the cap is 2.8x (WAGER_TITLE_MAX_MULTIPLIER in lib/titles/effects.ts).
 CREATE OR REPLACE FUNCTION chaos_wager_multiplier(p_wager chaos_actions) RETURNS NUMERIC
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   SELECT CASE
     WHEN p_wager.rules_version < 2 THEN 2.0
-    ELSE LEAST(2.5, COALESCE((p_wager.details->>'base_multiplier')::NUMERIC, 2.0) + 0.5 * LEAST(1, (
+    ELSE LEAST(2.8, COALESCE((p_wager.details->>'base_multiplier')::NUMERIC, 2.0) + 0.5 * LEAST(1, (
       SELECT count(*)
       FROM chaos_actions h
       WHERE h.session_id = p_wager.session_id
@@ -6974,7 +7021,8 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON game_outcome_records FROM anon, authe
 -- Called by the declare flow (lib/session/resolve.ts) once the game row is linked and before the status flips.
 -- Writes the game_players seats, bumps wins/losses/games_played and pays every linked player with a treasury
 -- (game_win +10, game_participation +2, reference_id = session id), all in one transaction. A second call for the
--- same session or game is a no-op, so the two minute retry of a dead declaration can never count twice.
+-- same session or game is a no-op, so the two minute retry of a dead declaration can never count twice. It also
+-- takes one game off the equipped bought titles of everyone who took part (vvv_title_games_tick).
 -- When an earlier app version already wrote the seats, it also moved the counters: only missing points are paid.
 CREATE OR REPLACE FUNCTION record_game_outcome(p_session_id UUID) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -6987,6 +7035,7 @@ DECLARE
   v_sides INTEGER;
   v_counted BOOLEAN := false;
   v_credited INTEGER := 0;
+  v_ticked INTEGER := 0;
   v_seat RECORD;
 BEGIN
   IF v_uid IS NULL THEN RAISE EXCEPTION 'game:not_authenticated'; END IF;
@@ -7065,9 +7114,14 @@ BEGIN
   INSERT INTO game_outcome_records (game_id, session_id, winner_side, counted, credited, recorded_by)
   VALUES (v_game.id, p_session_id, v_game.winner_side, v_counted, v_credited, v_uid);
 
+  -- Bought titles lose one game here, exactly once per recorded game (phase10_title-effects.sql).
+  IF to_regprocedure('public.vvv_title_games_tick(uuid)') IS NOT NULL THEN
+    v_ticked := vvv_title_games_tick(p_session_id);
+  END IF;
+
   RETURN jsonb_build_object(
     'recorded', true, 'already', false, 'game_id', v_game.id,
-    'winner_side', v_game.winner_side, 'counted', v_counted, 'credited', v_credited
+    'winner_side', v_game.winner_side, 'counted', v_counted, 'credited', v_credited, 'titles_ticked', v_ticked
   );
 END;
 $$;
@@ -7478,15 +7532,25 @@ NOTIFY pgrst, 'reload schema';
 -- file has run they report a missing function and the app falls back to its pre-migration paths.
 --
 -- Mirrored in TypeScript, keep both in lockstep:
---   lib/titles/effects.ts   effect keys, ranges, the per-title table and every formula
---   lib/titles/pricing.ts   price tiers: Legendary 15, Epic 10, Rare 6, Common 3 hand kisses (100 points each)
+--   lib/titles/effects.ts   effect keys, ranges, the per-title table and every formula (TITLE_RULES_V2 here)
+--   lib/titles/sets.ts      set bonuses (title_sets, title_set_members; their effects live in title_effects)
+--   lib/titles/pricing.ts   price tiers: Legendary 15, Epic 10, Rare 6, Common 3 hand kisses (100 points each), and
+--                           how many games a bought title lasts: Legendary 20, Epic 16, Rare 12, Common 8
 --   lib/titles/loadout.ts   slots (2 super rare, 3 rare, 4 common) and the conflicting pairs
 --   lib/titles/catalog.ts   honor tiers (act awards Legendary, the last title of a milestone group Rare, the rest Common)
 --
--- Effects come from every equipped self title and every brand (mockery curse) still burning. Several sources may
--- feed one key: their sum is clamped to the key's range. Every helper that changes an amount writes a note
--- ({title, key, value, subject}) into a transaction-local list; the calling function returns it as title_effects so
--- the API, the Herald and the ledgers can say which title did what.
+-- Effects come from every equipped self title with games left, every set bonus those titles complete, and every
+-- brand (mockery curse) still burning. Several sources may feed one key: their sum is clamped to the key's range.
+-- Every helper that changes an amount writes a note ({title, key, value, subject}) into a transaction-local list;
+-- the calling function returns it as title_effects so the API, the Herald and the ledgers can say which title (or
+-- set) did what.
+--
+-- Bought titles expire: user_titles.games_left counts down once per recorded game the owner took part in
+-- (vvv_title_games_tick, called by record_game_outcome in phase10_hardening.sql). A title spent in a game keeps
+-- working until that game is settled, then it is taken off and stays in the collection until it is renewed
+-- (buy_title at full price). Free honors and brands never use games_left.
+--
+-- The app detects this version through the title_sets table: until it exists, it shows the first rules.
 --
 -- New point reasons: title_stipend_bonus, title_stipend_redirected (0 points, the marker on the cursed side),
 -- title_stipend_tribute (received by Salaxe), title_duel_refund.
@@ -7542,11 +7606,30 @@ CREATE TABLE IF NOT EXISTS title_slot_rules (
   slots INTEGER NOT NULL CHECK (slots >= 0)
 );
 
+-- Set bonuses: wearing `needs` titles of a set adds the set's own row in title_effects as one more source.
+CREATE TABLE IF NOT EXISTS title_sets (
+  set_name TEXT PRIMARY KEY,
+  needs INTEGER NOT NULL CHECK (needs > 0),
+  blurb TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS title_set_members (
+  set_name TEXT NOT NULL REFERENCES title_sets (set_name) ON DELETE CASCADE,
+  title_name TEXT NOT NULL,
+  PRIMARY KEY (set_name, title_name)
+);
+
+-- Same columns as phase10_titles.sql adds, in case this file runs against an older copy of it.
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS games_left INTEGER;
+ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS ticked_session_id UUID;
+
 DO $$
 DECLARE
   v_table TEXT;
 BEGIN
-  FOREACH v_table IN ARRAY ARRAY['title_tiers', 'title_effect_keys', 'title_effects', 'title_conflicts', 'title_slot_rules'] LOOP
+  FOREACH v_table IN ARRAY ARRAY[
+    'title_tiers', 'title_effect_keys', 'title_effects', 'title_conflicts', 'title_slot_rules', 'title_sets', 'title_set_members'
+  ] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', v_table);
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', v_table || '_read', v_table);
     EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (true)', v_table || '_read', v_table);
@@ -7554,28 +7637,29 @@ BEGIN
   END LOOP;
 END $$;
 
--- Effect keys: how several sources combine (sum, lowest wins, on/off) and the range of the result.
+-- Effect keys: how several sources combine (sum, lowest wins, on/off) and the range of the result. Wide enough for
+-- the strongest combo to land: no key can make anything free, refund a whole stake or cover a whole bet.
 WITH seed (effect_key, mode, min_value, max_value) AS (
   VALUES
-    ('decree_extra_uses', 'sum', 0, 1),
-    ('decree_cost_pct', 'sum', -30, 50),
-    ('decree_cost_salaxe_pct', 'sum', -20, 0),
+    ('decree_extra_uses', 'sum', 0, 3),
+    ('decree_cost_pct', 'sum', -45, 50),
+    ('decree_cost_salaxe_pct', 'sum', -35, 0),
     ('decree_cost_target_pct', 'sum', -20, 0),
     ('exile_immune', 'flag', 0, 1),
-    ('wager_base_bonus', 'sum', 0, 0.2),
-    ('early_window_bonus_s', 'sum', 0, 30),
-    ('all_in_bonus_pct', 'sum', 0, 10),
-    ('insurance_coverage_bonus', 'sum', 0, 15),
-    ('insurance_premium_salaxe_pct', 'sum', -25, 0),
+    ('wager_base_bonus', 'sum', 0, 0.3),
+    ('early_window_bonus_s', 'sum', 0, 75),
+    ('all_in_bonus_pct', 'sum', 0, 25),
+    ('insurance_coverage_bonus', 'sum', 0, 25),
+    ('insurance_premium_salaxe_pct', 'sum', -40, 0),
     ('insurance_blocked', 'flag', 0, 1),
     ('bet_cap', 'min', 1, 100000),
-    ('praise_bonus_pct', 'sum', 0, 40),
-    ('favor_bonus_pct', 'sum', 0, 50),
-    ('stipend_bonus_pct', 'sum', 0, 100),
+    ('praise_bonus_pct', 'sum', 0, 75),
+    ('favor_bonus_pct', 'sum', 0, 150),
+    ('stipend_bonus_pct', 'sum', 0, 200),
     ('stipend_to_salaxe', 'flag', 0, 1),
-    ('bestow_cost_pct', 'sum', -30, 0),
-    ('duel_tithe_pct', 'sum', -50, 0),
-    ('duel_loss_refund_pct', 'sum', 0, 20),
+    ('bestow_cost_pct', 'sum', -35, 0),
+    ('duel_tithe_pct', 'sum', -100, 0),
+    ('duel_loss_refund_pct', 'sum', 0, 35),
     ('herald', 'flag', 0, 1)
 ), dropped AS (
   DELETE FROM title_effect_keys k WHERE NOT EXISTS (SELECT 1 FROM seed s WHERE s.effect_key = k.effect_key)
@@ -7585,35 +7669,42 @@ SELECT effect_key, mode, min_value, max_value FROM seed
 ON CONFLICT (effect_key) DO UPDATE
 SET mode = EXCLUDED.mode, min_value = EXCLUDED.min_value, max_value = EXCLUDED.max_value;
 
--- What each title does while equipped (curses: while the brand burns).
+-- What each title does while equipped (curses: while the brand burns), and what each completed set adds.
 WITH seed (title_name, effect_key, value) AS (
   VALUES
-    ('The Usurper', 'decree_extra_uses', 1),
-    ('Kingslayer', 'decree_cost_salaxe_pct', -20),
-    ('Crown Thief', 'early_window_bonus_s', 30),
-    ('The Disrespector', 'bestow_cost_pct', -20),
+    ('The Usurper', 'decree_extra_uses', 2),
+    ('Kingslayer', 'decree_cost_salaxe_pct', -35),
+    ('Crown Thief', 'early_window_bonus_s', 60),
+    ('The Disrespector', 'bestow_cost_pct', -35),
     ('The One Who Stopped Kneeling', 'exile_immune', 1),
-    ('Last Loyalist', 'praise_bonus_pct', 25),
-    ('Still Kneeling', 'stipend_bonus_pct', 100),
-    ('Throne Polisher', 'favor_bonus_pct', 50),
-    ('The Holdout', 'insurance_premium_salaxe_pct', -25),
-    ('Copium Dealer', 'insurance_coverage_bonus', 15),
-    ('Baron Caller (Derogatory)', 'wager_base_bonus', 0.2),
-    ('El Goblino Pequeno', 'duel_tithe_pct', -50),
+    ('Last Loyalist', 'praise_bonus_pct', 40),
+    ('Still Kneeling', 'stipend_bonus_pct', 200),
+    ('Throne Polisher', 'favor_bonus_pct', 100),
+    ('The Holdout', 'insurance_premium_salaxe_pct', -40),
+    ('Copium Dealer', 'insurance_coverage_bonus', 25),
+    ('Baron Caller (Derogatory)', 'wager_base_bonus', 0.3),
+    ('El Goblino Pequeno', 'duel_tithe_pct', -100),
     ('Main Character (Self-Diagnosed)', 'herald', 1),
-    ('The 0/8 Powerspike', 'all_in_bonus_pct', 10),
-    ('Delayed Victory Specialist', 'duel_loss_refund_pct', 20),
+    ('The 0/8 Powerspike', 'all_in_bonus_pct', 20),
+    ('Delayed Victory Specialist', 'duel_loss_refund_pct', 35),
     ('Court Jester', 'bet_cap', 50),
     ('Boot Licker', 'decree_cost_pct', 20),
     ('Royal Carpet', 'decree_cost_target_pct', -20),
     ('Salaxe''s Emotional Support', 'stipend_to_salaxe', 1),
     ('The Crawling One', 'insurance_blocked', 1),
-    ('Mischief Maker', 'decree_cost_pct', -3),
-    ('Chaos Enjoyer', 'decree_cost_pct', -5),
-    ('Chaos Incarnate', 'decree_cost_pct', -7),
-    ('Salaxe Appreciator', 'praise_bonus_pct', 5),
-    ('Devoted Servant', 'praise_bonus_pct', 5),
-    ('Down Horrendous For Salaxe', 'praise_bonus_pct', 10)
+    ('Mischief Maker', 'decree_cost_pct', -5),
+    ('Chaos Enjoyer', 'decree_cost_pct', -8),
+    ('Chaos Incarnate', 'decree_cost_pct', -12),
+    ('Salaxe Appreciator', 'praise_bonus_pct', 8),
+    ('Devoted Servant', 'praise_bonus_pct', 8),
+    ('Down Horrendous For Salaxe', 'praise_bonus_pct', 15),
+    ('Rebel Court', 'decree_cost_pct', -10),
+    ('Rebel Court', 'decree_extra_uses', 1),
+    ('Loyal Court', 'praise_bonus_pct', 20),
+    ('Loyal Court', 'favor_bonus_pct', 50),
+    ('High Roller', 'all_in_bonus_pct', 5),
+    ('High Roller', 'early_window_bonus_s', 15),
+    ('Chaos Crew', 'decree_cost_pct', -10)
 ), dropped AS (
   DELETE FROM title_effects e
   WHERE NOT EXISTS (SELECT 1 FROM seed s WHERE s.title_name = e.title_name AND s.effect_key = e.effect_key)
@@ -7725,6 +7816,51 @@ ON CONFLICT (title_a, title_b) DO UPDATE SET reason = EXCLUDED.reason;
 INSERT INTO title_slot_rules (slot, slots) VALUES ('super_rare', 2), ('rare', 3), ('common', 4)
 ON CONFLICT (slot) DO UPDATE SET slots = EXCLUDED.slots;
 
+-- Set bonuses (TITLE_SETS in lib/titles/sets.ts). A set name is never a title name: it is its own effect source.
+WITH seed (set_name, needs, blurb) AS (
+  VALUES
+    ('Rebel Court', 3, 'Three rebellion titles: the uprising gets organized.'),
+    ('Loyal Court', 3, 'Three loyalty or devotion titles: the throne notices.'),
+    ('High Roller', 2, 'Two gambler titles: the house starts to sweat.'),
+    ('Chaos Crew', 3, 'All three chaos honors: chaos, at wholesale prices.')
+), dropped AS (
+  DELETE FROM title_sets t WHERE NOT EXISTS (SELECT 1 FROM seed s WHERE s.set_name = t.set_name)
+)
+INSERT INTO title_sets (set_name, needs, blurb)
+SELECT set_name, needs, blurb FROM seed
+ON CONFLICT (set_name) DO UPDATE SET needs = EXCLUDED.needs, blurb = EXCLUDED.blurb;
+
+WITH seed (set_name, title_name) AS (
+  VALUES
+    ('Rebel Court', 'The Usurper'),
+    ('Rebel Court', 'Kingslayer'),
+    ('Rebel Court', 'The One Who Stopped Kneeling'),
+    ('Rebel Court', 'Crown Thief'),
+    ('Rebel Court', 'The Disrespector'),
+    ('Loyal Court', 'Copium Dealer'),
+    ('Loyal Court', 'Last Loyalist'),
+    ('Loyal Court', 'The Holdout'),
+    ('Loyal Court', 'Still Kneeling'),
+    ('Loyal Court', 'Throne Polisher'),
+    ('Loyal Court', 'Salaxe Appreciator'),
+    ('Loyal Court', 'Devoted Servant'),
+    ('Loyal Court', 'Down Horrendous For Salaxe'),
+    ('High Roller', 'Copium Dealer'),
+    ('High Roller', 'The 0/8 Powerspike'),
+    ('High Roller', 'Baron Caller (Derogatory)'),
+    ('High Roller', 'Crown Thief'),
+    ('High Roller', 'The Holdout'),
+    ('Chaos Crew', 'Mischief Maker'),
+    ('Chaos Crew', 'Chaos Enjoyer'),
+    ('Chaos Crew', 'Chaos Incarnate')
+), dropped AS (
+  DELETE FROM title_set_members m
+  WHERE NOT EXISTS (SELECT 1 FROM seed s WHERE s.set_name = m.set_name AND s.title_name = m.title_name)
+)
+INSERT INTO title_set_members (set_name, title_name)
+SELECT set_name, title_name FROM seed
+ON CONFLICT (set_name, title_name) DO NOTHING;
+
 -- ============================================================
 -- TIERS AND PRICES
 -- ============================================================
@@ -7771,6 +7907,29 @@ WHERE tt.title_name = t.name
   AND t.category <> 'award'
   AND t.price IS DISTINCT FROM vvv_title_tier_price(tt.tier);
 
+-- How many games a bought self title lasts (TIER_GAMES in lib/titles/pricing.ts). NULL: it never expires (free
+-- honors). Curses keep their own 8 game burn and never use this.
+CREATE OR REPLACE FUNCTION vvv_title_games(p_name TEXT, p_category TEXT, p_price INTEGER) RETURNS INTEGER
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT CASE
+    WHEN p_category IN ('award', 'mockery') OR COALESCE(p_price, 0) <= 0 THEN NULL
+    ELSE CASE vvv_title_tier(p_name, p_category, p_price)
+      WHEN 'legendary' THEN 20 WHEN 'epic' THEN 16 WHEN 'rare' THEN 12 ELSE 8
+    END
+  END
+$$;
+
+-- Titles bought before titles expired get their full run from now. Only rows that never had a count: re-running
+-- this file never refills a title that is counting down or has run out.
+UPDATE user_titles ut
+SET games_left = vvv_title_games(t.name, t.category, t.price)
+FROM titles t
+WHERE t.id = ut.title_id
+  AND ut.games_left IS NULL
+  AND ut.assigned_by IS NULL
+  AND t.for_self
+  AND vvv_title_games(t.name, t.category, t.price) IS NOT NULL;
+
 -- ============================================================
 -- LOADOUTS: several equipped titles, validated by equip_loadout()
 -- ============================================================
@@ -7781,7 +7940,8 @@ ALTER TABLE user_titles ADD COLUMN IF NOT EXISTS equipped_at TIMESTAMPTZ;
 DROP INDEX IF EXISTS idx_user_titles_one_active;
 CREATE INDEX IF NOT EXISTS idx_user_titles_active ON user_titles (user_id) WHERE is_active;
 
--- First rule a set of titles breaks, or NULL. Same rules as loadoutViolation() in lib/titles/loadout.ts.
+-- First rule a set of titles breaks, or NULL. Same rules as loadoutViolation() in lib/titles/loadout.ts: slots per
+-- tier and the two conflicting pairs. Rebels and loyalists may share the super rare slots now.
 CREATE OR REPLACE FUNCTION vvv_loadout_violation(p_user_id UUID, p_title_ids UUID[]) RETURNS TEXT
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -7792,6 +7952,13 @@ BEGIN
     WHERE NOT EXISTS (SELECT 1 FROM user_titles ut WHERE ut.user_id = p_user_id AND ut.title_id = wanted.id)
   ) THEN
     RETURN 'not_owned';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM user_titles ut
+    WHERE ut.user_id = p_user_id AND ut.title_id = ANY (p_title_ids) AND ut.games_left = 0
+  ) THEN
+    RETURN 'title_expired';
   END IF;
 
   FOR v_slot IN
@@ -7811,17 +7978,6 @@ BEGIN
     WHERE a.id = ANY (p_title_ids) AND b.id = ANY (p_title_ids)
   ) THEN
     RETURN 'title_conflict';
-  END IF;
-
-  -- Rebels and loyalists never share the super rare slots.
-  IF EXISTS (
-    SELECT 1 FROM titles t
-    WHERE t.id = ANY (p_title_ids) AND t.category = 'rebellion' AND vvv_title_slot(t.name, t.category, t.price) = 'super_rare'
-  ) AND EXISTS (
-    SELECT 1 FROM titles t
-    WHERE t.id = ANY (p_title_ids) AND t.category = 'loyalty' AND vvv_title_slot(t.name, t.category, t.price) = 'super_rare'
-  ) THEN
-    RETURN 'faction_conflict';
   END IF;
 
   RETURN NULL;
@@ -7878,13 +8034,31 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
   ORDER BY created_at LIMIT 1
 $$;
 
--- Every title acting on a user right now: equipped self titles, and brands that still have games left.
+-- A title still works with games left, or while the game that spent its last one is being settled (that game's
+-- decrees, bets, duels and perks still see it). NULL games: a permanent honor.
+CREATE OR REPLACE FUNCTION vvv_title_live(p_games_left INTEGER, p_ticked_session UUID) RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT p_games_left IS NULL OR p_games_left > 0 OR EXISTS (
+    SELECT 1 FROM game_sessions s
+    WHERE s.id = p_ticked_session AND s.status = 'in_game' AND s.updated_at > now() - interval '3 hours'
+  )
+$$;
+
+-- Every source acting on a user right now: equipped self titles that still work, every set bonus they complete,
+-- and brands that still have games left.
 CREATE OR REPLACE FUNCTION vvv_title_sources(p_user_id UUID)
 RETURNS TABLE (title_name TEXT, kind TEXT)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT t.name, 'equipped'
-  FROM user_titles ut JOIN titles t ON t.id = ut.title_id
-  WHERE ut.user_id = p_user_id AND ut.is_active AND t.for_self
+  WITH worn AS (
+    SELECT t.name
+    FROM user_titles ut JOIN titles t ON t.id = ut.title_id
+    WHERE ut.user_id = p_user_id AND ut.is_active AND t.for_self AND vvv_title_live(ut.games_left, ut.ticked_session_id)
+  )
+  SELECT name, 'equipped' FROM worn
+  UNION
+  SELECT s.set_name, 'set'
+  FROM title_sets s
+  WHERE (SELECT count(*) FROM title_set_members m JOIN worn w ON w.name = m.title_name WHERE m.set_name = s.set_name) >= s.needs
   UNION
   SELECT t.name, 'curse'
   FROM user_titles ut JOIN titles t ON t.id = ut.title_id
@@ -7955,7 +8129,7 @@ $$;
 -- ROYAL DECREES (chaos_issue_decree, chaos_wager_multiplier)
 -- ============================================================
 
--- The Usurper: one more use of every limited decree. Disabled decrees (max 0) stay disabled.
+-- The Usurper and Rebel Court: more uses of every limited decree. Disabled decrees (max 0) stay disabled.
 CREATE OR REPLACE FUNCTION vvv_title_decree_uses(p_user_id UUID, p_max INTEGER, p_used INTEGER) RETURNS INTEGER
 LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
@@ -7970,9 +8144,10 @@ BEGIN
 END;
 $$;
 
--- The price of a decree once every title has spoken: the caster's own modifier (Boot Licker, decree honors),
--- Kingslayer when it is aimed at Salaxe or his team, and Royal Carpet when it is aimed at a carpeted seat; the
--- total stays between -30% and +50%. The King's Wager is a stake, not a price: it never changes.
+-- The price of a decree once every title has spoken: the caster's own modifier (Boot Licker, decree honors, set
+-- bonuses), Kingslayer when it is aimed at Salaxe or his team, and Royal Carpet when it is aimed at a carpeted
+-- seat; the total stays between -45% and +50%, so a decree always costs something. The King's Wager is a stake,
+-- not a price: it never changes.
 -- Also refuses an exile on a seat that cannot be exiled (The One Who Stopped Kneeling).
 -- Mirrors decreeCost() in lib/titles/effects.ts and decreeAimedSeats() in lib/chaos/title-terms.ts.
 CREATE OR REPLACE FUNCTION vvv_title_decree_cost(
@@ -8029,7 +8204,7 @@ BEGIN
   ORDER BY 3, p.name
   LIMIT 1;
 
-  v_pct := LEAST(50, GREATEST(-30, v_own + v_slayer + COALESCE(v_carpet, 0)));
+  v_pct := LEAST(50, GREATEST(-45, v_own + v_slayer + COALESCE(v_carpet, 0)));
   IF v_pct = 0 THEN RETURN p_cost; END IF;
 
   IF v_own <> 0 THEN PERFORM vvv_title_fx_note(p_user_id, 'decree_cost_pct'); END IF;
@@ -8161,12 +8336,12 @@ END;
 $$;
 
 -- ============================================================
--- POST-GAME PERKS (apply_title_perk): every perk of one wearer together pays at most 60 per game
+-- POST-GAME PERKS (apply_title_perk): every perk of one wearer together pays at most 100 per game
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION vvv_title_perk_room(p_session_id UUID, p_user_id UUID, p_amount INTEGER) RETURNS INTEGER
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT LEAST(p_amount, GREATEST(0, 60 - COALESCE(sum(amount) FILTER (WHERE amount > 0), 0)))::INTEGER
+  SELECT LEAST(p_amount, GREATEST(0, 100 - COALESCE(sum(amount) FILTER (WHERE amount > 0), 0)))::INTEGER
   FROM title_perk_applications
   WHERE session_id = p_session_id AND user_id = p_user_id AND kind = 'perk'
 $$;
@@ -8232,6 +8407,82 @@ END;
 $$;
 
 -- ============================================================
+-- EXPIRY: one game off every equipped bought title of everyone who took part in a recorded game
+-- ============================================================
+
+-- Called by record_game_outcome() (phase10_hardening.sql), which runs exactly once per recorded game, before the
+-- game is settled. Took part: a seat (through either account link), or a bet, decree, duel or prophecy on the game
+-- that was not refunded. Only equipped titles with games left count down; a row already spent by this game is
+-- skipped, so a repeated call changes nothing. Returns how many titles lost a game.
+CREATE OR REPLACE FUNCTION vvv_title_games_tick(p_session_id UUID) RETURNS INTEGER
+LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_users UUID[];
+  v_ticked INTEGER;
+BEGIN
+  IF p_session_id IS NULL THEN RETURN 0; END IF;
+
+  -- Titles that ran out in a game settled since (or abandoned) come off the banner.
+  UPDATE user_titles SET is_active = false
+  WHERE is_active AND games_left = 0 AND NOT vvv_title_live(games_left, ticked_session_id);
+
+  v_users := ARRAY(
+    SELECT p.auth_user_id FROM session_assignments sa JOIN players p ON p.id = sa.player_id
+    WHERE sa.session_id = p_session_id AND p.auth_user_id IS NOT NULL
+    UNION
+    SELECT up.id FROM session_assignments sa JOIN user_profiles up ON up.player_id = sa.player_id
+    WHERE sa.session_id = p_session_id
+    UNION
+    SELECT user_id FROM bets WHERE session_id = p_session_id AND status <> 'refunded'
+    UNION
+    SELECT user_id FROM chaos_actions WHERE session_id = p_session_id AND status <> 'refunded'
+  );
+
+  -- Separate statements: plpgsql plans a whole expression at once, missing tables included.
+  IF to_regclass('public.duels') IS NOT NULL THEN
+    v_users := v_users || ARRAY(
+      SELECT unnest(ARRAY[challenger_id, opponent_id]) FROM duels
+      WHERE session_id = p_session_id AND status IN ('accepted', 'won', 'lost')
+    );
+  END IF;
+  IF to_regclass('public.prophecy_wagers') IS NOT NULL THEN
+    v_users := v_users || ARRAY(
+      SELECT user_id FROM prophecy_wagers WHERE session_id = p_session_id AND status <> 'refunded'
+    );
+  END IF;
+
+  UPDATE user_titles ut
+  SET games_left = ut.games_left - 1, ticked_session_id = p_session_id
+  FROM titles t
+  WHERE t.id = ut.title_id
+    AND ut.user_id = ANY (v_users)
+    AND ut.is_active
+    AND t.for_self
+    AND ut.games_left > 0
+    AND ut.ticked_session_id IS DISTINCT FROM p_session_id;
+  GET DIAGNOSTICS v_ticked = ROW_COUNT;
+  RETURN v_ticked;
+END;
+$$;
+
+-- Once the game that spent a title's last charge is finished, the title comes off the banner. It stays owned.
+CREATE OR REPLACE FUNCTION vvv_title_expire_after_game() RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  UPDATE user_titles SET is_active = false
+  WHERE ticked_session_id = NEW.id AND games_left = 0 AND is_active;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS vvv_title_expire_after_game ON game_sessions;
+CREATE TRIGGER vvv_title_expire_after_game
+  AFTER UPDATE OF status ON game_sessions
+  FOR EACH ROW
+  WHEN (OLD.status = 'in_game' AND NEW.status IS DISTINCT FROM OLD.status)
+  EXECUTE FUNCTION vvv_title_expire_after_game();
+
+-- ============================================================
 -- PRIVILEGES
 -- ============================================================
 
@@ -8261,7 +8512,11 @@ BEGIN
     'vvv_title_duel_tithe(uuid, integer, integer)',
     'vvv_title_duel_consolation(uuid, integer, uuid)',
     'vvv_title_perk_room(uuid, uuid, integer)',
-    'vvv_title_claim_stipend(uuid)'
+    'vvv_title_claim_stipend(uuid)',
+    'vvv_title_games(text, text, integer)',
+    'vvv_title_live(integer, uuid)',
+    'vvv_title_games_tick(uuid)',
+    'vvv_title_expire_after_game()'
   ] LOOP
     EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', v_fn);
   END LOOP;

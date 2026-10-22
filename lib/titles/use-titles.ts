@@ -1,12 +1,15 @@
 "use client"
 
+import { useSyncExternalStore } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { useLiveSignal } from "@/components/live/live-provider"
 import { showEquipToast } from "@/components/titles/equip-moment"
 import { perkInfo } from "@/lib/titles/catalog"
 import { signed } from "@/lib/titles/copy"
+import { gamesLabel } from "@/lib/titles/expiry"
 import { titleEffects } from "@/lib/titles/effects"
+import { setTitleRulesVersion, subscribeTitleRules, titleRulesVersion, type TitleRulesVersion } from "@/lib/titles/rules-version"
 import type { CourtResponse, MilestonesResponse, PerkInfo, TitleRarity, TitlesCatalogResponse, TitleView } from "@/lib/titles/types"
 
 export const TITLES_KEYS = {
@@ -44,10 +47,19 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 const post = <T>(url: string, payload: unknown) =>
   request<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
 
+// Re-renders when the server reports new title rules (the migration ran while the page was open).
+export function useTitleRules(): TitleRulesVersion {
+  return useSyncExternalStore(subscribeTitleRules, titleRulesVersion, () => 1)
+}
+
 export function useTitlesCatalog(enabled = true) {
   return useQuery({
     queryKey: TITLES_KEYS.catalog,
-    queryFn: () => request<TitlesCatalogResponse>("/api/titles"),
+    queryFn: async () => {
+      const catalog = await request<TitlesCatalogResponse>("/api/titles")
+      setTitleRulesVersion(catalog.rules ?? 1)
+      return catalog
+    },
     enabled,
     staleTime: 15_000,
   })
@@ -209,24 +221,30 @@ interface BuyResult {
   equipped: boolean
   equipError: string | null
   price: number | null
+  renewed: boolean
+  gamesLeft: number | null
 }
 
 export function useBuyTitle() {
   const refresh = useRefreshTitles()
   return useMutation({
     mutationFn: async (vars: BuyVars): Promise<BuyResult> => {
-      const bought = await post<{ price?: number | null }>("/api/titles/buy", {
+      const bought = await post<{ price?: number | null; renewed?: boolean; games_left?: number | null }>("/api/titles/buy", {
         title_id: vars.titleId,
         target_user_id: vars.targetUserId ?? null,
       })
-      const price = typeof bought?.price === "number" ? bought.price : null
-      if (!vars.equipWith && !vars.equip) return { equipped: false, equipError: null, price }
+      const terms = {
+        price: typeof bought?.price === "number" ? bought.price : null,
+        renewed: bought?.renewed === true,
+        gamesLeft: typeof bought?.games_left === "number" ? bought.games_left : null,
+      }
+      if (!vars.equipWith && !vars.equip) return { equipped: false, equipError: null, ...terms }
       try {
         if (vars.equipWith) await post<LoadoutResult>("/api/titles/loadout", { title_ids: vars.equipWith })
         else await post("/api/titles/activate", { title_id: vars.titleId })
-        return { equipped: true, equipError: null, price }
+        return { equipped: true, equipError: null, ...terms }
       } catch (error) {
-        return { equipped: false, equipError: error instanceof Error ? error.message : null, price }
+        return { equipped: false, equipError: error instanceof Error ? error.message : null, ...terms }
       }
     },
     onSuccess: (result, vars) => {
@@ -238,13 +256,21 @@ export function useBuyTitle() {
       }
       const does = titleToastLines(vars.title ?? { name: vars.name, category: vars.category ?? "" })
       const category = vars.category ?? vars.title?.category
+      const lasts = result.gamesLeft ? ` Good for ${gamesLabel(result.gamesLeft)}.` : ""
+      if (result.renewed) {
+        toast.success(`${vars.name} renewed.`, {
+          description: `${result.gamesLeft ? `${gamesLabel(result.gamesLeft)} on the clock again.` : "Back in business."}${result.equipped ? " Equipped." : " Equip it from your collection."}`,
+        })
+        if (result.equipped && category) showEquipToast({ title: vars.name, category, rarity: vars.rarity, wearer: vars.wearer })
+        return
+      }
       if (result.equipped && category) {
         showEquipToast({ title: vars.name, category, rarity: vars.rarity, wearer: vars.wearer })
       } else if (result.equipped) {
-        toast.success(`${vars.name} is yours, and it is equipped.`, { description: does })
+        toast.success(`${vars.name} is yours, and it is equipped.`, { description: `${does}${lasts}` })
       } else {
         toast.success(`${vars.name} is yours.`, {
-          description: result.equipError ? `${result.equipError} ${does}` : `Equip it from your collection. ${does}`,
+          description: result.equipError ? `${result.equipError} ${does}${lasts}` : `Equip it from your collection. ${does}${lasts}`,
         })
       }
     },

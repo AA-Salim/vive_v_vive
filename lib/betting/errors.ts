@@ -1,5 +1,5 @@
 import { BET_RULES } from "@/lib/betting/rules"
-import { TITLE_EFFECTS } from "@/lib/titles/effects"
+import { titleEffectTable } from "@/lib/titles/effects"
 
 export type BetErrorCode =
   | "not_authenticated"
@@ -28,7 +28,7 @@ export type BetErrorCode =
   | "title_no_insurance"
   | "treason"
 
-const JESTER_CAP = TITLE_EFFECTS["Court Jester"]?.bet_cap
+const JESTER_CAP = titleEffectTable()["Court Jester"]?.bet_cap
 
 export const BET_ERRORS: Record<BetErrorCode, { status: number; message: string }> = {
   not_authenticated: { status: 401, message: "Log in with Discord to bet." },

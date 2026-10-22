@@ -8,7 +8,7 @@ import { InfoTip } from "@/components/ui/info-tip"
 import type { RoomPhase } from "@/components/session/copy"
 import { useMyTitleEffects } from "@/hooks/use-title-effects"
 import { comboLines } from "@/lib/titles/effects"
-import { USER_PERK_CAP } from "@/lib/titles/rules"
+import { userPerkCap } from "@/lib/titles/rules"
 import type { RoomSession } from "@/lib/session/types"
 import type { HelpEntry } from "@/lib/help"
 import type { TitleRarity } from "@/lib/titles/types"
@@ -19,8 +19,10 @@ const SHOWN: ReadonlySet<RoomPhase> = new Set(["coach_draft", "draft", "chaos", 
 const COMBO_HELP: HelpEntry = {
   title: "Your titles this game",
   does: "Immediate effects change what your decrees, bets, praise, stipend and duels cost or pay the moment you act. Perks pay after the game.",
-  cost: "Already paid: titles are bought in the Hall of Titles and sealed while a game is live",
-  reward: `Every perk you wear together pays at most ${USER_PERK_CAP} points a game`,
+  cost: "Already paid: titles are bought in the Titles Shop and sealed while a game is live",
+  get reward() {
+    return `Every perk you wear together pays at most ${userPerkCap()} points a game`
+  },
   limits: "Several titles feeding one effect stack up to that effect's cap. Curses always apply while they burn.",
 }
 

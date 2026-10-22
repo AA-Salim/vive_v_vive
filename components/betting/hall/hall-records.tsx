@@ -14,14 +14,18 @@ import {
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { AnimatedNumber } from "@/components/betting/animated-number"
+import { HALL_RECORD_HELP } from "@/lib/betting/help"
 import { formatSigned, sideLabel } from "@/lib/betting/math"
+import { HALL_RULES } from "@/lib/betting/rules"
 import type { HallOfFame } from "@/lib/betting/types"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface RecordCardProps {
   icon: LucideIcon
-  title: string
+  help: HelpEntry
   flavor: string
   name: string | null
   avatarUrl: string | null
@@ -44,7 +48,7 @@ const TONES = {
   fire: "text-[var(--color-red-team)]",
 } as const
 
-function RecordCard({ icon: Icon, title, flavor, name, avatarUrl, value, format, caption, tone = "gold", index }: RecordCardProps) {
+function RecordCard({ icon: Icon, help, flavor, name, avatarUrl, value, format, caption, tone = "gold", index }: RecordCardProps) {
   const reduced = useReducedMotion()
   return (
     <motion.article
@@ -55,7 +59,10 @@ function RecordCard({ icon: Icon, title, flavor, name, avatarUrl, value, format,
     >
       <div className="flex items-start gap-1.5">
         <Icon className={cn("size-4 shrink-0", TONES[tone])} aria-hidden />
-        <h3 className="text-[11px] font-semibold uppercase leading-tight tracking-[0.1em] text-[var(--color-gold)]/85 sm:tracking-[0.16em]">{title}</h3>
+        <h3 className="min-w-0 flex-1 text-[11px] font-semibold uppercase leading-tight tracking-[0.1em] text-[var(--color-gold)]/85 sm:tracking-[0.16em]">
+          {help.title}
+        </h3>
+        <InfoTip help={help} align="end" className="-mt-0.5 -mr-1" />
       </div>
       {name && value != null ? (
         <>
@@ -89,7 +96,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
   const cards: Omit<RecordCardProps, "index">[] = [
     {
       icon: CrownIcon,
-      title: "Chalaksse's Chosen",
+      help: HALL_RECORD_HELP.chosen,
       flavor: "Most profit from the book. Salaxe wants a cut.",
       name: r.chosen?.name ?? null,
       avatarUrl: r.chosen?.avatar_url ?? null,
@@ -100,7 +107,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: TrendingDownIcon,
-      title: "The Royal Fool",
+      help: HALL_RECORD_HELP.fool,
       flavor: "Fed the notebook more than anyone. Generous, in a way.",
       name: r.fool?.name ?? null,
       avatarUrl: r.fool?.avatar_url ?? null,
@@ -111,7 +118,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: GemIcon,
-      title: "The Heist",
+      help: HALL_RECORD_HELP.heist,
       flavor: "Biggest single score. Clean in, clean out.",
       name: r.heist?.name ?? null,
       avatarUrl: r.heist?.avatar_url ?? null,
@@ -122,7 +129,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: SkullIcon,
-      title: "The Baron Throw",
+      help: HALL_RECORD_HELP.throw,
       flavor: "Worst single loss. Walked into the pit alone.",
       name: r.throw?.name ?? null,
       avatarUrl: r.throw?.avatar_url ?? null,
@@ -133,7 +140,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: SwordsIcon,
-      title: "The High Roller",
+      help: HALL_RECORD_HELP.high_roller,
       flavor: "Largest stake ever written down. No hesitation.",
       name: r.high_roller?.name ?? null,
       avatarUrl: r.high_roller?.avatar_url ?? null,
@@ -142,7 +149,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: DicesIcon,
-      title: "The Degenerate",
+      help: HALL_RECORD_HELP.degenerate,
       flavor: "Most wagers placed. Has not seen daylight since Act I.",
       name: r.degenerate?.name ?? null,
       avatarUrl: r.degenerate?.avatar_url ?? null,
@@ -151,8 +158,8 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: EyeIcon,
-      title: "The Oracle",
-      flavor: "Best win rate, 5+ decided bets. Probably scripting.",
+      help: HALL_RECORD_HELP.oracle,
+      flavor: `Best win rate, ${HALL_RULES.oracleMinDecided}+ decided bets. Probably scripting.`,
       name: r.oracle?.name ?? null,
       avatarUrl: r.oracle?.avatar_url ?? null,
       value: r.oracle?.win_rate ?? null,
@@ -161,7 +168,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: ShieldCheckIcon,
-      title: "Saved by the Angel",
+      help: HALL_RECORD_HELP.angel,
       flavor: "Most points pulled back by insurance. Coward, or genius.",
       name: r.angel?.name ?? null,
       avatarUrl: r.angel?.avatar_url ?? null,
@@ -172,7 +179,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
     },
     {
       icon: FlameIcon,
-      title: "Boots On",
+      help: HALL_RECORD_HELP.boots,
       flavor: "Most all-ins. No brakes, no regrets, no purse.",
       name: r.boots?.name ?? null,
       avatarUrl: r.boots?.avatar_url ?? null,
@@ -185,7 +192,7 @@ export function HallRecords({ records }: { records: HallOfFame["records"] }) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
       {cards.map((card, index) => (
-        <RecordCard key={card.title} {...card} index={index} />
+        <RecordCard key={card.help.title} {...card} index={index} />
       ))}
     </div>
   )

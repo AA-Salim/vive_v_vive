@@ -1,6 +1,8 @@
 "use client"
 
 import { AnimatedNumber } from "@/components/betting/animated-number"
+import { InfoTip } from "@/components/ui/info-tip"
+import { payoutHelp } from "@/lib/betting/help"
 import { formatSigned, otherSide, sideLabel, type Projection } from "@/lib/betting/math"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -51,8 +53,11 @@ export function PayoutPreview({ side, projection, exact = false }: PayoutPreview
           ? `Nobody is on ${sideLabel(other)} yet.`
           : `If ${sideLabel(side)} wins: ${formatSigned(win.net)} points. If ${sideLabel(other)} wins: ${formatSigned(lose.net)} points.`}
       </p>
-      <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
-        {exact ? "Final odds" : "If the notebook closed now"}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
+          {exact ? "Final odds" : "If the notebook closed now"}
+        </span>
+        <InfoTip help={payoutHelp(side, projection, exact)} align="end" className="-my-1" />
       </div>
 
       {projection.oneSided ? (

@@ -11,6 +11,7 @@ import { ResultReveal } from "@/components/betting/result-reveal"
 import { marketClock, useServerNow, type MarketClock } from "@/components/betting/use-clock"
 import { useBettingBalance, useMarket, type Market } from "@/components/betting/use-market"
 import { useAuth } from "@/hooks/use-auth"
+import { cn } from "@/lib/utils"
 
 interface BettingPanelProps {
   sessionId: string
@@ -45,7 +46,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
   const settled = phase === "settled" || phase === "refunded"
 
   return (
-    <section aria-labelledby="royal-wagers-title" className={PANEL_CLASS}>
+    <section aria-labelledby="royal-wagers-title" className={cn(PANEL_CLASS, "@container")}>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-gold)]/70 to-transparent"
@@ -65,7 +66,7 @@ export function BettingPanel({ sessionId, isBettingOpen = true }: BettingPanelPr
         />
       </div>
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
+      <div className="mt-5 grid gap-5 @3xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">
         <div className="min-w-0 space-y-4">
           {phase === "open" && !userId && <LoginCta onSignIn={signIn} loading={authLoading} />}
 

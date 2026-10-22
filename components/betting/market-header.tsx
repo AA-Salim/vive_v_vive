@@ -3,7 +3,9 @@
 import { AnimatePresence, motion } from "motion/react"
 import { CheckIcon, HourglassIcon, LockIcon, RotateCcwIcon, TimerIcon, ZapIcon } from "lucide-react"
 import { formatClock, type MarketClock } from "@/components/betting/use-clock"
+import { InfoTip } from "@/components/ui/info-tip"
 import { MARKET_COPY } from "@/lib/betting/copy"
+import { earlyHelp, LAST_CALL_HELP, marketHelp } from "@/lib/betting/help"
 import { BET_RULES } from "@/lib/betting/rules"
 import type { RulesVersion } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -67,9 +69,12 @@ export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) 
     <header className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 id="royal-wagers-title" className="font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]">
-            {MARKET_COPY.title}
-          </h3>
+          <div className="flex items-center gap-1">
+            <h3 id="royal-wagers-title" className="font-display text-lg font-semibold tracking-wide text-[var(--color-gold)]">
+              {MARKET_COPY.title}
+            </h3>
+            <InfoTip help={marketHelp(rulesVersion)} align="start" />
+          </div>
           <p className="text-xs leading-relaxed text-muted-foreground">{subtitle}</p>
         </div>
         <PhaseChip phase={phase} clock={clock} />
@@ -83,6 +88,7 @@ export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) 
                 <span className="flex min-w-0 items-center gap-1.5 font-semibold text-[var(--color-gold)]">
                   <ZapIcon className="size-3.5 shrink-0" aria-hidden />
                   {MARKET_COPY.earlyTitle}
+                  <InfoTip help={earlyHelp()} align="start" className="-my-1" />
                 </span>
                 <span className="shrink-0 tabular-nums text-[var(--color-gold-light)]/80">
                   {formatClock(clock.earlyRemainingMs)} left
@@ -100,16 +106,16 @@ export function MarketHeader({ phase, clock, rulesVersion }: MarketHeaderProps) 
         )}
         {showLastCall && (
           <motion.div key="last-call" {...bannerMotion} className="overflow-hidden">
-            <div
-              role="status"
-              className="rounded-lg border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/10 px-3 py-2 text-xs font-semibold text-[var(--color-red-team)]"
-            >
-              <span className="sr-only">
-                {MARKET_COPY.lastCall}: betting closes in under {BET_RULES.lastCallSeconds} seconds.
-              </span>
-              <span aria-hidden>
-                {MARKET_COPY.lastCall}. The notebook slams shut in {formatClock(clock.remainingMs ?? 0)}.
-              </span>
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/10 px-3 py-2 text-xs font-semibold text-[var(--color-red-team)]">
+              <p role="status" className="min-w-0">
+                <span className="sr-only">
+                  {MARKET_COPY.lastCall}: betting closes in under {BET_RULES.lastCallSeconds} seconds.
+                </span>
+                <span aria-hidden>
+                  {MARKET_COPY.lastCall}. The notebook slams shut in {formatClock(clock.remainingMs ?? 0)}.
+                </span>
+              </p>
+              <InfoTip help={LAST_CALL_HELP} align="end" className="-my-1 text-[var(--color-red-team)]/80" />
             </div>
           </motion.div>
         )}

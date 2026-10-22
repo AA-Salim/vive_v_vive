@@ -3,8 +3,10 @@
 import { useState } from "react"
 import { FlameIcon, ShieldCheckIcon, ZapIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { timeAgo } from "@/components/betting/hall/use-hall"
 import { outcomeTone } from "@/components/betting/payout-preview"
+import { RECENT_HELP } from "@/lib/betting/help"
 import { formatSigned, sideLabel } from "@/lib/betting/math"
 import type { HallRecentBet } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -13,11 +15,14 @@ export function HallRecent({ bets }: { bets: HallRecentBet[] }) {
   const [now] = useState(() => Date.now())
   return (
     <section aria-labelledby="hall-recent-title" className="rounded-2xl border border-[var(--color-gold)]/15 bg-card p-3 sm:p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 id="hall-recent-title" className="font-display text-base font-semibold text-[var(--color-gold)]">
-          Fresh Ink
-        </h2>
-        <span className="text-[11px] text-muted-foreground">Latest settled wagers</span>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <h2 id="hall-recent-title" className="font-display text-base font-semibold text-[var(--color-gold)]">
+            {RECENT_HELP.title}
+          </h2>
+          <InfoTip help={RECENT_HELP} align="start" />
+        </div>
+        <span className="text-right text-[11px] text-muted-foreground">Latest settled wagers</span>
       </div>
       <ul className="space-y-1">
         {bets.map((bet) => {

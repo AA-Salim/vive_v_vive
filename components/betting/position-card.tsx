@@ -4,11 +4,13 @@ import { useState } from "react"
 import { Loader2Icon, ShieldIcon, TrendingUpIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { BetTags } from "@/components/betting/bet-tags"
 import { PayoutPreview } from "@/components/betting/payout-preview"
 import { useInsureBet, type Market } from "@/components/betting/use-market"
 import { MARKET_COPY } from "@/lib/betting/copy"
+import { betHelp, guardianHelp, insureLaterHelp } from "@/lib/betting/help"
 import { coverageFor, otherSide, premiumFor, premiumPctFor, projectBet, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
 import type { MarketBet } from "@/lib/betting/types"
@@ -73,6 +75,14 @@ export function PositionCard({ sessionId, market, bet, userId, balance, open, on
   const quote = insuranceQuote(market, bet)
   const canRaise = open && market.rules_version === 2 && !bet.all_in && !(bet.scheme === "legacy" && bet.insured)
   const overLimit = purse - quote.premium < BET_RULES.debtFloor
+  const quoteHelp = {
+    rules: market.rules_version,
+    stake: quote.available ? bet.amount : 0,
+    premium: quote.premium,
+    pct: quote.pct,
+    coverage: quote.coverage,
+    loser: otherSide(bet.side),
+  }
 
   const buyInsurance = () => {
     insure.mutate({ rules: market.rules_version, maxPremium: quote.premium }, {
@@ -102,29 +112,40 @@ export function PositionCard({ sessionId, market, bet, userId, balance, open, on
       {open && (canRaise || quote.available || quote.reason) && (
         <div className={cn("grid gap-2", canRaise && quote.available && "sm:grid-cols-2")}>
           {canRaise && (
-            <Button type="button" onClick={onRaise} className="h-11 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]">
-              <TrendingUpIcon className="size-4" aria-hidden />
-              Raise the stakes
-            </Button>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Button type="button" onClick={onRaise} className="h-11 min-w-0 flex-1 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]">
+                <TrendingUpIcon className="size-4" aria-hidden />
+                Raise the stakes
+              </Button>
+              <InfoTip help={betHelp({ rules: market.rules_version, mode: "raise", side: bet.side, projection: null })} />
+            </div>
           )}
           {quote.available && (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={insure.isPending || overLimit}
-              onClick={() => (purse - quote.premium < 0 ? setPledgeOpen(true) : buyInsurance())}
-              className="h-auto min-h-11 flex-col gap-0 rounded-xl border-emerald-400/40 py-1.5 text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-400/10"
-            >
-              <span className="flex items-center gap-1.5 text-sm font-semibold">
-                {insure.isPending ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <ShieldIcon className="size-4" aria-hidden />}
-                Hire the {MARKET_COPY.insuranceTitle} for {quote.premium}
-              </span>
-              <span className="text-[11px] font-normal text-emerald-300/75">
-                {quote.coverage} back if {sideLabel(otherSide(bet.side))} wins · {quote.pct}% of your stake
-              </span>
-            </Button>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={insure.isPending || overLimit}
+                onClick={() => (purse - quote.premium < 0 ? setPledgeOpen(true) : buyInsurance())}
+                className="h-auto min-h-11 min-w-0 flex-1 flex-col gap-0 rounded-xl border-emerald-400/40 py-1.5 text-emerald-300 hover:border-emerald-400/70 hover:bg-emerald-400/10"
+              >
+                <span className="flex items-center gap-1.5 text-sm font-semibold">
+                  {insure.isPending ? <Loader2Icon className="size-4 animate-spin" aria-hidden /> : <ShieldIcon className="size-4" aria-hidden />}
+                  Hire the {MARKET_COPY.insuranceTitle} for {quote.premium}
+                </span>
+                <span className="text-[11px] font-normal text-emerald-300/75">
+                  {quote.coverage} back if {sideLabel(otherSide(bet.side))} wins · {quote.pct}% of your stake
+                </span>
+              </Button>
+              <InfoTip help={insureLaterHelp(quoteHelp)} align="end" />
+            </div>
           )}
-          {!quote.available && quote.reason && <p className="text-center text-xs text-muted-foreground">{quote.reason}</p>}
+          {!quote.available && quote.reason && (
+            <div className="flex items-center justify-center gap-1">
+              <p className="text-center text-xs text-muted-foreground">{quote.reason}</p>
+              <InfoTip help={guardianHelp(quoteHelp)} align="end" />
+            </div>
+          )}
         </div>
       )}
 

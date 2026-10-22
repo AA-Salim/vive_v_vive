@@ -11,9 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { HelpRows } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
 import { useAct } from "@/hooks/use-act"
 import { getActContent } from "@/lib/act-content"
+import { pledgeHelp } from "@/lib/betting/help"
 import { BET_RULES } from "@/lib/betting/rules"
 import { cn } from "@/lib/utils"
 
@@ -103,6 +105,10 @@ function PledgeBody({ inputRef, actNumber, currentBalance, cost, actionLabel, on
             <dd className="font-display text-lg font-semibold tabular-nums text-muted-foreground">{BET_RULES.debtFloor}</dd>
           </div>
         </dl>
+
+        <div className="rounded-lg border border-border bg-[var(--color-navy)]/40 p-3">
+          <HelpRows help={pledgeHelp(currentBalance, cost, actionLabel)} />
+        </div>
 
         <div className="rounded-lg border border-[var(--color-gold)]/25 bg-[var(--color-gold)]/5 p-4 text-center">
           <div className="mb-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Swear it, word for word</div>

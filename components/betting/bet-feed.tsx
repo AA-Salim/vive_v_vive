@@ -3,10 +3,12 @@
 import { memo } from "react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { BetTags } from "@/components/betting/bet-tags"
 import { outcomeTone } from "@/components/betting/payout-preview"
 import { useEquippedTitles } from "@/hooks/use-equipped-titles"
 import { MARKET_COPY } from "@/lib/betting/copy"
+import { FEED_HELP } from "@/lib/betting/help"
 import { formatSigned, sideLabel } from "@/lib/betting/math"
 import type { MarketBet } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -35,7 +37,10 @@ export const BetFeed = memo(function BetFeed({ bets, viewerId, open }: BetFeedPr
   return (
     <section aria-label="Bets placed" className="space-y-2">
       <div className="flex items-center justify-between">
-        <h4 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]/80">The notebook</h4>
+        <div className="flex items-center gap-1">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--color-gold)]/80">The notebook</h4>
+          <InfoTip help={FEED_HELP} align="start" className="-my-1" />
+        </div>
         <span className="text-[11px] tabular-nums text-muted-foreground">
           {bets.length} {bets.length === 1 ? "entry" : "entries"}
         </span>

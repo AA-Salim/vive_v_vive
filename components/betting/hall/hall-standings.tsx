@@ -2,7 +2,9 @@
 
 import { CrownIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { outcomeTone } from "@/components/betting/payout-preview"
+import { LEDGER_HELP } from "@/lib/betting/help"
 import { formatSigned } from "@/lib/betting/math"
 import type { HallStanding } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -12,11 +14,14 @@ const PODIUM = ["text-[var(--color-gold)]", "text-[var(--color-gold-light)]/80",
 export function HallStandings({ standings, viewerId }: { standings: HallStanding[]; viewerId: string | null }) {
   return (
     <section aria-labelledby="hall-standings-title" className="rounded-2xl border border-[var(--color-gold)]/15 bg-card p-3 sm:p-4">
-      <div className="mb-3 flex items-baseline justify-between gap-2">
-        <h2 id="hall-standings-title" className="font-display text-base font-semibold text-[var(--color-gold)]">
-          The Ledger
-        </h2>
-        <span className="text-[11px] text-muted-foreground">Net profit from wagers</span>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-1">
+          <h2 id="hall-standings-title" className="font-display text-base font-semibold text-[var(--color-gold)]">
+            {LEDGER_HELP.title}
+          </h2>
+          <InfoTip help={LEDGER_HELP} align="start" />
+        </div>
+        <span className="text-right text-[11px] text-muted-foreground">Net profit from wagers</span>
       </div>
       <ol className="space-y-1">
         {standings.map((s, i) => {

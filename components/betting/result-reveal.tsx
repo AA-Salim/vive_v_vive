@@ -4,10 +4,12 @@ import { useEffect } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { FlameIcon, RotateCcwIcon, SkullIcon, TrophyIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InfoTip } from "@/components/ui/info-tip"
 import { AnimatedNumber } from "@/components/betting/animated-number"
 import { claimCelebration, fireWinConfetti } from "@/components/betting/confetti"
 import { outcomeTone } from "@/components/betting/payout-preview"
 import { allInRoast, allInSelfRoast, resultLine } from "@/lib/betting/copy"
+import { refundHelp, resultHelp, settlementHelp } from "@/lib/betting/help"
 import { formatSigned, settledBreakdown, sideLabel } from "@/lib/betting/math"
 import type { MarketBet, MarketResult, ResultHighlight } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -89,12 +91,14 @@ export function ResultReveal({ sessionId, result, bet, viewerId, canceled = fals
         title: canceled ? "Game called off" : "No contest",
         text: resultLine(canceled ? "canceled" : "refund", sessionId),
         tone: "text-[var(--color-gold-light)]",
+        help: refundHelp(canceled),
       }
     : {
         icon: TrophyIcon,
         title: `${result.winner ? sideLabel(result.winner) : "The"} side wins`,
         text: `Pool of ${result.total_pool}${result.insurance_paid ? ` · ${result.insurance_paid} returned by insurance` : ""}${result.bonus_paid ? ` · ${result.bonus_paid} in boosts` : ""}`,
         tone: result.winner === "blue" ? "text-[var(--color-blue-team)]" : "text-[var(--color-red-team)]",
+        help: settlementHelp(result),
       }
 
   return (
@@ -105,10 +109,11 @@ export function ResultReveal({ sessionId, result, bet, viewerId, canceled = fals
         className="flex items-center gap-3 rounded-xl border border-[var(--color-gold)]/25 bg-[var(--color-navy)]/60 p-3"
       >
         <banner.icon className={cn("size-6 shrink-0", banner.tone)} aria-hidden />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className={cn("font-display text-lg font-semibold", banner.tone)}>{banner.title}</div>
           <div className="text-xs text-muted-foreground">{banner.text}</div>
         </div>
+        <InfoTip help={banner.help} align="end" />
       </motion.div>
 
       {settled && (
@@ -121,8 +126,9 @@ export function ResultReveal({ sessionId, result, bet, viewerId, canceled = fals
             won ? "border-emerald-300/35 bg-emerald-300/[0.06]" : settled.status === "lost" ? "border-rose-300/30 bg-rose-300/[0.05]" : "border-border bg-[var(--color-navy)]/50"
           )}
         >
-          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+          <div className="flex items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
             {won ? "Your take" : settled.status === "lost" ? "Your damage" : "Your stake came back"}
+            <InfoTip help={resultHelp(settled)} className="-my-1" />
           </div>
           <AnimatedNumber
             from={0}

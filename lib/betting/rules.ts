@@ -20,3 +20,8 @@ export const BET_RULES = {
 } as const
 
 export const QUICK_STAKES = [10, 25, 50, 100] as const
+
+export const HALL_RULES = {
+  oracleMinDecided: 5,
+  recentLimit: 20,
+} as const

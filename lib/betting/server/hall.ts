@@ -1,4 +1,5 @@
 import { betNet } from "@/lib/betting/math"
+import { HALL_RULES } from "@/lib/betting/rules"
 import { bettorFor } from "@/lib/betting/server/rows"
 import type {
   BetRow,
@@ -10,9 +11,6 @@ import type {
   HallStanding,
   RulesVersion,
 } from "@/lib/betting/types"
-
-const ORACLE_MIN_DECIDED = 5
-const RECENT_LIMIT = 20
 
 function pick<T>(items: T[], score: (item: T) => number, accept: (value: number) => boolean): T | null {
   let best: T | null = null
@@ -100,14 +98,14 @@ export function buildHallOfFame(
   const thrown = pick(lost, (r) => -(betNet(r) ?? 0), (v) => v > 0)
   const highRoller = pick(decided, (r) => r.amount, (v) => v > 0)
   const oracle = pick(
-    table.filter((s) => s.won + s.lost >= ORACLE_MIN_DECIDED),
+    table.filter((s) => s.won + s.lost >= HALL_RULES.oracleMinDecided),
     (s) => s.won / (s.won + s.lost),
     () => true
   )
 
   const recent: HallRecentBet[] = [...rows]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
-    .slice(0, RECENT_LIMIT)
+    .slice(0, HALL_RULES.recentLimit)
     .map((row) => {
       const bettor = bettorFor(bettors, row.user_id)
       return {

@@ -4,6 +4,8 @@ import { memo } from "react"
 import { motion, useReducedMotion } from "motion/react"
 import { TrophyIcon } from "lucide-react"
 import { AnimatedNumber } from "@/components/betting/animated-number"
+import { InfoTip } from "@/components/ui/info-tip"
+import { oddsHelp } from "@/lib/betting/help"
 import { cn } from "@/lib/utils"
 import type { Side } from "@/lib/types"
 
@@ -83,7 +85,10 @@ export const PoolBars = memo(function PoolBars({
       <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
         <SideStat side="blue" amount={blue} mult={blueMultiplier} count={blueCount} winner={winner} mine={mySide === "blue"} />
         <div className="pb-0.5 text-center">
-          <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Pool</div>
+          <div className="flex items-center justify-center gap-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            Pool
+            <InfoTip help={oddsHelp({ blue, red, blueMultiplier, redMultiplier })} className="-my-1" />
+          </div>
           <AnimatedNumber value={total} className="font-display text-xl font-semibold tabular-nums text-[var(--color-gold)] sm:text-2xl" />
         </div>
         <SideStat side="red" amount={red} mult={redMultiplier} count={redCount} winner={winner} mine={mySide === "red"} />

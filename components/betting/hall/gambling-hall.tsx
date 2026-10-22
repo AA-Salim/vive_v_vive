@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { NotebookPenIcon, RefreshCwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AnimatedNumber } from "@/components/betting/animated-number"
 import { HallRecent } from "@/components/betting/hall/hall-recent"
@@ -10,6 +11,7 @@ import { HallRecords } from "@/components/betting/hall/hall-records"
 import { HallStandings } from "@/components/betting/hall/hall-standings"
 import { useHall } from "@/components/betting/hall/use-hall"
 import { useLive } from "@/components/live/live-provider"
+import { HALL_HELP, HALL_TOTALS_HELP } from "@/lib/betting/help"
 import { formatSigned } from "@/lib/betting/math"
 import type { HallOfFame, HallScope } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
@@ -40,23 +42,29 @@ function ScopeToggle({ scope, onChange, actName }: { scope: HallScope; onChange:
 }
 
 function Totals({ totals }: { totals: HallOfFame["totals"] }) {
-  const items = [
-    { label: "Wagered", value: totals.wagered },
-    { label: "Bets", value: totals.bets },
-    { label: "Bettors", value: totals.bettors },
-    { label: "Saved by insurance", value: totals.recovered, signed: true },
-    { label: "Boosts paid", value: totals.bonus, signed: true },
+  const items: Array<{ key: keyof typeof HALL_TOTALS_HELP; value: number; signed?: boolean }> = [
+    { key: "wagered", value: totals.wagered },
+    { key: "bets", value: totals.bets },
+    { key: "bettors", value: totals.bettors },
+    { key: "recovered", value: totals.recovered, signed: true },
+    { key: "bonus", value: totals.bonus, signed: true },
   ]
   return (
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-      {items.map((item, i) => (
-        <div key={item.label} className={cn("rounded-xl border border-[var(--color-gold)]/15 bg-card px-3 py-2.5", i === 0 && "col-span-2 sm:col-span-1")}>
-          <dt className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">{item.label}</dt>
-          <dd className="font-display text-xl font-semibold tabular-nums text-[var(--color-gold-light)]">
-            <AnimatedNumber from={0} value={item.value} format={item.signed ? formatSigned : undefined} />
-          </dd>
-        </div>
-      ))}
+      {items.map((item, i) => {
+        const help = HALL_TOTALS_HELP[item.key]
+        return (
+          <div key={item.key} className={cn("rounded-xl border border-[var(--color-gold)]/15 bg-card px-3 py-2.5", i === 0 && "col-span-2 sm:col-span-1")}>
+            <dt className="flex items-start justify-between gap-1 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              <span className="min-w-0 leading-snug">{help.title}</span>
+              <InfoTip help={help} align="end" className="-my-1 -mr-1" />
+            </dt>
+            <dd className="font-display text-xl font-semibold tabular-nums text-[var(--color-gold-light)]">
+              <AnimatedNumber from={0} value={item.value} format={item.signed ? formatSigned : undefined} />
+            </dd>
+          </div>
+        )
+      })}
     </dl>
   )
 }
@@ -94,7 +102,10 @@ export function GamblingHall() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Gamba</p>
-          <h1 className="font-display text-3xl font-semibold text-[var(--color-gold)] sm:text-4xl">The Gambling Hall</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="font-display text-3xl font-semibold text-[var(--color-gold)] sm:text-4xl">{HALL_HELP.title}</h1>
+            <InfoTip help={HALL_HELP} align="start" />
+          </div>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-[var(--color-gold-light)]/70">
             {data?.scope === "act" && actName
               ? `Every wager of ${actName}. Glory for the sharp, a page in Salaxe's notebook for everyone else.`

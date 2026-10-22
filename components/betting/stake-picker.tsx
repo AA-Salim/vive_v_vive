@@ -1,10 +1,13 @@
 "use client"
 
-import { FlameIcon } from "lucide-react"
+import { FlameIcon, InfoIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
+import { purseHelp } from "@/lib/betting/help"
 import { QUICK_STAKES } from "@/lib/betting/rules"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface StakePickerProps {
@@ -19,6 +22,7 @@ interface StakePickerProps {
   purse: number | null
   maxAffordable: number
   sliderMax: number
+  allInHelp: HelpEntry
   disabled?: boolean
 }
 
@@ -37,6 +41,7 @@ export function StakePicker({
   purse,
   maxAffordable,
   sliderMax,
+  allInHelp,
   disabled = false,
 }: StakePickerProps) {
   const numeric = Number.parseInt(value, 10) || 0
@@ -49,8 +54,9 @@ export function StakePicker({
           {label}
         </Label>
         {purse != null && (
-          <span className="text-xs tabular-nums text-muted-foreground">
+          <span className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
             Purse <span className={cn("font-semibold", purse < 0 ? "text-[var(--color-red-team)]" : "text-[var(--color-gold-light)]")}>{purse}</span>
+            <InfoTip help={purseHelp(maxAffordable)} align="end" className="-my-1" />
           </span>
         )}
       </div>
@@ -89,22 +95,31 @@ export function StakePicker({
             {stake}
           </button>
         ))}
-        <button
-          type="button"
-          disabled={disabled || !allInEnabled}
-          aria-pressed={allIn}
-          onClick={onToggleAllIn}
-          className={cn(
-            chip,
-            "flex items-center justify-center gap-1 text-xs",
-            allIn
-              ? "border-[var(--color-red-team)] bg-[var(--color-red-team)]/20 text-[var(--color-red-team)]"
-              : "border-[var(--color-red-team)]/35 bg-[var(--color-navy)]/50 text-[var(--color-red-team)]/90 hover:border-[var(--color-red-team)]/70"
-          )}
-        >
-          <FlameIcon className="size-3.5" aria-hidden />
-          All-in
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            disabled={disabled || !allInEnabled}
+            aria-pressed={allIn}
+            onClick={onToggleAllIn}
+            className={cn(
+              chip,
+              "flex w-full items-center justify-center gap-1 text-xs",
+              allIn
+                ? "border-[var(--color-red-team)] bg-[var(--color-red-team)]/20 text-[var(--color-red-team)]"
+                : "border-[var(--color-red-team)]/35 bg-[var(--color-navy)]/50 text-[var(--color-red-team)]/90 hover:border-[var(--color-red-team)]/70"
+            )}
+          >
+            <FlameIcon className="size-3.5" aria-hidden />
+            All-in
+          </button>
+          <InfoTip
+            help={allInHelp}
+            align="end"
+            className="absolute -top-2.5 -right-2 size-5 rounded-full bg-card text-[var(--color-red-team)]/90 ring-1 ring-[var(--color-red-team)]/40"
+          >
+            <InfoIcon className="size-3" aria-hidden />
+          </InfoTip>
+        </div>
       </div>
 
       <Slider

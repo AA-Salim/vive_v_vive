@@ -4,6 +4,7 @@ import { useId, useState, type FormEvent } from "react"
 import { Loader2Icon, ZapIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { InsuranceToggle } from "@/components/betting/insurance-toggle"
 import { PayoutPreview } from "@/components/betting/payout-preview"
@@ -12,6 +13,7 @@ import { StakePicker } from "@/components/betting/stake-picker"
 import { usePlaceBet, type Market } from "@/components/betting/use-market"
 import type { MarketClock } from "@/components/betting/use-clock"
 import { MARKET_COPY } from "@/lib/betting/copy"
+import { allInHelp, betHelp, earlyHelp } from "@/lib/betting/help"
 import { maxAffordableAdd, otherSide, projectBet, sideLabel } from "@/lib/betting/math"
 import { BET_RULES } from "@/lib/betting/rules"
 import type { PlaceBetInput, PlaceBetResult } from "@/lib/betting/types"
@@ -28,6 +30,8 @@ interface BetSlipProps {
   clock: MarketClock
   mode: "new" | "raise"
   onDone?: () => void
+  // Sides the viewer may not back, with the reason shown on the slip. Wire it when the server enforces a side rule.
+  blockedSides?: Partial<Record<Side, string>>
 }
 
 function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" | "raise", coverage: number) {
@@ -48,7 +52,7 @@ function placedToast(input: PlaceBetInput, result: PlaceBetResult, mode: "new" |
   })
 }
 
-export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, onDone }: BetSlipProps) {
+export function BetSlip({ sessionId, market, userId, balance, balanceLoading, clock, mode, onDone, blockedSides }: BetSlipProps) {
   const ids = useId()
   const rules = market.rules_version
   const current = mode === "raise" ? market.user_bet : null
@@ -95,27 +99,30 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
       : null
   const quoteStake = stakeAfter > 0 ? stakeAfter : 0
 
+  const sideBlock = side ? blockedSides?.[side] : undefined
   const reason = clock.isExpired
     ? "Betting has closed."
     : balanceLoading
       ? "Reading your purse..."
       : !side
         ? "Pick a side first."
-        : amount < 1
-          ? allIn
-            ? "Your purse is empty. Nothing to shove."
-            : mode === "raise"
-              ? "Choose how much to add."
-              : "Choose a stake."
-          : allInBonus && stakeAfter < BET_RULES.allInMin
-            ? `All-in needs at least ${BET_RULES.allInMin} points on the line.`
-            : insureNow && rules === 2 && stakeAfter < BET_RULES.insuranceMin
-              ? `The Guardian Angel covers stakes of ${BET_RULES.insuranceMin} or more.`
-              : projection && projection.cost > purse - BET_RULES.debtFloor
-                ? maxAdd > 0
-                  ? `Over the debt limit. You can put in at most ${maxAdd}.`
-                  : `Debt limit reached (${BET_RULES.debtFloor}). Even Salaxe's notebook has a last page.`
-                : null
+        : sideBlock
+          ? sideBlock
+          : amount < 1
+            ? allIn
+              ? "Your purse is empty. Nothing to shove."
+              : mode === "raise"
+                ? "Choose how much to add."
+                : "Choose a stake."
+            : allInBonus && stakeAfter < BET_RULES.allInMin
+              ? `All-in needs at least ${BET_RULES.allInMin} points on the line.`
+              : insureNow && rules === 2 && stakeAfter < BET_RULES.insuranceMin
+                ? `The Guardian Angel covers stakes of ${BET_RULES.insuranceMin} or more.`
+                : projection && projection.cost > purse - BET_RULES.debtFloor
+                  ? maxAdd > 0
+                    ? `Over the debt limit. You can put in at most ${maxAdd}.`
+                    : `Debt limit reached (${BET_RULES.debtFloor}). Even Salaxe's notebook has a last page.`
+                  : null
 
   const submitLabel = !side
     ? "Pick a side"
@@ -168,6 +175,7 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           lockedSide={current?.side ?? null}
           multipliers={{ blue: market.blue_multiplier, red: market.red_multiplier }}
           disabled={place.isPending}
+          blocked={blockedSides}
         />
 
         <StakePicker
@@ -185,6 +193,7 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
           purse={balance}
           maxAffordable={maxAdd}
           sliderMax={sliderMax}
+          allInHelp={allInHelp(rules, balance, allInBonus && projection ? projection.win.allIn : 0)}
           disabled={place.isPending || clock.isExpired}
         />
 
@@ -205,18 +214,24 @@ export function BetSlip({ sessionId, market, userId, balance, balanceLoading, cl
         />
 
         {early && amount > 0 && (
-          <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-gold)]">
-            <ZapIcon className="size-3.5" aria-hidden />
-            Early conviction: this {mode === "raise" ? "raise" : "bet"} earns +{BET_RULES.earlyBonusPct}% on its share of the profit.
-          </p>
+          <div className="flex items-start gap-1.5 text-xs font-medium text-[var(--color-gold)]">
+            <ZapIcon className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <p className="min-w-0 flex-1">
+              Early conviction: this {mode === "raise" ? "raise" : "bet"} earns +{BET_RULES.earlyBonusPct}% on its share of the profit.
+            </p>
+            <InfoTip help={earlyHelp(projection?.win.early ?? 0)} align="end" className="-my-0.5" />
+          </div>
         )}
 
         <PayoutPreview side={side} projection={amount > 0 ? projection : null} />
 
         <div className="space-y-2">
-          <p id={`${ids}-reason`} className="min-h-4 text-center text-xs text-muted-foreground" aria-live="polite">
-            {reason ?? (projection && projection.cost > 0 ? `Costs ${projection.cost} now${projection.premiumAdd > 0 ? `, including ${projection.premiumAdd} premium` : ""}.` : "")}
-          </p>
+          <div className="flex min-h-5 items-center justify-center gap-1">
+            <p id={`${ids}-reason`} className="text-center text-xs text-muted-foreground" aria-live="polite">
+              {reason ?? (projection && projection.cost > 0 ? `Costs ${projection.cost} now${projection.premiumAdd > 0 ? `, including ${projection.premiumAdd} premium` : ""}.` : "")}
+            </p>
+            <InfoTip help={betHelp({ rules, mode, side, projection })} />
+          </div>
           <Button
             type="submit"
             disabled={!!reason || place.isPending}

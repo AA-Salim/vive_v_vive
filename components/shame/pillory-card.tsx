@@ -2,12 +2,14 @@
 
 import { motion, useReducedMotion } from "motion/react"
 import { GavelIcon, HourglassIcon, MegaphoneIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
 import { RelativeTime } from "@/components/live/relative-time"
 import { useLive } from "@/components/live/live-context"
 import { PlayerAvatar } from "@/components/bounties/player-avatar"
 import { TimeLeft, useMsLeft } from "@/components/bounties/time-left"
 import { EggButton } from "@/components/shame/egg-button"
 import { PILLORY_COPY } from "@/lib/bounties/copy"
+import { tribunalHelp } from "@/lib/bounties/help"
 import { tribunalLine } from "@/lib/bounties/roasts"
 import { laneWord } from "@/lib/bounties/shame-stats"
 import type { PilloryEntryView } from "@/lib/bounties/types"
@@ -80,9 +82,10 @@ function CompactBody({ entry, isMe, message, canEgg, eggDisabledLabel, onEgg }: 
       <div className="mt-1.5 flex items-center gap-2">
         <div className="min-w-0 flex-1">
           {tribunal ? (
-            <span className="flex items-center gap-1 truncate text-[11px] font-semibold text-[var(--color-gold)]">
+            <span className="flex min-w-0 items-center gap-1 text-[11px] font-semibold text-[var(--color-gold)]">
               <GavelIcon className="size-3.5 shrink-0" aria-hidden />
-              Tribunal decree
+              <span className="truncate">Tribunal decree</span>
+              <InfoTip help={tribunalHelp(entry)} align="start" />
             </span>
           ) : (
             <Byline entry={entry} />
@@ -115,9 +118,10 @@ function FullBody({ entry, isMe, message, canEgg, eggDisabledLabel, onEgg }: Car
             {isMe && <span className="ml-1.5 text-[11px] font-normal text-[var(--color-red-team)]">(you)</span>}
           </h3>
           {tribunal ? (
-            <p className="flex items-center gap-1 truncate text-xs font-semibold text-[var(--color-gold)]">
+            <p className="flex min-w-0 items-center gap-1 text-xs font-semibold text-[var(--color-gold)]">
               <GavelIcon className="size-3.5 shrink-0" aria-hidden />
-              {PILLORY_COPY.tribunal}
+              <span className="truncate">{PILLORY_COPY.tribunal}</span>
+              <InfoTip help={tribunalHelp(entry)} side="bottom" align="start" />
             </p>
           ) : (
             <Byline entry={entry} />

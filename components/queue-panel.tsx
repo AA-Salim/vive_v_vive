@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AnimatePresence } from "motion/react"
 import { EllipsisVerticalIcon, ListOrderedIcon, Loader2Icon, LogInIcon, RotateCcwIcon, Trash2Icon, UserPlusIcon, UserMinusIcon } from "lucide-react"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { HelpRows, InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ConfirmDialog } from "@/components/session/confirm-dialog"
@@ -15,6 +16,7 @@ import { useAuth } from "@/hooks/use-auth"
 import { useSession } from "@/hooks/use-session"
 import { ACTIVE_STATUSES } from "@/lib/live/events"
 import { LOBBY_SIZE, TEAM_SIZE } from "@/lib/lobby/constants"
+import { QUEUE_HELP } from "@/lib/lobby/help"
 import { useQueue, useVainqueur } from "@/lib/lobby/queries"
 import { planRotation } from "@/lib/lobby/rotation"
 import { cn } from "@/lib/utils"
@@ -103,6 +105,7 @@ export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
         <h2 id="queue-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
           The Queue
         </h2>
+        <InfoTip help={QUEUE_HELP.queue} />
         <span className="ml-auto rounded-full bg-muted px-2 py-0.5 text-xs tabular-nums text-muted-foreground" aria-live="polite">
           {queue.isPending ? "..." : `${entries.length} waiting`}
         </span>
@@ -161,7 +164,10 @@ export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
               </AnimatePresence>
             </ol>
           )}
-          <div className="mt-3">{myButton}</div>
+          <div className="mt-3 flex items-center gap-2.5">
+            <div className="min-w-0 flex-1">{myButton}</div>
+            {!authLoading && <InfoTip help={QUEUE_HELP.join} align="end" />}
+          </div>
         </>
       )}
 
@@ -174,7 +180,9 @@ export function QueuePanel({ currentPlayerId, onUpdate }: QueuePanelProps) {
         destructive
         pending={busy}
         onConfirm={() => action.mutate({ action: "clear" }, { onSettled: () => setConfirmClear(false) })}
-      />
+      >
+        <HelpRows help={QUEUE_HELP.clear} />
+      </ConfirmDialog>
     </section>
   )
 }

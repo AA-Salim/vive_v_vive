@@ -4,6 +4,7 @@ import { useState } from "react"
 import { AnimatePresence } from "motion/react"
 import { ChevronRightIcon, CrosshairIcon, PlusIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { BountyDialog } from "@/components/bounty-dialog"
 import { BountySheet, liveFirst } from "@/components/bounties/bounty-sheet"
@@ -13,6 +14,7 @@ import { WarrantRow } from "@/components/bounties/warrant-row"
 import { useBountyBoard } from "@/components/bounties/use-bounties"
 import { useAuth } from "@/hooks/use-auth"
 import { WARRANT_COPY } from "@/lib/bounties/copy"
+import { WARRANT_HELP } from "@/lib/bounties/help"
 import type { WarrantView } from "@/lib/bounties/types"
 
 const PREVIEW = 3
@@ -29,6 +31,7 @@ export function BountyPanel() {
   const data = board.data
   const warrants = liveFirst(data?.warrants ?? [], onTheRift)
   const canPledge = !!userId && (data?.available ?? false)
+  const showPost = canPledge || !userId
   const myPlayerId = data?.viewer.playerId ?? null
 
   const openSheet = (warrant: WarrantView | null) => {
@@ -59,6 +62,7 @@ export function BountyPanel() {
         <h2 id="warrants-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
           {WARRANT_COPY.title}
         </h2>
+        <InfoTip help={WARRANT_HELP.board} />
         {warrants.length > 0 && (
           <span className="ml-auto rounded-full bg-[var(--color-red-team)]/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--color-red-team)]">
             {warrants.length} open
@@ -104,17 +108,20 @@ export function BountyPanel() {
 
       <LastHunt record={data?.recent[0]} />
 
-      <div className="mt-3 flex gap-2">
-        {(canPledge || !userId) && (
-          <Button
-            onClick={() => openDialog(null)}
-            className="h-10 flex-1 rounded-xl border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/15 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/25"
-          >
-            <PlusIcon aria-hidden />
-            {warrants.length === 0 ? WARRANT_COPY.emptyCta : WARRANT_COPY.post}
-          </Button>
+      <div className="mt-3 flex items-center gap-2.5">
+        {showPost && (
+          <>
+            <Button
+              onClick={() => openDialog(null)}
+              className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/15 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/25"
+            >
+              <PlusIcon aria-hidden />
+              <span className="truncate">{WARRANT_COPY.post}</span>
+            </Button>
+            <InfoTip help={WARRANT_HELP.pledge} />
+          </>
         )}
-        <Button variant="outline" className="h-10 flex-1 rounded-xl" onClick={() => openSheet(null)}>
+        <Button variant="outline" className={showPost ? "h-10 shrink-0 rounded-xl px-3" : "h-10 flex-1 rounded-xl"} onClick={() => openSheet(null)}>
           {warrants.length > PREVIEW ? `All ${warrants.length}` : WARRANT_COPY.seeAll}
           <ChevronRightIcon aria-hidden />
         </Button>

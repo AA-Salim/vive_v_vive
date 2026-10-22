@@ -4,12 +4,14 @@ import type { ReactNode } from "react"
 import { AnimatePresence } from "motion/react"
 import { LogInIcon, MegaphoneIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CourtSheet } from "@/components/bounties/court-sheet"
 import { RulesList } from "@/components/bounties/rules-list"
 import { formatTimeLeft, useMsLeft } from "@/components/bounties/time-left"
 import { PilloryCard } from "@/components/shame/pillory-card"
 import { PILLORY_COPY, PILLORY_RULES_COPY } from "@/lib/bounties/copy"
+import { PILLORY_HELP } from "@/lib/bounties/help"
 import { PILLORY_RULES } from "@/lib/bounties/rules"
 import type { PilloryEntryView, PilloryWall } from "@/lib/bounties/types"
 
@@ -39,14 +41,17 @@ export function PillorySheet({ open, onOpenChange, wall, isPending, isError, onR
       {PILLORY_COPY.loginHint}
     </Button>
   ) : available ? (
-    <Button
-      onClick={onPost}
-      disabled={coolingDown}
-      className="h-11 w-full rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
-    >
-      <MegaphoneIcon aria-hidden />
-      {coolingDown ? `Next pillory in ${formatTimeLeft(cooldown ?? 0)}` : `${PILLORY_COPY.post} · ${PILLORY_RULES.cost}`}
-    </Button>
+    <div className="flex w-full items-center gap-2.5">
+      <Button
+        onClick={onPost}
+        disabled={coolingDown}
+        className="h-11 min-w-0 flex-1 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
+      >
+        <MegaphoneIcon aria-hidden />
+        {coolingDown ? `Next pillory in ${formatTimeLeft(cooldown ?? 0)}` : `${PILLORY_COPY.post} · ${PILLORY_RULES.cost}`}
+      </Button>
+      <InfoTip help={PILLORY_HELP.post} side="top" align="end" />
+    </div>
   ) : null
 
   return (
@@ -57,6 +62,7 @@ export function PillorySheet({ open, onOpenChange, wall, isPending, isError, onR
       title={PILLORY_COPY.title}
       description={PILLORY_COPY.sheetDescription}
       tone="roast"
+      help={PILLORY_HELP.wall}
       footer={footer}
     >
       <div className="space-y-4">

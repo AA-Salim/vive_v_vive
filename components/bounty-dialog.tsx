@@ -6,6 +6,7 @@ import { CrosshairIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { HelpRows, InfoTip } from "@/components/ui/info-tip"
 import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { AmountPicker } from "@/components/bounties/amount-picker"
 import { PlayerPicker } from "@/components/bounties/player-picker"
@@ -15,7 +16,8 @@ import { useBountyBoard, usePledge, useRoster } from "@/components/bounties/use-
 import { useAuth } from "@/hooks/use-auth"
 import { usePoints } from "@/hooks/use-points"
 import { WARRANT_COPY } from "@/lib/bounties/copy"
-import { BOUNTY_RULES, minHuntShare, nextEscapeBonus } from "@/lib/bounties/rules"
+import { WARRANT_HELP, pledgeHelp } from "@/lib/bounties/help"
+import { BOUNTY_RULES, nextEscapeBonus } from "@/lib/bounties/rules"
 import type { WarrantView } from "@/lib/bounties/types"
 
 interface BountyDialogProps {
@@ -72,7 +74,6 @@ function PledgeForm({ initialTargetId, onDone, onClose }: { initialTargetId: str
   const price = (existing?.price ?? 0) + amount
   const pledged = (existing?.pledged ?? 0) + amount
   const escapeBonus = nextEscapeBonus(pledged, existing?.crownBonus ?? 0)
-  const minShare = minHuntShare(price)
   const unavailable = board.data ? !board.data.available : false
 
   const reason = !target
@@ -124,10 +125,13 @@ function PledgeForm({ initialTargetId, onDone, onClose }: { initialTargetId: str
     <>
       <form onSubmit={submit} className="grid gap-4">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display text-xl text-[var(--color-gold-light)]">
-            <CrosshairIcon aria-hidden className="size-5 text-[var(--color-red-team)]" />
-            Sign a royal warrant
-          </DialogTitle>
+          <div className="flex items-center gap-2 pr-8">
+            <DialogTitle className="flex items-center gap-2 font-display text-xl text-[var(--color-gold-light)]">
+              <CrosshairIcon aria-hidden className="size-5 text-[var(--color-red-team)]" />
+              Sign a royal warrant
+            </DialogTitle>
+            <InfoTip help={WARRANT_HELP.pledge} side="bottom" align="start" />
+          </div>
           <DialogDescription>Price a head. The next team that beats them splits the pot. Unclaimed in a week, you get it back.</DialogDescription>
         </DialogHeader>
 
@@ -178,20 +182,12 @@ function PledgeForm({ initialTargetId, onDone, onClose }: { initialTargetId: str
                   className="grid gap-4 overflow-hidden"
                 >
                   <AmountPicker id={`${ids}-amount`} value={amountText} onChange={setAmountText} purse={purse} max={Math.max(affordable, 0)} disabled={pledge.isPending} />
-                  <div className="space-y-1.5 rounded-xl border border-[var(--color-red-team)]/25 bg-[var(--color-red-team)]/5 p-3 text-xs leading-relaxed text-[var(--color-gold-light)]/85">
-                    <p className="flex items-baseline justify-between gap-2">
+                  <div className="space-y-2 rounded-xl border border-[var(--color-red-team)]/25 bg-[var(--color-red-team)]/5 p-3">
+                    <p className="flex items-baseline justify-between gap-2 text-xs">
                       <span className="uppercase tracking-[0.18em] text-muted-foreground">{existing ? "New price" : "Price"}</span>
                       <span className="font-display text-lg font-bold tabular-nums text-[var(--color-gold)]">{price} pts</span>
                     </p>
-                    <p>
-                      {target.name} loses: the winners split {price}
-                      {minShare > 0 ? ` (at least ${minShare} each)` : ""}.
-                    </p>
-                    <p>
-                      {target.name} wins: an escape,{" "}
-                      {escapeBonus > 0 ? `the Crown adds ${escapeBonus}.` : "and the Crown has already matched every pledge."}
-                    </p>
-                    <p className="text-muted-foreground">Unclaimed {BOUNTY_RULES.lifetimeDays} days after the last pledge: your {mine + amount} comes back.</p>
+                    <HelpRows help={pledgeHelp({ targetName: target.name, amount, price, escapeBonus, refund: mine + amount })} />
                   </div>
                 </motion.div>
               )}

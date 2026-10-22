@@ -4,10 +4,12 @@ import { motion, useReducedMotion } from "motion/react"
 import { CrosshairIcon, CrownIcon, HourglassIcon, PlusIcon, ScrollTextIcon } from "lucide-react"
 import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { AnimatedNumber } from "@/components/betting/animated-number"
 import { PlayerAvatar } from "@/components/bounties/player-avatar"
 import { TimeLeft } from "@/components/bounties/time-left"
 import { WARRANT_COPY, escapeLine, posterLine } from "@/lib/bounties/copy"
+import { WARRANT_HELP, warrantHelp } from "@/lib/bounties/help"
 import { minHuntShare } from "@/lib/bounties/rules"
 import type { WarrantView } from "@/lib/bounties/types"
 import { cn } from "@/lib/utils"
@@ -53,6 +55,7 @@ export function WantedPoster({ id, warrant, viewerPlayerId, canPledge, live = fa
       <div aria-hidden className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-red-team)]/70 to-transparent" />
       <header className="flex items-center gap-2">
         <span className="font-display text-xs font-bold uppercase tracking-[0.35em] text-[var(--color-red-team)]">Wanted</span>
+        <InfoTip help={warrantHelp(warrant, isMe)} side="bottom" align="start" className="-ml-1" />
         {legacy && (
           <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">Old terms</span>
         )}
@@ -132,13 +135,16 @@ export function WantedPoster({ id, warrant, viewerPlayerId, canPledge, live = fa
       </div>
 
       {!legacy && !isMe && canPledge && (
-        <Button
-          onClick={() => onPledge(warrant)}
-          className="mt-3 h-10 w-full rounded-xl border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/15 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/25"
-        >
-          <PlusIcon aria-hidden />
-          {WARRANT_COPY.addTo}
-        </Button>
+        <div className="mt-3 flex items-center gap-2.5">
+          <Button
+            onClick={() => onPledge(warrant)}
+            className="h-10 min-w-0 flex-1 rounded-xl border border-[var(--color-red-team)]/40 bg-[var(--color-red-team)]/15 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/25"
+          >
+            <PlusIcon aria-hidden />
+            {WARRANT_COPY.addTo}
+          </Button>
+          <InfoTip help={WARRANT_HELP.pledge} align="end" />
+        </div>
       )}
     </motion.article>
   )

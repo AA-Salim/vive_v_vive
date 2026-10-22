@@ -49,7 +49,12 @@ export function PlayerAdminMenu({ player, queued, onIntent }: PlayerAdminMenuPro
           )}
           <DropdownMenuItem className="min-h-10" onClick={() => onIntent(player.is_active ? "bench" : "activate", player)}>
             {player.is_active ? <ArmchairIcon aria-hidden /> : <UndoDotIcon aria-hidden />}
-            {player.is_active ? "Bench" : "Bring back"}
+            <span className="flex flex-col">
+              {player.is_active ? "Bench" : "Bring back"}
+              <span className="text-[11px] text-muted-foreground">
+                {player.is_active ? "Hidden from picks and the queue. History stays" : "Back on the active roster"}
+              </span>
+            </span>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -62,7 +67,7 @@ export function PlayerAdminMenu({ player, queued, onIntent }: PlayerAdminMenuPro
           <Trash2Icon aria-hidden />
           <span className="flex flex-col">
             Delete
-            {!deletable && <span className="text-[11px] text-muted-foreground">Has history: bench instead</span>}
+            <span className="text-[11px] text-muted-foreground">{deletable ? "Strikes an unused name for good" : "Has history: bench instead"}</span>
           </span>
         </DropdownMenuItem>
       </DropdownMenuContent>

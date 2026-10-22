@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { ChevronRightIcon, DicesIcon, GavelIcon, Loader2Icon, RotateCcwIcon, UserPlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { HelpRows, InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/session/confirm-dialog"
 import { useMediaQuery } from "@/components/session/use-browser-state"
@@ -14,11 +15,12 @@ import { RosterList, RosterSearch } from "@/components/lobby/roster/roster-list"
 import { RosterSheet } from "@/components/lobby/roster/roster-sheet"
 import { SelectionTray } from "@/components/lobby/roster/selection-tray"
 import { useRosterActions } from "@/components/lobby/roster/use-roster-actions"
-import { useRosterSelection } from "@/components/lobby/roster/use-roster-selection"
+import { MAX_SELECTION, useRosterSelection } from "@/components/lobby/roster/use-roster-selection"
 import { useAuth } from "@/hooks/use-auth"
 import { useSession } from "@/hooks/use-session"
 import { ACTIVE_STATUSES } from "@/lib/live/events"
 import { LOBBY_SIZE } from "@/lib/lobby/constants"
+import { DELETE_HELP, rosterHelp } from "@/lib/lobby/help"
 import { useQueue, useRoster } from "@/lib/lobby/queries"
 import type { RosterPlayer } from "@/lib/lobby/types"
 import type { Player } from "@/lib/types"
@@ -31,6 +33,7 @@ interface RosterManagerProps {
 }
 
 const QUICK_PICKS = 8
+const HELP = rosterHelp(MAX_SELECTION)
 
 type NameConfig = { mode: "add" } | { mode: "rename"; player: RosterPlayer }
 
@@ -115,14 +118,20 @@ export function RosterManager({ onRandomize, onCoachDraft, isAdmin = false, disa
       <div aria-hidden className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/70 to-transparent" />
       <header className="mb-4 flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-semibold tracking-wide text-[var(--color-gold)]">The Roster</h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="font-display text-xl font-semibold tracking-wide text-[var(--color-gold)]">The Roster</h2>
+            <InfoTip help={HELP.roster} align="start" />
+          </div>
           <p className="text-xs text-muted-foreground">Tap ten names. The regulars sit on top.</p>
         </div>
         {isAdmin && (
-          <Button variant="outline" className="h-10 shrink-0 gap-2" onClick={() => openNameDialog({ mode: "add" })}>
-            <UserPlusIcon aria-hidden />
-            Add player
-          </Button>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <Button variant="outline" className="h-10 gap-2" onClick={() => openNameDialog({ mode: "add" })}>
+              <UserPlusIcon aria-hidden />
+              Add player
+            </Button>
+            <InfoTip help={HELP.admin} align="end" />
+          </div>
         )}
       </header>
 
@@ -146,6 +155,7 @@ export function RosterManager({ onRandomize, onCoachDraft, isAdmin = false, disa
             onSeatQueue={selection.seatQueue}
             onRematch={selection.rematch}
             onClear={selection.clear}
+            help={HELP.quickSeats}
           />
 
           {wide ? (
@@ -165,20 +175,26 @@ export function RosterManager({ onRandomize, onCoachDraft, isAdmin = false, disa
             </>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row">
-            <Button
-              className="h-12 gap-2 rounded-xl text-base font-semibold shadow-[0_8px_24px_-12px_var(--color-gold)] disabled:shadow-none sm:flex-1"
-              disabled={!ready || disabled}
-              onClick={() => onRandomize(selection.selected)}
-            >
-              {disabled ? <Loader2Icon className="animate-spin" aria-hidden /> : <DicesIcon aria-hidden />}
-              {rollLabel}
-            </Button>
-            {onCoachDraft && (
-              <Button variant="outline" className="h-12 gap-2 rounded-xl sm:px-5" disabled={disabled} onClick={onCoachDraft}>
-                <GavelIcon aria-hidden />
-                Coach draft
+          <div className="flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:flex-1">
+              <Button
+                className="h-12 min-w-0 flex-1 gap-2 rounded-xl text-base font-semibold shadow-[0_8px_24px_-12px_var(--color-gold)] disabled:shadow-none"
+                disabled={!ready || disabled}
+                onClick={() => onRandomize(selection.selected)}
+              >
+                {disabled ? <Loader2Icon className="animate-spin" aria-hidden /> : <DicesIcon aria-hidden />}
+                {rollLabel}
               </Button>
+              <InfoTip help={HELP.roll} align="end" />
+            </div>
+            {onCoachDraft && (
+              <div className="flex items-center gap-2.5">
+                <Button variant="outline" className="h-12 min-w-0 flex-1 gap-2 rounded-xl sm:px-5" disabled={disabled} onClick={onCoachDraft}>
+                  <GavelIcon aria-hidden />
+                  Coach draft
+                </Button>
+                <InfoTip help={HELP.coachDraft} align="end" />
+              </div>
             )}
           </div>
           {onCoachDraft && <p className="-mt-2 text-center text-[11px] text-muted-foreground sm:text-right">{poolHint}</p>}
@@ -223,7 +239,9 @@ export function RosterManager({ onRandomize, onCoachDraft, isAdmin = false, disa
         onConfirm={() => {
           if (deleteTarget) actions.remove.mutate(deleteTarget, { onSettled: closeDeleteDialog })
         }}
-      />
+      >
+        <HelpRows help={DELETE_HELP} />
+      </ConfirmDialog>
     </div>
   )
 }

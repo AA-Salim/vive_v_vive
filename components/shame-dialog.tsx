@@ -6,6 +6,7 @@ import { MegaphoneIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
 import { DebtPledgeDialog } from "@/components/debt-pledge-dialog"
 import { PlayerPicker } from "@/components/bounties/player-picker"
 import { SelectedPlayer } from "@/components/bounties/selected-player"
@@ -17,6 +18,7 @@ import { usePilloryPreview, usePilloryWall, usePostPillory } from "@/components/
 import { useAuth } from "@/hooks/use-auth"
 import { usePoints } from "@/hooks/use-points"
 import { PILLORY_COPY } from "@/lib/bounties/copy"
+import { PILLORY_HELP } from "@/lib/bounties/help"
 import { roastsFor } from "@/lib/bounties/roasts"
 import { PILLORY_RULES } from "@/lib/bounties/rules"
 import type { ShameStatKey } from "@/lib/bounties/types"
@@ -132,10 +134,13 @@ function PilloryForm({ initialTargetId, onDone, onClose }: { initialTargetId: st
     <>
       <form onSubmit={submit} className="grid gap-4">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 font-display text-xl text-[var(--color-gold-light)]">
-            <MegaphoneIcon aria-hidden className="size-5 text-[var(--color-red-team)]" />
-            Nail someone to the pillory
-          </DialogTitle>
+          <div className="flex items-center gap-2 pr-8">
+            <DialogTitle className="flex items-center gap-2 font-display text-xl text-[var(--color-gold-light)]">
+              <MegaphoneIcon aria-hidden className="size-5 text-[var(--color-red-team)]" />
+              Nail someone to the pillory
+            </DialogTitle>
+            <InfoTip help={PILLORY_HELP.post} side="bottom" align="start" />
+          </div>
           <DialogDescription>
             {PILLORY_RULES.cost} points, {PILLORY_RULES.hours} hours on the wall, their worst real stat in big letters. Everyone gets to throw eggs.
           </DialogDescription>

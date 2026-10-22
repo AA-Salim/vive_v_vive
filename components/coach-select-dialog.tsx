@@ -4,11 +4,13 @@ import { useMemo, useState } from "react"
 import { ArrowRightLeftIcon, CheckIcon, GavelIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CoachAvatar, CoachSlot } from "@/components/lobby/coach-draft/coach-slot"
 import { RosterSearch, matchesSearch } from "@/components/lobby/roster/roster-list"
 import { useStoredSelection } from "@/components/lobby/use-stored-selection"
 import { COACH_POOL_COOKIE, COACH_POOL_PATH, LOBBY_SIZE } from "@/lib/lobby/constants"
+import { COACH_HELP } from "@/lib/lobby/help"
 import { useCoachProfiles, useRoster } from "@/lib/lobby/queries"
 import type { CoachProfile } from "@/lib/lobby/types"
 import type { Side } from "@/lib/types"
@@ -183,7 +185,10 @@ export function CoachSelectDialog({ open, onOpenChange, currentUserId, onConfirm
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Summon two coaches</DialogTitle>
+          <div className="flex items-center gap-1.5 pr-8">
+            <DialogTitle className="font-display text-xl">Summon two coaches</DialogTitle>
+            <InfoTip help={COACH_HELP.summon} side="bottom" align="start" />
+          </div>
           <DialogDescription>They draft the teams in snake order, then set lanes. Champions stay random.</DialogDescription>
         </DialogHeader>
         {open && <CoachPicker currentUserId={currentUserId} onCancel={() => onOpenChange(false)} onConfirm={onConfirm} />}

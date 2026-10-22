@@ -5,6 +5,7 @@ import { AnimatePresence } from "motion/react"
 import { ChevronRightIcon, MegaphoneIcon, RotateCcwIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ShameDialog } from "@/components/shame-dialog"
 import { isMigrationPending } from "@/components/bounties/request"
@@ -14,6 +15,7 @@ import { PillorySheet } from "@/components/shame/pillory-sheet"
 import { useEgg, usePilloryWall } from "@/components/shame/use-pillory"
 import { useAuth } from "@/hooks/use-auth"
 import { PILLORY_COPY } from "@/lib/bounties/copy"
+import { PILLORY_HELP } from "@/lib/bounties/help"
 import { PILLORY_RULES } from "@/lib/bounties/rules"
 import type { PilloryEntryView } from "@/lib/bounties/types"
 
@@ -36,6 +38,7 @@ export function ShameBoard({ userId }: ShameBoardProps) {
   const available = data?.available ?? false
   const signedIn = !!userId
   const coolingDown = cooldown !== null && cooldown > 0
+  const showPost = !signedIn || available
 
   const openDialog = () => {
     if (!signedIn) {
@@ -69,6 +72,7 @@ export function ShameBoard({ userId }: ShameBoardProps) {
         <h2 id="pillory-title" className="font-display text-sm font-semibold uppercase tracking-[0.18em] text-[var(--color-gold)]">
           {PILLORY_COPY.title}
         </h2>
+        <InfoTip help={PILLORY_HELP.wall} />
         {entries.length > 0 && (
           <span className="ml-auto rounded-full bg-[var(--color-gold)]/15 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-[var(--color-gold)]">
             {entries.length} on the wall
@@ -111,18 +115,23 @@ export function ShameBoard({ userId }: ShameBoardProps) {
         </div>
       )}
 
-      <div className="mt-3 flex gap-2">
-        {(!signedIn || available) && (
-          <Button
-            onClick={openDialog}
-            disabled={signedIn && coolingDown}
-            className="h-10 flex-1 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
-          >
-            <MegaphoneIcon aria-hidden />
-            {signedIn && coolingDown ? `Ready in ${formatTimeLeft(cooldown ?? 0)}` : `${PILLORY_COPY.post} · ${PILLORY_RULES.cost}`}
-          </Button>
+      <div className="mt-3 flex items-center gap-2.5">
+        {showPost && (
+          <>
+            <Button
+              onClick={openDialog}
+              disabled={signedIn && coolingDown}
+              className="h-10 min-w-0 flex-1 rounded-xl bg-[var(--color-gold)] font-semibold text-[var(--color-navy)] hover:bg-[var(--color-gold-light)]"
+            >
+              <MegaphoneIcon aria-hidden />
+              <span className="truncate">
+                {signedIn && coolingDown ? `Ready in ${formatTimeLeft(cooldown ?? 0)}` : `Pillory · ${PILLORY_RULES.cost}`}
+              </span>
+            </Button>
+            <InfoTip help={PILLORY_HELP.post} />
+          </>
         )}
-        <Button variant="outline" className="h-10 flex-1 rounded-xl" onClick={() => setSheetOpen(true)}>
+        <Button variant="outline" className={showPost ? "h-10 shrink-0 rounded-xl px-3" : "h-10 flex-1 rounded-xl"} onClick={() => setSheetOpen(true)}>
           {entries.length > PREVIEW ? `${PILLORY_COPY.seeAll} (${entries.length})` : PILLORY_COPY.seeAll}
           <ChevronRightIcon aria-hidden />
         </Button>

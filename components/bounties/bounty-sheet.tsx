@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react"
 import { AnimatePresence } from "motion/react"
 import { CrosshairIcon, LogInIcon, PlusIcon, RotateCcwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { CourtSheet } from "@/components/bounties/court-sheet"
 import { HuntHistory } from "@/components/bounties/hunt-history"
@@ -11,6 +12,7 @@ import { RulesList } from "@/components/bounties/rules-list"
 import { WantedPoster } from "@/components/bounties/wanted-poster"
 import { useOnTheRift } from "@/components/bounties/use-wanted"
 import { WARRANT_COPY, WARRANT_RULES } from "@/lib/bounties/copy"
+import { WARRANT_HELP } from "@/lib/bounties/help"
 import type { BountyBoard, WarrantView } from "@/lib/bounties/types"
 
 interface BountySheetProps {
@@ -63,13 +65,16 @@ export function BountySheet({
       {WARRANT_COPY.loginHint}
     </Button>
   ) : available ? (
-    <Button
-      onClick={() => onPledge(null)}
-      className="h-11 w-full rounded-xl border border-[var(--color-red-team)]/50 bg-[var(--color-red-team)]/20 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/30"
-    >
-      <PlusIcon aria-hidden />
-      {WARRANT_COPY.post}
-    </Button>
+    <div className="flex w-full items-center gap-2.5">
+      <Button
+        onClick={() => onPledge(null)}
+        className="h-11 min-w-0 flex-1 rounded-xl border border-[var(--color-red-team)]/50 bg-[var(--color-red-team)]/20 font-semibold text-[var(--color-gold-light)] hover:bg-[var(--color-red-team)]/30"
+      >
+        <PlusIcon aria-hidden />
+        {WARRANT_COPY.post}
+      </Button>
+      <InfoTip help={WARRANT_HELP.pledge} side="top" align="end" />
+    </div>
   ) : null
 
   return (
@@ -80,6 +85,7 @@ export function BountySheet({
       title={WARRANT_COPY.title}
       description={WARRANT_COPY.sheetDescription}
       tone="danger"
+      help={WARRANT_HELP.board}
       footer={footer}
     >
       <div className="space-y-4">

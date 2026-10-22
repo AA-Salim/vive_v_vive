@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { LayoutGroup } from "motion/react"
 import { DicesIcon, GavelIcon, Loader2Icon, LockIcon, RotateCcwIcon, Undo2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { DraftRules } from "@/components/lobby/coach-draft/draft-rules"
 import { PickTrack } from "@/components/lobby/coach-draft/pick-track"
@@ -13,7 +14,9 @@ import { TurnBanner } from "@/components/lobby/coach-draft/turn-banner"
 import { useCoachDraftActions } from "@/components/lobby/coach-draft/use-coach-draft-actions"
 import { useTurnCue } from "@/components/lobby/coach-draft/use-turn-cue"
 import { useAuth } from "@/hooks/use-auth"
+import type { HelpEntry } from "@/lib/help"
 import { LANES, sideForPick } from "@/lib/lobby/constants"
+import { COACH_HELP } from "@/lib/lobby/help"
 import { useCoachPicks, useCoachProfiles, useRoster } from "@/lib/lobby/queries"
 import type { CoachDraftPickView, RosterPlayer } from "@/lib/lobby/types"
 import type { RoomSession } from "@/lib/session/types"
@@ -29,6 +32,15 @@ const PANEL = "relative rounded-2xl border border-[var(--color-gold)]/25 bg-card
 
 function lanesSet(picks: CoachDraftPickView[], side: Side): number {
   return new Set(picks.filter((p) => p.side === side && p.lane).map((p) => p.lane)).size
+}
+
+function Tipped({ help, grow = false, children }: { help: HelpEntry; grow?: boolean; children: ReactNode }) {
+  return (
+    <div className={cn("flex items-center gap-2.5", grow && "sm:flex-1")}>
+      {children}
+      <InfoTip help={help} align="end" />
+    </div>
+  )
 }
 
 function DraftSkeleton() {
@@ -219,28 +231,38 @@ export function CoachDraftPanel({ session, userId }: CoachDraftPanelProps) {
       {(isMyTurn || canUndo || (lanesPhase && (mySide || isAdmin))) && (
         <div className="sticky bottom-3 z-10 mt-4 flex flex-col gap-2 rounded-xl border border-[var(--color-gold)]/25 bg-card/95 p-2 shadow-2xl shadow-black/50 backdrop-blur sm:flex-row">
           {isMyTurn && (
-            <Button className="h-12 gap-2 text-base font-semibold sm:flex-1" disabled={!chosen || busy} onClick={lockIn}>
-              {actions.pick.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <LockIcon aria-hidden />}
-              {chosen ? `Lock in ${chosen.name}` : "Tap a player to pick"}
-            </Button>
+            <Tipped help={COACH_HELP.pick} grow>
+              <Button className="h-12 min-w-0 flex-1 gap-2 text-base font-semibold" disabled={!chosen || busy} onClick={lockIn}>
+                {actions.pick.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <LockIcon aria-hidden />}
+                <span className="truncate">{chosen ? `Lock in ${chosen.name}` : "Tap a player to pick"}</span>
+              </Button>
+            </Tipped>
           )}
           {canUndo && latest && (
-            <Button variant="outline" className="h-12 gap-2" disabled={busy} onClick={() => actions.undo.mutate()}>
-              {actions.undo.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <Undo2Icon aria-hidden />}
-              Take back {latest.players?.name ?? "the last pick"}
-            </Button>
+            <Tipped help={COACH_HELP.undo}>
+              <Button variant="outline" className="h-12 min-w-0 flex-1 gap-2" disabled={busy} onClick={() => actions.undo.mutate()}>
+                {actions.undo.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <Undo2Icon aria-hidden />}
+                <span className="truncate">Take back {latest.players?.name ?? "the last pick"}</span>
+              </Button>
+            </Tipped>
           )}
           {lanesPhase && mySide && myLanesMissing > 0 && (
-            <Button variant="outline" className="h-12 gap-2" disabled={actions.autoLanes.isPending} onClick={() => actions.autoLanes.mutate()}>
-              {actions.autoLanes.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <DicesIcon aria-hidden />}
-              Fill my {myLanesMissing} open lane{myLanesMissing === 1 ? "" : "s"} at random
-            </Button>
+            <Tipped help={COACH_HELP.lanes}>
+              <Button variant="outline" className="h-12 min-w-0 flex-1 gap-2" disabled={actions.autoLanes.isPending} onClick={() => actions.autoLanes.mutate()}>
+                {actions.autoLanes.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <DicesIcon aria-hidden />}
+                <span className="truncate">
+                  Fill my {myLanesMissing} open lane{myLanesMissing === 1 ? "" : "s"} at random
+                </span>
+              </Button>
+            </Tipped>
           )}
           {lanesPhase && (mySide || isAdmin) && (
-            <Button className="h-12 gap-2 text-base font-semibold sm:flex-1" disabled={!teamsReady || busy} onClick={() => actions.confirm.mutate()}>
-              {actions.confirm.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <GavelIcon aria-hidden />}
-              {teamsReady ? "Lock the teams and deal" : "Waiting for all ten lanes"}
-            </Button>
+            <Tipped help={COACH_HELP.lock} grow>
+              <Button className="h-12 min-w-0 flex-1 gap-2 text-base font-semibold" disabled={!teamsReady || busy} onClick={() => actions.confirm.mutate()}>
+                {actions.confirm.isPending ? <Loader2Icon className="animate-spin" aria-hidden /> : <GavelIcon aria-hidden />}
+                <span className="truncate">{teamsReady ? "Lock the teams and deal" : "Waiting for all ten lanes"}</span>
+              </Button>
+            </Tipped>
           )}
         </div>
       )}

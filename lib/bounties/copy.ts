@@ -5,7 +5,6 @@ export const WARRANT_COPY = {
   tagline: "Price a head. Beat them, split the pot.",
   sheetDescription: "Put a price on a player. The next team that beats them splits it.",
   empty: "No warrants. The Rift is suspiciously peaceful.",
-  emptyCta: "Post the first warrant",
   post: "Post a warrant",
   seeAll: "All warrants",
   addTo: "Add to the bounty",

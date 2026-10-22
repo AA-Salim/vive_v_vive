@@ -3,8 +3,10 @@
 import type { ReactNode } from "react"
 import { XIcon, type LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from "@/components/session/use-browser-state"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface CourtSheetProps {
@@ -14,12 +16,13 @@ interface CourtSheetProps {
   title: string
   description: string
   tone: "danger" | "roast"
+  help?: HelpEntry
   footer?: ReactNode
   children: ReactNode
 }
 
 // Bottom sheet on phones, side panel from 640px up.
-export function CourtSheet({ open, onOpenChange, icon: Icon, title, description, tone, footer, children }: CourtSheetProps) {
+export function CourtSheet({ open, onOpenChange, icon: Icon, title, description, tone, help, footer, children }: CourtSheetProps) {
   const wide = useMediaQuery("(min-width: 640px)")
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -39,10 +42,13 @@ export function CourtSheet({ open, onOpenChange, icon: Icon, title, description,
           <span className="sr-only">Close</span>
         </SheetClose>
         <SheetHeader className="border-b border-border px-4 pt-4 pb-3 pr-14">
-          <SheetTitle className="flex items-center gap-2 font-display text-lg font-semibold uppercase tracking-[0.14em] text-[var(--color-gold)]">
-            <Icon className={cn("size-5", tone === "danger" ? "text-[var(--color-red-team)]" : "text-[var(--color-gold)]")} aria-hidden />
-            {title}
-          </SheetTitle>
+          <div className="flex items-center gap-2">
+            <SheetTitle className="flex items-center gap-2 font-display text-lg font-semibold uppercase tracking-[0.14em] text-[var(--color-gold)]">
+              <Icon className={cn("size-5", tone === "danger" ? "text-[var(--color-red-team)]" : "text-[var(--color-gold)]")} aria-hidden />
+              {title}
+            </SheetTitle>
+            {help && <InfoTip help={help} side="bottom" align="start" />}
+          </div>
           <SheetDescription className="text-xs leading-relaxed">{description}</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>

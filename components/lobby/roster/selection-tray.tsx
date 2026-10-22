@@ -3,6 +3,8 @@
 import { AnimatePresence, motion } from "motion/react"
 import { RotateCcwIcon, UsersRoundIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
+import type { HelpEntry } from "@/lib/help"
 import { LOBBY_SIZE } from "@/lib/lobby/constants"
 import type { RosterPlayer } from "@/lib/lobby/types"
 import { cn } from "@/lib/utils"
@@ -15,6 +17,7 @@ interface SelectionTrayProps {
   onSeatQueue: () => void
   onRematch: () => void
   onClear: () => void
+  help?: HelpEntry
 }
 
 function Pips({ count }: { count: number }) {
@@ -40,7 +43,7 @@ function Pips({ count }: { count: number }) {
   )
 }
 
-export function SelectionTray({ selected, queueReady, canRematch, onRemove, onSeatQueue, onRematch, onClear }: SelectionTrayProps) {
+export function SelectionTray({ selected, queueReady, canRematch, onRemove, onSeatQueue, onRematch, onClear, help }: SelectionTrayProps) {
   const count = selected.length
   const seats = Array.from({ length: Math.max(LOBBY_SIZE, count) }, (_, i) => selected[i] ?? null)
   const status =
@@ -111,7 +114,7 @@ export function SelectionTray({ selected, queueReady, canRematch, onRemove, onSe
       </ul>
 
       {(queueReady > 0 || canRematch || count > 0) && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {queueReady > 0 && (
             <Button variant="outline" className="h-10 gap-2 rounded-full px-3.5 text-xs" onClick={onSeatQueue}>
               <UsersRoundIcon aria-hidden />
@@ -131,6 +134,7 @@ export function SelectionTray({ selected, queueReady, canRematch, onRemove, onSe
               Clear
             </Button>
           )}
+          {help && (queueReady > 0 || canRematch) && <InfoTip help={help} align="end" className="ml-0.5" />}
         </div>
       )}
     </div>

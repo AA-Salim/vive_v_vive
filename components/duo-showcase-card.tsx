@@ -1,104 +1,61 @@
+"use client"
+
+import { motion, useReducedMotion } from "motion/react"
+import { CrownIcon } from "lucide-react"
+import { PlayerAvatar } from "@/components/pages/avatars"
+import { plural } from "@/components/pages/format"
+import { WinRateMeter } from "@/components/pages/indicators"
+import type { Duo, PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
 interface DuoShowcaseCardProps {
-  playerA: string
-  playerB: string
-  label: string
-  labelText: string
-  wins: number
-  losses: number
-  winRate: number
+  duo: Duo
+  a: PlayerRef
+  b: PlayerRef
   rank: number
-  bonusLabels?: { label: string; text: string }[]
+  onOpen?: () => void
 }
 
-export function DuoShowcaseCard({
-  playerA,
-  playerB,
-  label,
-  labelText,
-  wins,
-  losses,
-  winRate,
-  rank,
-  bonusLabels,
-}: DuoShowcaseCardProps) {
-  const isFirst = rank === 1
-
+export function DuoShowcaseCard({ duo, a, b, rank, onOpen }: DuoShowcaseCardProps) {
+  const reduced = useReducedMotion()
+  const first = rank === 1
   return (
-    <div
+    <motion.button
+      type="button"
+      onClick={onOpen}
+      initial={reduced ? false : { opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay: reduced ? 0 : (rank - 1) * 0.08 }}
       className={cn(
-        "relative flex flex-col items-center gap-4 rounded-xl border p-6 text-center",
-        "bg-[var(--color-navy-light)]",
-        isFirst
-          ? "border-[var(--color-gold)] shadow-[0_0_30px_rgba(201,169,80,0.3)]"
-          : "border-[var(--color-gold)]/20"
+        "relative flex h-full w-full flex-col items-center gap-3 overflow-hidden rounded-2xl border p-5 text-center outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        first
+          ? "border-[var(--color-gold)]/60 bg-linear-to-b from-[var(--color-gold)]/[0.12] to-card shadow-[0_0_40px_-12px_var(--color-gold)]"
+          : "border-[var(--color-gold)]/20 bg-card"
       )}
     >
-      <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-navy)] px-3 py-0.5 text-xs font-bold text-[var(--color-gold)]">
-        #{rank}
-      </div>
-
-      <div className="mt-2 flex items-center gap-3">
-        <span className="text-lg font-bold text-[var(--color-gold-light)]">
-          {playerA}
+      <span className="absolute top-3 left-3 font-display text-sm font-semibold text-muted-foreground">#{rank}</span>
+      {first ? <CrownIcon className="absolute top-3 right-3 size-4 text-[var(--color-gold)]" aria-hidden /> : null}
+      <span className="flex items-center -space-x-3">
+        <PlayerAvatar name={a.name} src={a.avatarUrl} size="lg" className="ring-2 ring-card" />
+        <PlayerAvatar name={b.name} src={b.avatarUrl} size="lg" className="ring-2 ring-card" />
+      </span>
+      <span className="text-sm font-semibold text-[var(--color-gold-light)]">
+        {a.name} <span className="text-muted-foreground">&amp;</span> {b.name}
+      </span>
+      {duo.headline ? (
+        <span className="space-y-1">
+          <span className={cn("block font-display font-semibold tracking-wide text-[var(--color-gold)]", first ? "text-2xl" : "text-xl")}>
+            {duo.headline.label}
+          </span>
+          <span className="block text-sm leading-snug text-[var(--color-gold-light)]/75">{duo.headline.text}</span>
         </span>
-        <span className="text-sm text-[var(--color-gold)]/50">&</span>
-        <span className="text-lg font-bold text-[var(--color-gold-light)]">
-          {playerB}
+      ) : null}
+      <span className="mt-auto flex flex-col items-center gap-1.5">
+        <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="text-emerald-300">{duo.wins}W</span> <span className="text-rose-300">{duo.losses}L</span> · {plural(duo.games, "game")} together
         </span>
-      </div>
-
-      <div className="space-y-1">
-        <p
-          className={cn(
-            "text-xl font-black tracking-wide",
-            isFirst ? "text-2xl text-[var(--color-gold)]" : "text-[var(--color-gold)]"
-          )}
-        >
-          {label}
-        </p>
-        <p className="text-sm text-[var(--color-gold-light)]/70">{labelText}</p>
-      </div>
-
-      {bonusLabels && bonusLabels.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-1.5">
-          {bonusLabels.map((bl) => (
-            <span
-              key={bl.label}
-              className="rounded-full bg-[var(--color-gold)]/10 px-2.5 py-0.5 text-xs font-semibold text-[var(--color-gold)]"
-              title={bl.text}
-            >
-              {bl.label}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="flex items-center gap-4 text-sm">
-        <span className="text-green-400">{wins}W</span>
-        <span className="text-red-400">{losses}L</span>
-      </div>
-
-      <div className="w-full space-y-1">
-        <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--color-navy)]">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all",
-              winRate >= 50 ? "bg-green-500" : "bg-red-500"
-            )}
-            style={{ width: `${Math.min(winRate, 100)}%` }}
-          />
-        </div>
-        <p
-          className={cn(
-            "text-sm font-semibold",
-            winRate >= 50 ? "text-green-400" : "text-red-400"
-          )}
-        >
-          {winRate}% WR
-        </p>
-      </div>
-    </div>
+        <WinRateMeter rate={duo.winRate} games={duo.games} />
+      </span>
+    </motion.button>
   )
 }

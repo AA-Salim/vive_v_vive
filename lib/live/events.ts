@@ -126,6 +126,7 @@ export interface LiveEventPayloads {
     playerName: string
     previousName?: string | null
   }
+  "profile.linked": { playerName: string }
 }
 
 export type LiveEventType = keyof LiveEventPayloads
@@ -191,6 +192,7 @@ const DOMAIN_KEYS: Record<LiveDomain, string[]> = {
   duel: ["duels", "points"],
   vote: ["votes", "sidebets", "points", "shame"],
   roster: ["sessions", "session", "queue", "vainqueur"],
+  profile: ["profile", "leaderboard", "games"],
 }
 
 // Query-key roots to invalidate when an event arrives. Feature queries must start with one of these roots.

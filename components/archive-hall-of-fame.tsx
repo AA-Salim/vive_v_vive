@@ -1,135 +1,78 @@
 "use client"
 
-import Image from "next/image"
-import type { ActAward } from "@/lib/types"
+import { motion, useReducedMotion } from "motion/react"
+import { CrownIcon, DicesIcon, FlameIcon, HandHeartIcon, ShieldIcon, SwordsIcon, TrophyIcon, type LucideIcon } from "lucide-react"
+import { PlayerAvatar } from "@/components/pages/avatars"
+import { formatNumber } from "@/components/pages/format"
+import type { ArchiveAward } from "@/lib/pages/types"
 
-const CATEGORY_CONFIG: Record<
-  string,
-  { label: string; icon: string; color: string }
-> = {
-  treasury: {
-    label: "The Treasury",
-    icon: "👑",
-    color: "border-[var(--color-gold)] shadow-[0_0_20px_rgba(200,155,60,0.3)]",
-  },
-  grand_champion: {
-    label: "Grand Champion",
-    icon: "👑",
-    color: "border-[var(--color-gold)] shadow-[0_0_20px_rgba(200,155,60,0.3)]",
-  },
-  warrior: {
-    label: "The Warrior",
-    icon: "⚔️",
-    color: "border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]",
-  },
-  iron_man: {
-    label: "The Iron Man",
-    icon: "🛡️",
-    color: "border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.2)]",
-  },
-  degenerate: {
-    label: "The Degenerate",
-    icon: "🎲",
-    color: "border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]",
-  },
-  devotee: {
-    label: "The Devotee",
-    icon: "🙏",
-    color: "border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]",
-  },
-  punching_bag: {
-    label: "The Punching Bag",
-    icon: "🥊",
-    color: "border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.2)]",
-  },
+const CATEGORY: Record<string, { label: string; icon: LucideIcon; quip: string }> = {
+  treasury: { label: "The Treasury", icon: CrownIcon, quip: "Richest noble when the curtain fell." },
+  grand_champion: { label: "Grand Champion", icon: CrownIcon, quip: "Richest noble when the curtain fell." },
+  warrior: { label: "The Warrior", icon: SwordsIcon, quip: "Best win rate of the act." },
+  iron_man: { label: "The Iron Man", icon: ShieldIcon, quip: "Never left the Rift." },
+  degenerate: { label: "The Degenerate", icon: DicesIcon, quip: "Bet on everything, always." },
+  devotee: { label: "The Devotee", icon: HandHeartIcon, quip: "Kissed the most hands." },
+  punching_bag: { label: "The Punching Bag", icon: FlameIcon, quip: "Shamed more than anyone." },
 }
 
-interface ArchiveHallOfFameProps {
-  awards: (ActAward & {
-    username?: string
-    avatar_url?: string | null
-    player_name?: string | null
-  })[]
-}
-
-export function ArchiveHallOfFame({ awards }: ArchiveHallOfFameProps) {
-  const grandChampion = awards.find(
-    (a) => a.category === "treasury" || a.category === "grand_champion"
-  )
-  const otherAwards = awards.filter(
-    (a) => a.category !== "grand_champion" && a.category !== "treasury"
-  )
+export function ArchiveHallOfFame({ awards }: { awards: ArchiveAward[] }) {
+  const reduced = useReducedMotion()
+  const champion = awards.find((a) => a.category === "treasury") ?? awards.find((a) => a.category === "grand_champion")
+  const others = awards.filter((a) => a.category !== "treasury" && a.category !== "grand_champion")
 
   return (
-    <div className="space-y-8">
-      {grandChampion && (
-        <div className="flex flex-col items-center">
-          <div
-            className={`w-full max-w-md rounded-lg border-2 ${CATEGORY_CONFIG[grandChampion.category]?.color ?? ""} bg-[var(--color-navy-light)] p-6 text-center`}
-          >
-            <div className="mb-3 text-4xl">👑</div>
-            <div className="flex justify-center">
-              <div className="mb-3 flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-[var(--color-gold)] bg-[var(--color-navy)]">
-                {grandChampion.avatar_url ? (
-                  <Image
-                    src={grandChampion.avatar_url}
-                    alt=""
-                    width={80}
-                    height={80}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-2xl font-bold text-[var(--color-gold)]">
-                    ?
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="text-xl font-bold text-[var(--color-gold)]">
-              {grandChampion.player_name ?? grandChampion.username ?? "Unknown"}
-            </div>
-            <div className="mt-1 text-sm font-semibold text-[var(--color-gold-light)]">
-              {grandChampion.title}
-            </div>
-            <div className="mt-2 text-2xl font-bold text-[var(--color-gold)]">
-              {grandChampion.final_value}
-            </div>
-            {grandChampion.carry_over_bonus > 0 && (
-              <div className="mt-2 text-xs text-[var(--color-gold-light)]/50">
-                +{grandChampion.carry_over_bonus} carry-over bonus
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+    <div className="space-y-4">
+      {champion ? (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5 }}
+          className="relative mx-auto flex max-w-lg flex-col items-center gap-2 overflow-hidden rounded-2xl border border-[var(--color-gold)]/60 bg-linear-to-b from-[var(--color-gold)]/[0.14] to-card px-5 py-6 text-center shadow-[0_0_50px_-15px_var(--color-gold)]"
+        >
+          <CrownIcon className="size-8 text-[var(--color-gold)] drop-shadow-[0_0_12px_var(--color-gold)]" aria-hidden />
+          <PlayerAvatar name={champion.name} src={champion.avatarUrl} size="xl" ring="gold" />
+          <p className="text-[10px] font-semibold tracking-[0.24em] text-muted-foreground uppercase">{champion.title}</p>
+          <p className="font-display text-2xl font-semibold text-[var(--color-gold)]">{champion.name}</p>
+          {champion.value ? <p className="font-display text-lg text-[var(--color-gold-light)]">{champion.value}</p> : null}
+          {champion.bonus > 0 ? (
+            <p className="text-xs text-muted-foreground">Carried {formatNumber(champion.bonus)} bonus points into the next act</p>
+          ) : null}
+        </motion.div>
+      ) : null}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {otherAwards.map((award) => {
-          const config = CATEGORY_CONFIG[award.category]
-          return (
-            <div
-              key={award.id}
-              className={`rounded-lg border ${config?.color ?? "border-[var(--color-gold)]/20"} bg-[var(--color-navy-light)] p-4 text-center`}
-            >
-              <div className="mb-2 text-2xl">{config?.icon ?? "🏆"}</div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-[var(--color-gold-light)]/50">
-                {config?.label ?? award.category}
-              </div>
-              <div className="mt-1 font-bold text-[var(--color-gold-light)]">
-                {award.player_name ?? award.username ?? "Unknown"}
-              </div>
-              <div className="mt-1 text-lg font-bold text-[var(--color-gold)]">
-                {award.final_value}
-              </div>
-              <div className="mt-1 text-xs text-[var(--color-gold-light)]/40">
-                {award.title}
-                {award.carry_over_bonus > 0 &&
-                  ` (+${award.carry_over_bonus} bonus)`}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {others.length > 0 ? (
+        <ul className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 lg:grid-cols-3">
+          {others.map((award, i) => {
+            const meta = CATEGORY[award.category] ?? { label: award.category, icon: TrophyIcon, quip: "" }
+            const Icon = meta.icon
+            return (
+              <motion.li
+                key={award.id}
+                initial={reduced ? false : { opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: reduced ? 0 : 0.15 + i * 0.05 }}
+                className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--color-gold)]/20 bg-card p-3"
+              >
+                <div className="relative shrink-0">
+                  <PlayerAvatar name={award.name} src={award.avatarUrl} size="md" />
+                  <span className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-[var(--color-gold)] text-[var(--color-navy)] ring-2 ring-card">
+                    <Icon className="size-3" aria-hidden />
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)] uppercase">{meta.label}</p>
+                  <p className="truncate text-sm font-semibold text-[var(--color-gold-light)]">{award.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {award.value ?? meta.quip}
+                    {award.bonus > 0 ? ` · +${award.bonus} carried` : ""}
+                  </p>
+                </div>
+              </motion.li>
+            )
+          })}
+        </ul>
+      ) : null}
     </div>
   )
 }

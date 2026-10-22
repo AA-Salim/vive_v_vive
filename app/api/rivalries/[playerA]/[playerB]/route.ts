@@ -1,80 +1,55 @@
+import { z } from "zod"
 import { createClient } from "@/lib/supabase"
-import { NextResponse } from "next/server"
-import type { Side } from "@/lib/types"
+import { json, loadMatchContext, scribeError } from "@/lib/pages/server"
+import type { MatchupGame, RivalryDetailResponse } from "@/lib/pages/types"
 
-interface GamePlayerRow {
-  game_id: string
-  player_id: string
-  side: Side
-  lane: string
-  champion: string
-  games: { winner_side: Side; played_at: string }
-}
-
-interface MatchupGame {
-  game_id: string
-  played_at: string
-  winner_side: Side
-  a_side: Side
-  a_lane: string
-  a_champion: string
-  b_side: Side
-  b_lane: string
-  b_champion: string
-}
+const Params = z
+  .object({ playerA: z.guid(), playerB: z.guid() })
+  .refine((p) => p.playerA !== p.playerB, { message: "A rivalry needs two people" })
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ playerA: string; playerB: string }> }
 ) {
-  const { playerA, playerB } = await params
+  const parsed = Params.safeParse(await params)
+  if (!parsed.success) return scribeError("Pick two different players.", 400)
+  const { playerA, playerB } = parsed.data
+
   const supabase = await createClient()
+  try {
+    const { data, internalOf } = await loadMatchContext(supabase)
+    const a = data.players.get(playerA)
+    const b = data.players.get(playerB)
+    if (!a || !b) return scribeError("One of them is not in the royal register.", 404)
 
-  const { data, error } = await supabase
-    .from("game_players")
-    .select("game_id, player_id, side, lane, champion, games!inner(winner_side, played_at)")
-    .in("player_id", [playerA, playerB])
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  const rows = data as unknown as GamePlayerRow[]
-  const gameGroups = new Map<string, GamePlayerRow[]>()
-
-  for (const row of rows) {
-    const group = gameGroups.get(row.game_id)
-    if (group) {
-      group.push(row)
-    } else {
-      gameGroups.set(row.game_id, [row])
+    const versus: MatchupGame[] = []
+    const allied: MatchupGame[] = []
+    const together = { games: 0, wins: 0 }
+    for (let i = data.matches.length - 1; i >= 0; i--) {
+      const match = data.matches[i]
+      const seatA = match.seats.find((s) => s.playerId === playerA)
+      const seatB = match.seats.find((s) => s.playerId === playerB)
+      if (!seatA || !seatB) continue
+      const game: MatchupGame = {
+        gameId: match.id,
+        playedAt: match.playedAt,
+        winner: match.winner,
+        a: { side: seatA.side, lane: seatA.lane, champion: seatA.champion, internal: internalOf(seatA.champion) },
+        b: { side: seatB.side, lane: seatB.lane, champion: seatB.champion, internal: internalOf(seatB.champion) },
+        laneDuel: seatA.side !== seatB.side && seatA.lane === seatB.lane,
+      }
+      if (seatA.side === seatB.side) {
+        together.games++
+        if (seatA.side === match.winner) together.wins++
+        allied.push(game)
+      } else {
+        versus.push(game)
+      }
     }
+
+    const body: RivalryDetailResponse = { a, b, versus, together, allied }
+    return json(body)
+  } catch {
+    return scribeError()
   }
-
-  const games: MatchupGame[] = []
-
-  for (const [gameId, players] of gameGroups) {
-    if (players.length !== 2) continue
-
-    const rowA = players.find((p) => p.player_id === playerA)
-    const rowB = players.find((p) => p.player_id === playerB)
-
-    if (!rowA || !rowB || rowA.side === rowB.side) continue
-
-    games.push({
-      game_id: gameId,
-      played_at: rowA.games.played_at,
-      winner_side: rowA.games.winner_side,
-      a_side: rowA.side,
-      a_lane: rowA.lane,
-      a_champion: rowA.champion,
-      b_side: rowB.side,
-      b_lane: rowB.lane,
-      b_champion: rowB.champion,
-    })
-  }
-
-  games.sort((a, b) => new Date(b.played_at).getTime() - new Date(a.played_at).getTime())
-
-  return NextResponse.json({ games })
 }

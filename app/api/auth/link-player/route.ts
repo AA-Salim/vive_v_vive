@@ -1,68 +1,56 @@
-import { createClient } from "@/lib/supabase"
 import { NextResponse } from "next/server"
+import { z } from "zod"
+import { createClient } from "@/lib/supabase"
+import { emitLive, getActor } from "@/lib/live/server"
+
+const Body = z.object({ player_id: z.guid() })
+
+const fail = (error: string, status: number) => NextResponse.json({ error }, { status })
 
 export async function POST(request: Request) {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
+  if (!user) return fail("Not authenticated", 401)
 
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+  const parsed = Body.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) return fail("player_id is required", 400)
+  const playerId = parsed.data.player_id
+
+  const [{ data: profile }, { data: player }] = await Promise.all([
+    supabase.from("user_profiles").select("player_id").eq("id", user.id).maybeSingle(),
+    supabase.from("players").select("id, name, auth_user_id").eq("id", playerId).maybeSingle(),
+  ])
+  if (!player) return fail("Player not found", 404)
+  if (profile?.player_id && profile.player_id !== playerId) {
+    return fail("You already answer to another name on the roster.", 409)
+  }
+  if (player.auth_user_id && player.auth_user_id !== user.id) {
+    return fail("Player already claimed by another user", 409)
   }
 
-  const { player_id } = (await request.json()) as { player_id: string }
-
-  if (!player_id) {
-    return NextResponse.json(
-      { error: "player_id is required" },
-      { status: 400 }
-    )
-  }
-
-  const { data: existing } = await supabase
-    .from("players")
-    .select("auth_user_id")
-    .eq("id", player_id)
-    .single()
-
-  if (!existing) {
-    return NextResponse.json(
-      { error: "Player not found" },
-      { status: 404 }
-    )
-  }
-
-  if (existing.auth_user_id && existing.auth_user_id !== user.id) {
-    return NextResponse.json(
-      { error: "Player already claimed by another user" },
-      { status: 409 }
-    )
-  }
-
-  const { error: playerError } = await supabase
+  // Conditional write: two people racing for the same player cannot both win it.
+  const { data: claimed, error: claimError } = await supabase
     .from("players")
     .update({ auth_user_id: user.id })
-    .eq("id", player_id)
+    .eq("id", playerId)
+    .or(`auth_user_id.is.null,auth_user_id.eq.${user.id}`)
+    .select("id")
+    .maybeSingle()
+  if (claimError) return fail(claimError.message, 500)
+  if (!claimed) return fail("Player already claimed by another user", 409)
 
-  if (playerError) {
-    return NextResponse.json(
-      { error: playerError.message },
-      { status: 500 }
-    )
-  }
-
-  const { error: profileError } = await supabase
-    .from("user_profiles")
-    .update({ player_id })
-    .eq("id", user.id)
-
+  const { error: profileError } = await supabase.from("user_profiles").update({ player_id: playerId }).eq("id", user.id)
   if (profileError) {
-    return NextResponse.json(
-      { error: profileError.message },
-      { status: 500 }
-    )
+    if (!player.auth_user_id) {
+      await supabase.from("players").update({ auth_user_id: null }).eq("id", playerId).eq("auth_user_id", user.id)
+    }
+    return fail(profileError.message, 500)
   }
 
+  if (!player.auth_user_id) {
+    emitLive("profile.linked", { actor: await getActor(supabase, user.id), data: { playerName: player.name as string } })
+  }
   return NextResponse.json({ success: true })
 }

@@ -1,13 +1,14 @@
 "use client"
 
 import { useQuery } from "@tanstack/react-query"
-import type { HallOfFame, HallScope } from "@/lib/betting/types"
+import { withSeason, type SeasonKey } from "@/components/pages/use-season"
+import type { HallOfFame } from "@/lib/betting/types"
 
-export function useHall(scope: HallScope) {
+export function useHall(season: SeasonKey) {
   return useQuery({
-    queryKey: ["bets", "hall", scope],
-    queryFn: async (): Promise<HallOfFame> => {
-      const res = await fetch(`/api/bets?scope=${scope}`, { cache: "no-store" })
+    queryKey: ["bets", "hall", season],
+    queryFn: async ({ signal }): Promise<HallOfFame> => {
+      const res = await fetch(withSeason("/api/bets", season), { cache: "no-store", signal })
       if (!res.ok) throw new Error("The hall is closed for repairs.")
       return res.json()
     },

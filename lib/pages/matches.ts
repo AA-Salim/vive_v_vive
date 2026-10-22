@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { ALL_ROLES } from "@/lib/champions"
 import { fetchAllRows, uniqueBy } from "@/lib/pages/fetch-all"
+import { withinWindow } from "@/lib/pages/season"
+import { ALL_TIME, type PlayedWindow } from "@/lib/pages/season-calendar"
 import type { PlayerRef } from "@/lib/pages/types"
 import type { Role, Side } from "@/lib/types"
 
@@ -65,13 +67,24 @@ export async function loadPlayers(supabase: SupabaseClient): Promise<Map<string,
   )
 }
 
-export async function loadMatchData(supabase: SupabaseClient): Promise<MatchData> {
+const SEAT_COLUMNS = "id, game_id, player_id, side, lane, champion"
+
+// Seats are filtered through their game, so a season only reads its own rows.
+export async function loadMatchData(supabase: SupabaseClient, window: PlayedWindow = ALL_TIME): Promise<MatchData> {
+  const bounded = window.from !== null || window.to !== null
   const [games, seats, players] = await Promise.all([
     fetchAllRows<GameRow>((from, to) =>
-      supabase.from("games").select("id, played_at, winner_side").order("played_at").order("id").range(from, to)
+      withinWindow(supabase.from("games").select("id, played_at, winner_side"), window)
+        .order("played_at")
+        .order("id")
+        .range(from, to)
     ),
     fetchAllRows<SeatRow>((from, to) =>
-      supabase.from("game_players").select("id, game_id, player_id, side, lane, champion").order("id").range(from, to)
+      bounded
+        ? withinWindow(supabase.from("game_players").select(`${SEAT_COLUMNS}, game:games!inner(played_at)`), window, "game.played_at")
+            .order("id")
+            .range(from, to)
+        : supabase.from("game_players").select(SEAT_COLUMNS).order("id").range(from, to)
     ),
     loadPlayers(supabase),
   ])

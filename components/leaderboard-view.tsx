@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowRightIcon, CoinsIcon, CrownIcon, ScaleIcon, TrendingDownIcon } from "lucide-react"
+import { ArrowRightIcon, CoinsIcon, CrownIcon, ScaleIcon, ScrollTextIcon, TrendingDownIcon, UsersIcon } from "lucide-react"
 import { displayName, LeaderboardPodium } from "@/components/leaderboard-podium"
 import { LeaderboardTable } from "@/components/leaderboard-table"
 import { useLiveSignal } from "@/components/live/live-context"
@@ -13,16 +13,16 @@ import { LiveStamp } from "@/components/pages/live-stamp"
 import { PageHeader } from "@/components/pages/page-header"
 import { PlayerSheet } from "@/components/pages/player-sheet"
 import { PAGE_KEYS, useLeaderboard } from "@/components/pages/queries"
+import { SeasonPicker, TREASURY_HELP } from "@/components/pages/season-picker"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { InfoTip } from "@/components/ui/info-tip"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/hooks/use-auth"
 import { domainOf, type LiveDomain } from "@/lib/live/events"
 import { COURT_LIST_HELP, LEADERBOARD_HELP, TREASURY_TOTALS_HELP } from "@/lib/pages/help"
 import type { LeaderboardEntry, PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
-
-const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"]
 
 // These events move balances (or the act) without naming the leaderboard in their invalidation roots.
 const TREASURY_DOMAINS: ReadonlySet<LiveDomain> = new Set<LiveDomain>(["title", "bounty", "duel", "sidebet", "vote", "shame", "act"])
@@ -65,13 +65,20 @@ function YourStanding({ entries }: { entries: LeaderboardEntry[] }) {
   )
 }
 
-function TreasuryTotals({ entries }: { entries: LeaderboardEntry[] }) {
+function TreasuryTotals({ entries, sealed }: { entries: LeaderboardEntry[]; sealed: boolean }) {
   const total = entries.reduce((sum, e) => sum + e.balance, 0)
   const debtors = entries.filter((e) => e.balance < 0).length
   const moved = entries.reduce((sum, e) => sum + Math.abs(e.delta_24h), 0)
   const items = [
-    { icon: CoinsIcon, label: "Coin in play", value: formatNumber(total), help: TREASURY_TOTALS_HELP.coin },
-    { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved), help: TREASURY_TOTALS_HELP.moved },
+    { icon: CoinsIcon, label: sealed ? "Final treasury" : "Coin in play", value: formatNumber(total), help: TREASURY_TOTALS_HELP.coin },
+    sealed
+      ? {
+          icon: UsersIcon,
+          label: "Nobles",
+          value: formatNumber(entries.length),
+          help: { title: "Nobles", does: "How many players held a treasury when this act was sealed.", cost: "Free to look at." },
+        }
+      : { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved), help: TREASURY_TOTALS_HELP.moved },
     {
       icon: TrendingDownIcon,
       label: "In debt",
@@ -119,7 +126,11 @@ function LeaderboardSkeleton() {
 }
 
 export function LeaderboardView() {
-  const query = useLeaderboard()
+  const [picked, setSeason] = useSeasonParam()
+  // Balances restart every act, so the treasury has no all-time view: "all" from another tab reads the live act.
+  const season = picked === "all" ? "current" : picked
+  const query = useLeaderboard(season)
+  const sealed = query.data?.sealed ?? false
   const queryClient = useQueryClient()
   const { user, isLoading: authLoading } = useAuthUser()
   const [open, setOpen] = useState<PlayerRef | null>(null)
@@ -139,12 +150,27 @@ export function LeaderboardView() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
-        eyebrow={act ? `Act ${ROMAN[act.number] ?? act.number} · ${act.subtitle ?? act.name}` : "The kingdom"}
+        eyebrow="The kingdom"
         title="The Treasury"
         description="Every coin in the kingdom, counted twice. Salaxe counts it a third time, in his little notebook."
         help={LEADERBOARD_HELP}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
+      <div className="flex flex-wrap items-center gap-2">
+        <SeasonPicker value={season} onChange={setSeason} served={query.data?.season} allowAll={false} help={TREASURY_HELP} className="w-full sm:w-auto" />
+        {sealed && act ? (
+          <Link
+            href={`/archives/${act.id}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[var(--color-gold)]/25 px-3 text-sm font-medium text-[var(--color-gold-light)] transition-colors outline-none hover:bg-[var(--color-gold)]/10 focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <ScrollTextIcon className="size-4" aria-hidden />
+            The act&apos;s full archive
+          </Link>
+        ) : null}
+        {picked === "all" ? (
+          <p className="w-full text-xs text-muted-foreground">The treasury restarts with every act, so it has no all-time view. Here is the act being played.</p>
+        ) : null}
+      </div>
 
       {query.isPending ? (
         <LeaderboardSkeleton />
@@ -156,14 +182,20 @@ export function LeaderboardView() {
           retrying={query.isFetching}
         />
       ) : entries.length === 0 ? (
-        <PageEmpty icon={CrownIcon} title="The vault is empty">
-          No coin has changed hands yet. Sign in, claim your daily stipend and play a game to open the books.
-        </PageEmpty>
+        sealed ? (
+          <PageEmpty icon={ScrollTextIcon} title="No standings were sealed">
+            This act closed without a final count of the treasury. Its games still live in the stats and the history.
+          </PageEmpty>
+        ) : (
+          <PageEmpty icon={CrownIcon} title="The vault is empty">
+            No coin has changed hands yet. Sign in, claim your daily stipend and play a game to open the books.
+          </PageEmpty>
+        )
       ) : (
         <>
           <LeaderboardPodium entries={entries.slice(0, 3)} onOpen={setOpen} />
-          <TreasuryTotals entries={entries} />
-          <YourStanding entries={entries} />
+          <TreasuryTotals entries={entries} sealed={sealed} />
+          {sealed ? null : <YourStanding entries={entries} />}
           {entries.length > 3 ? (
             <section aria-labelledby="court-title" className="space-y-3">
               <div className="flex items-baseline justify-between gap-2">
@@ -173,14 +205,16 @@ export function LeaderboardView() {
                   </h2>
                   <InfoTip help={COURT_LIST_HELP} />
                 </div>
-                <span className="hidden text-xs text-muted-foreground sm:inline">Arrows: movement in the last 24 hours</span>
+                <span className="hidden text-xs text-muted-foreground sm:inline">
+                  {sealed ? "Final standings, sealed when the act closed" : "Arrows: movement in the last 24 hours"}
+                </span>
               </div>
-              <LeaderboardTable entries={entries.slice(3)} onOpen={setOpen} />
+              <LeaderboardTable entries={entries.slice(3)} onOpen={setOpen} sealed={sealed} />
             </section>
           ) : null}
         </>
       )}
-      <PlayerSheet player={open} onClose={() => setOpen(null)} />
+      <PlayerSheet player={open} onClose={() => setOpen(null)} season={season} />
     </div>
   )
 }

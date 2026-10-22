@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { createClient } from "@/lib/supabase"
+import { seasonFromRequest } from "@/lib/pages/season"
 import { json, loadMatchContext, scribeError } from "@/lib/pages/server"
 import type { MatchupGame, RivalryDetailResponse } from "@/lib/pages/types"
 
@@ -8,7 +9,7 @@ const Params = z
   .refine((p) => p.playerA !== p.playerB, { message: "A rivalry needs two people" })
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ playerA: string; playerB: string }> }
 ) {
   const parsed = Params.safeParse(await params)
@@ -17,7 +18,9 @@ export async function GET(
 
   const supabase = await createClient()
   try {
-    const { data, internalOf } = await loadMatchContext(supabase)
+    const scope = await seasonFromRequest(supabase, request)
+    if ("error" in scope) return scope.error
+    const { data, internalOf } = await loadMatchContext(supabase, scope.window)
     const a = data.players.get(playerA)
     const b = data.players.get(playerB)
     if (!a || !b) return scribeError("One of them is not in the royal register.", 404)
@@ -47,7 +50,7 @@ export async function GET(
       }
     }
 
-    const body: RivalryDetailResponse = { a, b, versus, together, allied }
+    const body: RivalryDetailResponse = { a, b, versus, together, allied, season: scope.season }
     return json(body)
   } catch {
     return scribeError()

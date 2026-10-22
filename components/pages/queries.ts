@@ -1,11 +1,13 @@
 "use client"
 
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query"
+import { withSeason, type SeasonKey } from "@/components/pages/use-season"
 import type {
   ArchiveDetailResponse,
   ArchivesResponse,
   ChampionsResponse,
   DuosResponse,
+  GameDetailResponse,
   HistoryResponse,
   LeaderboardResponse,
   PlayerDetailResponse,
@@ -35,93 +37,107 @@ export async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T
 const retryTransient = (count: number, error: Error) =>
   count < 2 && !(error instanceof PageApiError && error.status >= 400 && error.status < 500)
 
+// Every stats key carries its season right after the live root, so one invalidation of "games" refreshes them all.
 export const PAGE_KEYS = {
   leaderboard: ["leaderboard"] as const,
-  stats: ["games", "stats"] as const,
-  champions: ["games", "champions"] as const,
-  duos: ["games", "duos"] as const,
-  rivalries: ["games", "rivalries"] as const,
-  rivalry: (a: string, b: string) => ["games", "rivalries", a, b] as const,
-  history: (playerId: string | null) => ["games", "history", playerId ?? "all"] as const,
-  player: (playerId: string) => ["games", "player", playerId] as const,
+  treasury: (season: SeasonKey = "current") => ["leaderboard", season] as const,
+  stats: (season: SeasonKey = "current") => ["games", "stats", season] as const,
+  champions: (season: SeasonKey = "current") => ["games", "champions", season] as const,
+  duos: (season: SeasonKey = "current") => ["games", "duos", season] as const,
+  rivalries: (season: SeasonKey = "current") => ["games", "rivalries", season] as const,
+  rivalry: (a: string, b: string, season: SeasonKey = "current") => ["games", "rivalries", season, a, b] as const,
+  history: (playerId: string | null, season: SeasonKey = "current") => ["games", "history", season, playerId ?? "all"] as const,
+  player: (playerId: string, season: SeasonKey = "current") => ["games", "player", season, playerId] as const,
+  game: (gameId: string) => ["games", "game", gameId] as const,
   pointsHistory: (userId: string | null) => ["points", userId ?? "anonymous", "history"] as const,
   archives: ["acts", "list"] as const,
   archive: (id: number) => ["acts", id, "archive"] as const,
 }
 
-export function useLeaderboard() {
+export function useLeaderboard(season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.leaderboard,
-    queryFn: ({ signal }) => fetchJson<LeaderboardResponse>("/api/leaderboard", signal),
+    queryKey: PAGE_KEYS.treasury(season),
+    queryFn: ({ signal }) => fetchJson<LeaderboardResponse>(withSeason("/api/leaderboard", season), signal),
     staleTime: 10_000,
     retry: retryTransient,
   })
 }
 
-export function useStats() {
+export function useStats(season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.stats,
-    queryFn: ({ signal }) => fetchJson<StatsResponse>("/api/stats", signal),
+    queryKey: PAGE_KEYS.stats(season),
+    queryFn: ({ signal }) => fetchJson<StatsResponse>(withSeason("/api/stats", season), signal),
     staleTime: 30_000,
     retry: retryTransient,
   })
 }
 
-export function useChampionStats() {
+export function useChampionStats(season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.champions,
-    queryFn: ({ signal }) => fetchJson<ChampionsResponse>("/api/stats/champions", signal),
+    queryKey: PAGE_KEYS.champions(season),
+    queryFn: ({ signal }) => fetchJson<ChampionsResponse>(withSeason("/api/stats/champions", season), signal),
     staleTime: 60_000,
     retry: retryTransient,
   })
 }
 
-export function useDuos() {
+export function useDuos(season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.duos,
-    queryFn: ({ signal }) => fetchJson<DuosResponse>("/api/duos", signal),
+    queryKey: PAGE_KEYS.duos(season),
+    queryFn: ({ signal }) => fetchJson<DuosResponse>(withSeason("/api/duos", season), signal),
     staleTime: 30_000,
     retry: retryTransient,
   })
 }
 
-export function useRivalries() {
+export function useRivalries(season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.rivalries,
-    queryFn: ({ signal }) => fetchJson<RivalriesResponse>("/api/rivalries", signal),
+    queryKey: PAGE_KEYS.rivalries(season),
+    queryFn: ({ signal }) => fetchJson<RivalriesResponse>(withSeason("/api/rivalries", season), signal),
     staleTime: 30_000,
     retry: retryTransient,
   })
 }
 
-export function useRivalryDetail(a: string | null, b: string | null) {
+export function useRivalryDetail(a: string | null, b: string | null, season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.rivalry(a ?? "none", b ?? "none"),
-    queryFn: ({ signal }) => fetchJson<RivalryDetailResponse>(`/api/rivalries/${a}/${b}`, signal),
+    queryKey: PAGE_KEYS.rivalry(a ?? "none", b ?? "none", season),
+    queryFn: ({ signal }) => fetchJson<RivalryDetailResponse>(withSeason(`/api/rivalries/${a}/${b}`, season), signal),
     enabled: !!a && !!b,
     staleTime: 30_000,
     retry: retryTransient,
   })
 }
 
-export function usePlayerDetail(playerId: string | null) {
+export function usePlayerDetail(playerId: string | null, season: SeasonKey = "current") {
   return useQuery({
-    queryKey: PAGE_KEYS.player(playerId ?? "none"),
-    queryFn: ({ signal }) => fetchJson<PlayerDetailResponse>(`/api/stats/players/${playerId}`, signal),
+    queryKey: PAGE_KEYS.player(playerId ?? "none", season),
+    queryFn: ({ signal }) => fetchJson<PlayerDetailResponse>(withSeason(`/api/stats/players/${playerId}`, season), signal),
     enabled: !!playerId,
     staleTime: 30_000,
     retry: retryTransient,
   })
 }
 
-export function useHistory(playerId: string | null) {
+// A single game, whatever act it belongs to: the match sheet and links to /history?game=<id>.
+export function useGameDetail(gameId: string | null) {
+  return useQuery({
+    queryKey: PAGE_KEYS.game(gameId ?? "none"),
+    queryFn: ({ signal }) => fetchJson<GameDetailResponse>(`/api/games/${gameId}`, signal),
+    enabled: !!gameId,
+    staleTime: 60_000,
+    retry: retryTransient,
+  })
+}
+
+export function useHistory(playerId: string | null, season: SeasonKey = "current") {
   return useInfiniteQuery({
-    queryKey: PAGE_KEYS.history(playerId),
+    queryKey: PAGE_KEYS.history(playerId, season),
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({ limit: "15" })
       if (pageParam) params.set("cursor", pageParam)
       if (playerId) params.set("player", playerId)
-      return fetchJson<HistoryResponse>(`/api/games?${params}`, signal)
+      return fetchJson<HistoryResponse>(withSeason("/api/games", season, params), signal)
     },
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,

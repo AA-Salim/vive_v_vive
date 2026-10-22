@@ -1,16 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { HandshakeIcon, SwordsIcon } from "lucide-react"
+import { ChevronRightIcon, HandshakeIcon, SwordsIcon } from "lucide-react"
 import { LaneIcon } from "@/components/lane-icon"
 import { ChampionIcon, PlayerAvatar } from "@/components/pages/avatars"
 import { Segmented } from "@/components/pages/controls"
 import { formatShortDay, plural } from "@/components/pages/format"
+import { MatchSheet, type MatchPreview } from "@/components/pages/match-sheet"
 import { useRivalryDetail } from "@/components/pages/queries"
 import { PageError } from "@/components/pages/states"
+import type { SeasonKey } from "@/components/pages/use-season"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ROLE_LABELS } from "@/lib/champions"
+import { roman } from "@/lib/lore/herald/kit"
 import type { MatchupGame, MatchupSide, RivalryDetailResponse } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -24,50 +27,65 @@ interface RivalryDetailDialogProps {
   playerAName: string
   playerBName: string
   initialView?: PairView
+  // The act the opening page is reading.
+  season?: SeasonKey
 }
 
+// Rendered inside a row button, so only phrasing elements (spans) are allowed here.
 function Seat({ seat, won, align }: { seat: MatchupSide; won: boolean; align: "left" | "right" }) {
   return (
-    <div className={cn("flex min-w-0 items-center gap-2", align === "right" && "flex-row-reverse text-right")}>
+    <span className={cn("flex min-w-0 items-center gap-2", align === "right" && "flex-row-reverse text-right")}>
       <ChampionIcon name={seat.champion} internal={seat.internal} size={36} side={seat.side} dimmed={!won} />
-      <div className="min-w-0">
-        <p className={cn("truncate text-sm font-medium", won ? "text-[var(--color-gold-light)]" : "text-muted-foreground")}>{seat.champion}</p>
-        <p className={cn("flex items-center gap-1 text-[11px] text-muted-foreground", align === "right" && "justify-end")}>
+      <span className="block min-w-0">
+        <span className={cn("block truncate text-sm font-medium", won ? "text-[var(--color-gold-light)]" : "text-muted-foreground")}>{seat.champion}</span>
+        <span className={cn("flex items-center gap-1 text-[11px] text-muted-foreground", align === "right" && "justify-end")}>
           <LaneIcon lane={seat.lane} size={11} className="text-[var(--color-gold)]/60" />
           {ROLE_LABELS[seat.lane]}
-        </p>
-      </div>
-    </div>
+        </span>
+      </span>
+    </span>
   )
 }
 
-function GameRow({ game, allied }: { game: MatchupGame; allied: boolean }) {
+function GameRow({ game, allied, onOpen }: { game: MatchupGame; allied: boolean; onOpen: (match: MatchPreview) => void }) {
   const aWon = game.winner === game.a.side
   const bWon = game.winner === game.b.side
   const chip = allied ? (aWon ? "W" : "L") : aWon ? "W - L" : "L - W"
   return (
-    <li className="rounded-xl border border-[var(--color-gold)]/10 bg-[var(--color-navy)]/50 p-2.5">
-      <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-        <time dateTime={game.playedAt}>{formatShortDay(game.playedAt)}</time>
-        {game.laneDuel ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/10 px-2 py-0.5 font-semibold text-[var(--color-gold)]">
-            <SwordsIcon className="size-3" aria-hidden />
-            Lane duel
+    <li>
+      <button
+        type="button"
+        onClick={() => onOpen({ gameId: game.gameId, playedAt: game.playedAt, winner: game.winner })}
+        className="group/row block w-full rounded-xl border border-[var(--color-gold)]/10 bg-[var(--color-navy)]/50 p-2.5 text-left transition-colors outline-none hover:border-[var(--color-gold)]/35 hover:bg-[var(--color-navy)]/80 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <span className="mb-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+          <time dateTime={game.playedAt}>{formatShortDay(game.playedAt)}</time>
+          <span className="flex items-center gap-1.5">
+            {game.laneDuel ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[var(--color-gold)]/10 px-2 py-0.5 font-semibold text-[var(--color-gold)]">
+                <SwordsIcon className="size-3" aria-hidden />
+                Lane duel
+              </span>
+            ) : null}
+            <span className="inline-flex items-center gap-0.5 font-medium text-[var(--color-gold-light)]/70 group-hover/row:text-[var(--color-gold-light)]">
+              Full match
+              <ChevronRightIcon className="size-3.5" aria-hidden />
+            </span>
           </span>
-        ) : null}
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-        <Seat seat={game.a} won={aWon} align="left" />
-        <span
-          className={cn(
-            "rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
-            aWon ? "bg-emerald-400/15 text-emerald-300" : "bg-rose-400/15 text-rose-300"
-          )}
-        >
-          {chip}
         </span>
-        <Seat seat={game.b} won={bWon} align="right" />
-      </div>
+        <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+          <Seat seat={game.a} won={aWon} align="left" />
+          <span
+            className={cn(
+              "rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+              aWon ? "bg-emerald-400/15 text-emerald-300" : "bg-rose-400/15 text-rose-300"
+            )}
+          >
+            {chip}
+          </span>
+          <Seat seat={game.b} won={bWon} align="right" />
+        </span>
+      </button>
     </li>
   )
 }
@@ -102,9 +120,10 @@ function Scoreboard({ data, view }: { data: RivalryDetailResponse; view: PairVie
   )
 }
 
-function PairFile({ playerAId, playerBId, initialView }: { playerAId: string; playerBId: string; initialView: PairView }) {
-  const detail = useRivalryDetail(playerAId, playerBId)
+function PairFile({ playerAId, playerBId, initialView, season }: { playerAId: string; playerBId: string; initialView: PairView; season: SeasonKey }) {
+  const detail = useRivalryDetail(playerAId, playerBId, season)
   const [view, setView] = useState<PairView>(initialView)
+  const [match, setMatch] = useState<MatchPreview | null>(null)
   const data = detail.data
 
   if (detail.isPending) {
@@ -162,10 +181,11 @@ function PairFile({ playerAId, playerBId, initialView }: { playerAId: string; pl
       ) : (
         <ol className="space-y-2" aria-label={view === "versus" ? "Games against each other, newest first" : "Games together, newest first"}>
           {games.map((game) => (
-            <GameRow key={game.gameId} game={game} allied={view === "allied"} />
+            <GameRow key={game.gameId} game={game} allied={view === "allied"} onOpen={setMatch} />
           ))}
         </ol>
       )}
+      <MatchSheet match={match} onClose={() => setMatch(null)} focus={[data.a, data.b]} />
     </div>
   )
 }
@@ -178,6 +198,7 @@ export function RivalryDetailDialog({
   playerAName,
   playerBName,
   initialView = "versus",
+  season = "current",
 }: RivalryDetailDialogProps) {
   // The last pair stays on screen while the dialog animates out, even once the parent has cleared it.
   const [pair, setPair] = useState({ a: playerAId, b: playerBId, aName: playerAName, bName: playerBName, view: initialView })
@@ -196,9 +217,14 @@ export function RivalryDetailDialog({
           <DialogTitle className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
             {pair.aName} <span className="text-muted-foreground">{pair.view === "allied" ? "&" : "vs"}</span> {pair.bName}
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">Every game they shared, as enemies and as allies.</DialogDescription>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Every game they shared {season === "all" ? "across every act" : season === "current" ? "this act" : `in Act ${roman(season)}`}, as
+            enemies and as allies. Tap one for the full match.
+          </DialogDescription>
         </DialogHeader>
-        {pair.a && pair.b ? <PairFile key={`${pair.a}:${pair.b}:${pair.view}`} playerAId={pair.a} playerBId={pair.b} initialView={pair.view} /> : null}
+        {pair.a && pair.b ? (
+          <PairFile key={`${pair.a}:${pair.b}:${pair.view}:${season}`} playerAId={pair.a} playerBId={pair.b} initialView={pair.view} season={season} />
+        ) : null}
       </DialogContent>
     </Dialog>
   )

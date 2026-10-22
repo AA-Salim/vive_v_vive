@@ -14,7 +14,9 @@ import { Ledger } from "@/components/pages/profile/ledger"
 import { ProfileHero } from "@/components/pages/profile/profile-hero"
 import { TitlesCard } from "@/components/pages/profile/titles-card"
 import { PageApiError, usePlayerDetail, usePointsHistory } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
@@ -67,7 +69,8 @@ export function ProfileView() {
   const points = usePoints(userId)
   const history = usePointsHistory(userId)
   const playerId = profile?.player_id ?? null
-  const detail = usePlayerDetail(playerId)
+  const [season, setSeason] = useSeasonParam()
+  const detail = usePlayerDetail(playerId, season)
   const [claimOpen, setClaimOpen] = useState(false)
   const economy = useEconomy(history.data?.act?.initialGrant)
   const titlesHelp = economy.find((entry) => entry.key === "titles")?.help
@@ -180,10 +183,11 @@ export function ProfileView() {
 
       <SectionCard
         id="rift-record"
-        eyebrow="All time"
+        eyebrow={season === "all" ? "All time" : season === "current" ? "This act" : "A past act"}
         title={playerId ? "Your record on the Rift" : "The Rift does not know you yet"}
         description={playerId ? "Wins, lanes, champions and the people who ruin your evenings." : undefined}
         help={PROFILE_HELP.record}
+        action={playerId ? <SeasonPicker value={season} onChange={setSeason} served={detail.data?.season} size="sm" /> : undefined}
       >
         {!playerId ? (
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -200,7 +204,9 @@ export function ProfileView() {
         ) : detail.data ? (
           <PlayerRecord detail={detail.data} />
         ) : detail.error instanceof PageApiError && detail.error.status === 404 ? (
-          <p className="text-sm text-muted-foreground">No games recorded yet. Your legend starts with the first one.</p>
+          <p className="text-sm text-muted-foreground">
+            {season === "all" ? "No games recorded yet. Your legend starts with the first one." : "No games for you in this act yet. Your legend continues with the next one."}
+          </p>
         ) : (
           <PageError message={detail.error?.message} onRetry={() => void detail.refetch()} retrying={detail.isFetching} className="py-6" />
         )}

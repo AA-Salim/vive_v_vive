@@ -1,6 +1,16 @@
-import type { GameMode, Role, Side } from "@/lib/types"
+import type { ActStatus, GameMode, Role, Side } from "@/lib/types"
 
 export type Outcome = "W" | "L"
+
+// An act seen as a stats season. Responses carry the one they were computed for: null means all time.
+export interface Season {
+  id: number
+  number: number
+  name: string
+  status: ActStatus
+  startedAt: string
+  endedAt: string | null
+}
 
 export interface PlayerRef {
   id: string
@@ -69,6 +79,7 @@ export interface StatsResponse {
   }
   players: PlayerStat[]
   records: StatsRecord[]
+  season: Season | null
 }
 
 export interface Rivalry {
@@ -87,6 +98,7 @@ export interface Rivalry {
 export interface RivalriesResponse {
   players: PlayerRef[]
   rivalries: Rivalry[]
+  season: Season | null
 }
 
 export interface MatchupSide {
@@ -112,6 +124,7 @@ export interface RivalryDetailResponse {
   together: { games: number; wins: number }
   // Games where both sat on the same side, newest first.
   allied: MatchupGame[]
+  season: Season | null
 }
 
 export type BadgeTone = "royal" | "hype" | "roast"
@@ -139,6 +152,7 @@ export interface DuosResponse {
   players: PlayerRef[]
   duos: Duo[]
   minGames: number
+  season: Season | null
 }
 
 export interface ChampionStat {
@@ -162,6 +176,7 @@ export interface ChampionsResponse {
   totals: { picks: number; unique: number; pool: number }
   champions: ChampionStat[]
   pools: Record<Role, PoolChampion[]>
+  season: Season | null
 }
 
 export interface Matchup {
@@ -196,6 +211,7 @@ export interface PlayerDetailResponse {
   prey: Matchup | null
   bestDuo: Partner | null
   worstDuo: Partner | null
+  season: Season | null
 }
 
 export interface HistoryPlayer {
@@ -219,6 +235,13 @@ export interface HistoryGame {
 export interface HistoryResponse {
   games: HistoryGame[]
   nextCursor: string | null
+  season: Season | null
+}
+
+export interface GameDetailResponse {
+  game: HistoryGame
+  // The act the game was played in, null when it fell between two acts.
+  season: Season | null
 }
 
 export type * from "@/lib/pages/economy-types"

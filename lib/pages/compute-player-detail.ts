@@ -15,7 +15,7 @@ export function computePlayerDetail(
   data: MatchData,
   internalOf: ChampionLookup,
   playerId: string
-): PlayerDetailResponse | null {
+): Omit<PlayerDetailResponse, "season"> | null {
   const own = data.matches.filter((m) => m.seats.some((s) => s.playerId === playerId))
   const stat = computePlayerStats({ matches: own, players: data.players }, internalOf).find((s) => s.id === playerId)
   if (!stat) return null

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { getChampionPools } from "@/lib/champions-db"
 import { buildChampionIndex, type ChampionLookup } from "@/lib/pages/champion-index"
 import { loadMatchData, type MatchData } from "@/lib/pages/matches"
+import { ALL_TIME, type PlayedWindow } from "@/lib/pages/season-calendar"
 import type { PoolChampion } from "@/lib/pages/types"
 import type { Role } from "@/lib/types"
 
@@ -27,8 +28,8 @@ export function loadPools(): Promise<Record<Role, PoolChampion[]>> {
   return poolsCache.pools
 }
 
-export async function loadMatchContext(supabase: SupabaseClient): Promise<MatchContext> {
-  const [data, pools] = await Promise.all([loadMatchData(supabase), loadPools()])
+export async function loadMatchContext(supabase: SupabaseClient, window: PlayedWindow = ALL_TIME): Promise<MatchContext> {
+  const [data, pools] = await Promise.all([loadMatchData(supabase, window), loadPools()])
   return { data, internalOf: buildChampionIndex(pools), pools }
 }
 

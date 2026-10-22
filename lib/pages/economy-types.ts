@@ -1,3 +1,4 @@
+import type { Season } from "@/lib/pages/types"
 import type { ReasonGroup } from "@/lib/reasons"
 import type { ActStatus } from "@/lib/types"
 
@@ -34,6 +35,9 @@ export interface LeaderboardResponse {
   leaderboard: LeaderboardEntry[]
   act: ActRef | null
   generatedAt: string
+  season: Season | null
+  // An archived act: its final standings as sealed when it closed, no live movement.
+  sealed: boolean
 }
 
 export interface BalancePoint {

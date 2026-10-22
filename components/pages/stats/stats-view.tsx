@@ -8,11 +8,13 @@ import { LiveStamp } from "@/components/pages/live-stamp"
 import { PageHeader } from "@/components/pages/page-header"
 import { PlayerSheet } from "@/components/pages/player-sheet"
 import { useStats } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { StatTile } from "@/components/pages/stat-tile"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { StatsRecords } from "@/components/pages/stats/stats-records"
 import { sortPlayers, StatsCards, StatsTable, type SortKey, type SortState } from "@/components/pages/stats/stats-table"
 import { InfoTip } from "@/components/ui/info-tip"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RATE_MIN_GAMES } from "@/lib/pages/constants"
 import { STATS_HELP } from "@/lib/pages/help"
@@ -47,7 +49,8 @@ function StatsSkeleton() {
 }
 
 export function StatsView() {
-  const query = useStats()
+  const [season, setSeason] = useSeasonParam()
+  const query = useStats(season)
   const [scope, setScope] = useState<Scope>("regulars")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortState>({ key: "wins", ascending: false })
@@ -75,13 +78,14 @@ export function StatsView() {
         help={STATS_HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
+      <SeasonPicker value={season} onChange={setSeason} served={query.data?.season} />
 
       {query.isPending ? (
         <StatsSkeleton />
       ) : !data ? (
         <PageError title="The record books are locked" message={query.error?.message} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       ) : data.players.length === 0 ? (
-        <PageEmpty icon={BarChart3Icon} title="No games played yet">
+        <PageEmpty icon={BarChart3Icon} title={data.season ? "No games this act yet" : "No games played yet"}>
           The record books open with the first declared winner.
         </PageEmpty>
       ) : (
@@ -112,7 +116,7 @@ export function StatsView() {
               icon={CalendarIcon}
               label="Since"
               value={data.totals.firstGameAt ? formatShortDay(data.totals.firstGameAt) : "-"}
-              hint="The first recorded game"
+              hint={data.season ? "The first game of the act" : "The first recorded game"}
               help={STATS_HELP.since}
             />
           </div>
@@ -172,7 +176,7 @@ export function StatsView() {
         </>
       )}
 
-      <PlayerSheet player={open} onClose={() => setOpen(null)} />
+      <PlayerSheet player={open} onClose={() => setOpen(null)} season={season} />
     </div>
   )
 }

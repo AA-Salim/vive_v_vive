@@ -11,7 +11,9 @@ import { plural } from "@/components/pages/format"
 import { LiveStamp } from "@/components/pages/live-stamp"
 import { PageHeader } from "@/components/pages/page-header"
 import { useDuos } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -38,7 +40,8 @@ function DuosSkeleton() {
 }
 
 export function DuosView() {
-  const query = useDuos()
+  const [season, setSeason] = useSeasonParam()
+  const query = useDuos(season)
   const { profile } = useAuth()
   const [scope, setScope] = useState<"regulars" | "everyone">("regulars")
   const [sort, setSort] = useState<Sort>("wins")
@@ -95,13 +98,14 @@ export function DuosView() {
         help={help.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
+      <SeasonPicker value={season} onChange={setSeason} served={query.data?.season} />
 
       {query.isPending ? (
         <DuosSkeleton />
       ) : !data ? (
         <PageError title="The pairing book is lost" message={query.error?.message} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       ) : data.duos.length === 0 ? (
-        <PageEmpty icon={UsersIcon} title="No duos yet">
+        <PageEmpty icon={UsersIcon} title={data.season ? "No duos this act yet" : "No duos yet"}>
           Duos form the moment two people win or lose on the same side. Play a game.
         </PageEmpty>
       ) : (
@@ -212,6 +216,7 @@ export function DuosView() {
         playerAName={open ? players.get(open.a)?.name ?? "" : ""}
         playerBName={open ? players.get(open.b)?.name ?? "" : ""}
         initialView="allied"
+        season={season}
       />
     </div>
   )

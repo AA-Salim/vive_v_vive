@@ -1,12 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { ChampionLookup } from "@/lib/pages/champion-index"
+import { withinWindow } from "@/lib/pages/season"
+import type { PlayedWindow } from "@/lib/pages/season-calendar"
 import type { HistoryGame, HistoryPlayer, PlayerRef } from "@/lib/pages/types"
 import type { GameMode, Role, Side } from "@/lib/types"
 
 const LANE_ORDER: Role[] = ["top", "jungle", "mid", "adc", "support"]
 const MODES: GameMode[] = ["standard", "coach_draft", "vainqueur"]
 
-interface GameRow {
+export interface GameRow {
   id: string
   played_at: string
   winner_side: string
@@ -37,16 +39,14 @@ export function decodeCursor(raw: string | null | undefined): Cursor | null {
   }
 }
 
+export const GAME_COLUMNS = "id, played_at, winner_side, roster:game_players(player_id, side, lane, champion)"
+
 export async function loadHistoryPage(
   supabase: SupabaseClient,
-  options: { limit: number; cursor: Cursor | null; playerId: string | null }
+  options: { limit: number; cursor: Cursor | null; playerId: string | null; window: PlayedWindow }
 ): Promise<{ rows: GameRow[]; next: Cursor | null }> {
-  const columns = options.playerId
-    ? "id, played_at, winner_side, roster:game_players(player_id, side, lane, champion), seat:game_players!inner(player_id)"
-    : "id, played_at, winner_side, roster:game_players(player_id, side, lane, champion)"
-  let query = supabase
-    .from("games")
-    .select(columns)
+  const columns = options.playerId ? `${GAME_COLUMNS}, seat:game_players!inner(player_id)` : GAME_COLUMNS
+  let query = withinWindow(supabase.from("games").select(columns), options.window)
     .order("played_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(options.limit + 1)

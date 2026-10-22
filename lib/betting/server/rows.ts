@@ -56,7 +56,8 @@ export async function loadSessionBets(
 
 export async function loadSettledBets(
   supabase: SupabaseClient,
-  since: string | null
+  since: string | null,
+  until: string | null = null
 ): Promise<{ rows: BetRow[]; version: RulesVersion }> {
   let version: RulesVersion = 2
   const rows: BetRow[] = []
@@ -69,6 +70,7 @@ export async function loadSettledBets(
       .order("created_at", { ascending: false })
       .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1)
     if (since) query = query.gte("created_at", since)
+    if (until) query = query.lt("created_at", until)
     const { data, error } = await query
     if (error) {
       if (version === 2 && page === 0 && isMissingSchema(error)) {

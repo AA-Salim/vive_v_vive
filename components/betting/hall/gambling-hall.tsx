@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { NotebookPenIcon, RefreshCwIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
@@ -12,34 +11,11 @@ import { HallStandings } from "@/components/betting/hall/hall-standings"
 import { useHall } from "@/components/betting/hall/use-hall"
 import { useLive } from "@/components/live/live-provider"
 import { HALL_HELP, HALL_TOTALS_HELP } from "@/lib/betting/help"
+import { SeasonPicker } from "@/components/pages/season-picker"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { formatSigned } from "@/lib/betting/math"
-import type { HallOfFame, HallScope } from "@/lib/betting/types"
+import type { HallOfFame } from "@/lib/betting/types"
 import { cn } from "@/lib/utils"
-
-function ScopeToggle({ scope, onChange, actName }: { scope: HallScope; onChange: (scope: HallScope) => void; actName: string | null }) {
-  const options: Array<{ value: HallScope; label: string }> = [
-    { value: "act", label: actName ? "This Act" : "Current Act" },
-    { value: "all", label: "All time" },
-  ]
-  return (
-    <div role="group" aria-label="Time range" className="inline-flex self-start rounded-xl border border-[var(--color-gold)]/20 bg-[var(--color-navy)]/60 p-1 sm:self-auto">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          aria-pressed={scope === option.value}
-          onClick={() => onChange(option.value)}
-          className={cn(
-            "h-10 rounded-lg px-4 text-sm font-semibold transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-            scope === option.value ? "bg-[var(--color-gold)] text-[var(--color-navy)]" : "text-[var(--color-gold-light)]/70 hover:text-[var(--color-gold-light)]"
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 function Totals({ totals }: { totals: HallOfFame["totals"] }) {
   const items: Array<{ key: keyof typeof HALL_TOTALS_HELP; value: number; signed?: boolean }> = [
@@ -91,8 +67,8 @@ function HallSkeleton() {
 }
 
 export function GamblingHall() {
-  const [scope, setScope] = useState<HallScope>("act")
-  const hall = useHall(scope)
+  const [season, setSeason] = useSeasonParam()
+  const hall = useHall(season)
   const { userId } = useLive()
   const data = hall.data
   const actName = data?.act?.name ?? null
@@ -112,7 +88,7 @@ export function GamblingHall() {
               : "Every wager ever written in the little notebook. Glory for the sharp, shame for the rest."}
           </p>
         </div>
-        <ScopeToggle scope={scope} onChange={setScope} actName={actName} />
+        <SeasonPicker value={season} onChange={setSeason} className="w-full sm:w-auto" />
       </header>
 
       {hall.isPending ? (
@@ -130,7 +106,9 @@ export function GamblingHall() {
         <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-[var(--color-gold)]/25 bg-card px-4 py-12 text-center">
           <NotebookPenIcon className="size-8 text-[var(--color-gold)]/70" aria-hidden />
           <p className="font-display text-lg font-semibold text-[var(--color-gold)]">The notebook is blank</p>
-          <p className="max-w-sm text-sm text-muted-foreground">No settled wagers yet. The first bettor to cash out gets a name in gold.</p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            {data.scope === "act" ? "No settled wagers in this act yet." : "No settled wagers yet."} The first bettor to cash out gets a name in gold.
+          </p>
         </div>
       ) : (
         <>

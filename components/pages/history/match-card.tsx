@@ -39,7 +39,7 @@ const SIDE_WASH: Record<Side, string> = {
 }
 
 // Rendered inside the card's toggle button, so only phrasing elements (spans) are allowed here.
-function TeamStrip({ side, players, won, highlight }: { side: Side; players: HistoryPlayer[]; won: boolean; highlight: string | null }) {
+function TeamStrip({ side, players, won, highlight }: { side: Side; players: HistoryPlayer[]; won: boolean; highlight: ReadonlySet<string> }) {
   return (
     <span
       className={cn(
@@ -60,12 +60,12 @@ function TeamStrip({ side, players, won, highlight }: { side: Side; players: His
               size={44}
               side={won ? side : null}
               dimmed={!won}
-              className={cn("size-9 sm:size-10 md:size-11", highlight === p.playerId && "opacity-100 ring-2 ring-[var(--color-gold)] grayscale-0")}
+              className={cn("size-9 sm:size-10 md:size-11", highlight.has(p.playerId) && "opacity-100 ring-2 ring-[var(--color-gold)] grayscale-0")}
             />
             <span
               className={cn(
                 "hidden w-full truncate text-center text-[11px] md:block",
-                highlight === p.playerId ? "font-semibold text-[var(--color-gold)]" : "text-muted-foreground"
+                highlight.has(p.playerId) ? "font-semibold text-[var(--color-gold)]" : "text-muted-foreground"
               )}
             >
               {p.name}
@@ -77,7 +77,7 @@ function TeamStrip({ side, players, won, highlight }: { side: Side; players: His
   )
 }
 
-function Matchups({ game, highlight }: { game: HistoryGame; highlight: string | null }) {
+function Matchups({ game, highlight }: { game: HistoryGame; highlight: ReadonlySet<string> }) {
   const seat = (side: Side, lane: string) => game.players.find((p) => p.side === side && p.lane === lane)
   return (
     <ol className="mt-3 space-y-1.5 border-t border-[var(--color-gold)]/10 pt-3" aria-label="Lane matchups">
@@ -92,7 +92,7 @@ function Matchups({ game, highlight }: { game: HistoryGame; highlight: string | 
                 {p ? (
                   <>
                     <div className={cn("min-w-0", i === 0 ? "order-1" : "order-2")}>
-                      <p className={cn("truncate text-sm font-medium", highlight === p.playerId ? "text-[var(--color-gold)]" : "text-[var(--color-gold-light)]")}>
+                      <p className={cn("truncate text-sm font-medium", highlight.has(p.playerId) ? "text-[var(--color-gold)]" : "text-[var(--color-gold-light)]")}>
                         {p.name}
                       </p>
                       <p className="truncate text-[11px] text-muted-foreground">{p.champion}</p>
@@ -122,7 +122,15 @@ function Matchups({ game, highlight }: { game: HistoryGame; highlight: string | 
   )
 }
 
-export function MatchCard({ game, defaultOpen = false, highlight = null }: { game: HistoryGame; defaultOpen?: boolean; highlight?: string | null }) {
+interface MatchCardProps {
+  game: HistoryGame
+  defaultOpen?: boolean
+  // One player (the history filter) or several (the two rivals of a feud).
+  highlight?: string | readonly string[] | null
+}
+
+export function MatchCard({ game, defaultOpen = false, highlight = null }: MatchCardProps) {
+  const marked = new Set(typeof highlight === "string" ? [highlight] : (highlight ?? []))
   const blue = game.players.filter((p) => p.side === "blue")
   const red = game.players.filter((p) => p.side === "red")
   const mode = game.session ? MODE_LABEL[game.session.mode] : undefined
@@ -186,14 +194,14 @@ export function MatchCard({ game, defaultOpen = false, highlight = null }: { gam
           <span className="mt-3 block text-sm text-muted-foreground">The roster of this game was lost to the void.</span>
         ) : (
           <span className="mt-3 grid gap-1.5 md:grid-cols-2 md:gap-3">
-            <TeamStrip side="blue" players={blue} won={game.winner === "blue"} highlight={highlight} />
-            <TeamStrip side="red" players={red} won={game.winner === "red"} highlight={highlight} />
+            <TeamStrip side="blue" players={blue} won={game.winner === "blue"} highlight={marked} />
+            <TeamStrip side="red" players={red} won={game.winner === "red"} highlight={marked} />
           </span>
         )}
       </CollapsibleTrigger>
       {game.players.length > 0 ? (
         <CollapsibleContent className="px-3 pb-3 sm:px-4 sm:pb-4">
-          <Matchups game={game} highlight={highlight} />
+          <Matchups game={game} highlight={marked} />
         </CollapsibleContent>
       ) : null}
     </Collapsible>

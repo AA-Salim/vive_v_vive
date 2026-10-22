@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
@@ -11,16 +11,21 @@ import { formatDay, localDayKey, plural } from "@/components/pages/format"
 import { FormDots, StreakChip, WinRateMeter } from "@/components/pages/indicators"
 import { LiveStamp } from "@/components/pages/live-stamp"
 import { MatchCard } from "@/components/pages/history/match-card"
+import { OpenedGame } from "@/components/pages/history/opened-game"
 import { PageHeader } from "@/components/pages/page-header"
-import { PAGE_KEYS, useHistory, useStats } from "@/components/pages/queries"
+import { PageApiError, PAGE_KEYS, useGameDetail, useHistory, useStats } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { PageEmpty, PageError } from "@/components/pages/states"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HISTORY_HELP } from "@/lib/pages/help"
+import { seasonTitle } from "@/lib/pages/season-calendar"
 import type { HistoryGame } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
 const PLAYER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const uuidParam = (raw: string | null) => (raw && PLAYER_ID.test(raw) ? raw.toLowerCase() : null)
 
 interface Night {
   key: string
@@ -60,14 +65,31 @@ export function HistoryView() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  const requested = searchParams.get("player")
-  const playerId = requested && PLAYER_ID.test(requested) ? requested : null
+  const playerId = uuidParam(searchParams.get("player"))
+  const target = uuidParam(searchParams.get("game"))
+  const [season, setSeason] = useSeasonParam()
   const reduced = useReducedMotion()
   const queryClient = useQueryClient()
 
-  const stats = useStats()
-  const history = useHistory(playerId)
+  const stats = useStats(season)
+  const history = useHistory(playerId, season)
+  const opened = useGameDetail(target)
   const games = useMemo(() => history.data?.pages.flatMap((p) => p.games) ?? [], [history.data])
+  const served = history.isPlaceholderData ? undefined : history.data?.pages[0]?.season
+
+  // A linked game deeper than the loaded pages (or from another act) is pinned on top, once, so it never jumps around.
+  const inList = target !== null && games.some((g) => g.id === target)
+  const [pinnedFor, setPinnedFor] = useState<string | null>(null)
+  if (target && history.isSuccess && !history.isPlaceholderData && !inList && pinnedFor !== target) setPinnedFor(target)
+  const pinned = target !== null && pinnedFor === target
+  const openedGone = opened.error instanceof PageApiError && opened.error.status === 404
+  const scrolledTo = useRef<string | null>(null)
+  const targetReady = target !== null && (pinned ? opened.isSuccess || openedGone : inList)
+  useEffect(() => {
+    if (!target || !targetReady || scrolledTo.current === target) return
+    scrolledTo.current = target
+    document.getElementById(pinned ? "opened-game" : `game-${target}`)?.scrollIntoView({ block: "start", behavior: reduced ? "auto" : "smooth" })
+  }, [target, targetReady, pinned, reduced])
   const nights = useMemo(() => groupNights(games), [games])
   const focus = playerId ? stats.data?.players.find((p) => p.id === playerId) ?? null : null
   const players = useMemo(() => {
@@ -82,7 +104,7 @@ export function HistoryView() {
   // The Tribunal's MVP and Inter land after the game itself: refresh the verdicts the moment the vote closes.
   useLiveSignal((signal) => {
     if (signal.kind === "event" && signal.event.type === "vote.closed") {
-      void queryClient.invalidateQueries({ queryKey: PAGE_KEYS.history(playerId) })
+      void queryClient.invalidateQueries({ queryKey: PAGE_KEYS.history(playerId, season) })
     }
   })
 
@@ -90,6 +112,13 @@ export function HistoryView() {
     const params = new URLSearchParams(searchParams.toString())
     if (next) params.set("player", next)
     else params.delete("player")
+    const query = params.toString()
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+  }
+
+  const closeOpened = () => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.delete("game")
     const query = params.toString()
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
   }
@@ -103,6 +132,7 @@ export function HistoryView() {
         help={HISTORY_HELP}
         actions={<LiveStamp updatedAt={history.dataUpdatedAt} fetching={history.isFetching && !history.isPending && !history.isFetchingNextPage} />}
       />
+      <SeasonPicker value={season} onChange={setSeason} served={served} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <PlayerSelect value={playerId} onChange={setPlayer} players={players} label="Show the games of" everyoneLabel="Every match" className="w-full sm:w-56" />
@@ -122,6 +152,20 @@ export function HistoryView() {
         ) : null}
       </div>
 
+      {pinned ? (
+        <OpenedGame
+          detail={opened.data}
+          loading={opened.isPending}
+          gone={openedGone}
+          error={opened.error?.message ?? null}
+          retrying={opened.isFetching}
+          onRetry={() => void opened.refetch()}
+          onClose={closeOpened}
+          listed={served}
+          highlight={playerId}
+        />
+      ) : null}
+
       {history.isPending ? (
         <HistorySkeleton />
       ) : history.isError && games.length === 0 ? (
@@ -132,7 +176,10 @@ export function HistoryView() {
           retrying={history.isFetching}
         />
       ) : games.length === 0 ? (
-        <PageEmpty icon={HistoryIcon} title={focus ? `${focus.name} has not played yet` : "No games played yet"}>
+        <PageEmpty
+          icon={HistoryIcon}
+          title={focus ? `${focus.name} has not played yet` : served ? "No games this act yet" : "No games played yet"}
+        >
           {focus ? "His chapter of the chronicle is still blank." : "The first game will be written here the moment a winner is declared."}
         </PageEmpty>
       ) : (
@@ -152,11 +199,21 @@ export function HistoryView() {
                   {night.games.map((game) => (
                     <motion.li
                       key={game.id}
+                      id={`game-${game.id}`}
                       initial={reduced ? false : { opacity: 0, y: -12 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.35 }}
+                      className={cn(
+                        "scroll-mt-4 rounded-2xl",
+                        !pinned && game.id === target && "ring-2 ring-[var(--color-gold)]/50 ring-offset-2 ring-offset-[var(--color-navy)]"
+                      )}
                     >
-                      <MatchCard game={game} defaultOpen={game.id === games[0]?.id} highlight={playerId} />
+                      <MatchCard
+                        key={!pinned && game.id === target ? "opened" : "listed"}
+                        game={game}
+                        defaultOpen={target && !pinned ? game.id === target : game.id === games[0]?.id}
+                        highlight={playerId}
+                      />
                     </motion.li>
                   ))}
                 </AnimatePresence>
@@ -176,7 +233,11 @@ export function HistoryView() {
             </Button>
           ) : (
             <p className="text-center text-xs text-muted-foreground">
-              {focus ? `That is every game ${focus.name} ever played.` : "You have reached the first page of the chronicle."}
+              {focus
+                ? `That is every game ${focus.name} played${served ? ` in ${seasonTitle(served)}` : ""}.`
+                : served
+                  ? `That is every game of ${seasonTitle(served)}.`
+                  : "You have reached the first page of the chronicle."}
             </p>
           )}
         </div>

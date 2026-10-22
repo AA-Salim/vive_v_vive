@@ -16,7 +16,8 @@ import { cn } from "@/lib/utils"
 
 const COLUMNS = "grid-cols-[2.5rem_minmax(0,1fr)_auto] md:grid-cols-[3rem_minmax(0,1fr)_6.5rem_5.5rem_11rem_8rem]"
 
-function LastMove({ entry }: { entry: LeaderboardEntry }) {
+function LastMove({ entry, sealed }: { entry: LeaderboardEntry; sealed: boolean }) {
+  if (sealed) return <span className="text-xs text-muted-foreground">Sealed</span>
   if (entry.last_change === null || !entry.last_reason) return <span className="text-xs text-muted-foreground">Quiet week</span>
   const Icon = reasonMeta(entry.last_reason).icon
   return (
@@ -42,7 +43,7 @@ export function entryPlayer(entry: LeaderboardEntry): PlayerRef | null {
     : null
 }
 
-function Row({ entry, reduced, onOpen }: { entry: LeaderboardEntry; reduced: boolean; onOpen: (player: PlayerRef) => void }) {
+function Row({ entry, reduced, onOpen, sealed }: { entry: LeaderboardEntry; reduced: boolean; onOpen: (player: PlayerRef) => void; sealed: boolean }) {
   const player = entryPlayer(entry)
   const name = displayName(entry)
   const record = entry.wins !== null && entry.losses !== null ? `${entry.wins}W ${entry.losses}L` : null
@@ -99,7 +100,7 @@ function Row({ entry, reduced, onOpen }: { entry: LeaderboardEntry; reduced: boo
           {entry.total_kisses > 0 ? entry.total_kisses : "-"}
         </span>
         <span className="hidden min-w-0 md:block">
-          <LastMove entry={entry} />
+          <LastMove entry={entry} sealed={sealed} />
         </span>
 
         <span className="flex flex-col items-end gap-0.5 text-right">
@@ -117,7 +118,7 @@ function Row({ entry, reduced, onOpen }: { entry: LeaderboardEntry; reduced: boo
   )
 }
 
-export function LeaderboardTable({ entries, onOpen }: { entries: LeaderboardEntry[]; onOpen: (player: PlayerRef) => void }) {
+export function LeaderboardTable({ entries, onOpen, sealed = false }: { entries: LeaderboardEntry[]; onOpen: (player: PlayerRef) => void; sealed?: boolean }) {
   const reduced = useReducedMotion() ?? false
   if (entries.length === 0) return null
   return (
@@ -138,7 +139,7 @@ export function LeaderboardTable({ entries, onOpen }: { entries: LeaderboardEntr
       </div>
       <ol className="space-y-1.5" aria-label="Standings">
         {entries.map((entry) => (
-          <Row key={entry.user_id} entry={entry} reduced={reduced} onOpen={onOpen} />
+          <Row key={entry.user_id} entry={entry} reduced={reduced} onOpen={onOpen} sealed={sealed} />
         ))}
       </ol>
     </div>

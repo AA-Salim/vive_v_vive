@@ -11,8 +11,10 @@ import { formatNumber, formatPercent, plural } from "@/components/pages/format"
 import { LiveStamp } from "@/components/pages/live-stamp"
 import { PageHeader } from "@/components/pages/page-header"
 import { useChampionStats } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { StatTile } from "@/components/pages/stat-tile"
 import { PageEmpty, PageError } from "@/components/pages/states"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Button } from "@/components/ui/button"
 import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -58,7 +60,8 @@ function Spotlight({ label, quip, champion, value, icon: Icon, help }: Spotlight
 }
 
 export function ChampionsView() {
-  const query = useChampionStats()
+  const [season, setSeason] = useSeasonParam()
+  const query = useChampionStats(season)
   const [view, setView] = useState<View>("record")
   const [sort, setSort] = useState<Sort>("games")
   const [lane, setLane] = useState<LaneFilter>("all")
@@ -95,6 +98,7 @@ export function ChampionsView() {
         help={CHAMPIONS_HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
+      <SeasonPicker value={season} onChange={setSeason} served={query.data?.season} />
 
       <Segmented
         label="Choose a view"
@@ -125,7 +129,7 @@ export function ChampionsView() {
       ) : view === "pools" ? (
         <PoolBoard pools={data.pools} dealt={dealt} />
       ) : data.champions.length === 0 ? (
-        <PageEmpty icon={DicesIcon} title="No champion dealt yet">
+        <PageEmpty icon={DicesIcon} title={data.season ? "No champion dealt this act yet" : "No champion dealt yet"}>
           The first game will fill the armory.
         </PageEmpty>
       ) : (

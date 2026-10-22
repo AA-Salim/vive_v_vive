@@ -11,10 +11,12 @@ import { plural } from "@/components/pages/format"
 import { LiveStamp } from "@/components/pages/live-stamp"
 import { PageHeader } from "@/components/pages/page-header"
 import { useRivalries } from "@/components/pages/queries"
+import { SeasonPicker } from "@/components/pages/season-picker"
 import { FeudList } from "@/components/pages/rivalries/feud-list"
 import { archNemesisOf, feudsOf, highlightsOf, type Highlight } from "@/components/pages/rivalries/rivalry-math"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
 import { InfoTip } from "@/components/ui/info-tip"
+import { useSeasonParam } from "@/components/pages/use-season"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
 import { highlightHelp, rivalriesHelp } from "@/lib/pages/help"
@@ -72,7 +74,8 @@ function RivalriesSkeleton() {
 }
 
 export function RivalriesView() {
-  const query = useRivalries()
+  const [season, setSeason] = useSeasonParam()
+  const query = useRivalries(season)
   const { profile } = useAuth()
   const [picked, setPicked] = useState<string | null>(null)
   const [pair, setPair] = useState<[string, string] | null>(null)
@@ -113,13 +116,14 @@ export function RivalriesView() {
         help={HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
+      <SeasonPicker value={season} onChange={setSeason} served={query.data?.season} />
 
       {query.isPending ? (
         <RivalriesSkeleton />
       ) : !data ? (
         <PageError title="The feud files are sealed" message={query.error?.message} onRetry={() => void query.refetch()} retrying={query.isFetching} />
       ) : data.rivalries.length === 0 ? (
-        <PageEmpty icon={SwordsIcon} title="No feuds yet">
+        <PageEmpty icon={SwordsIcon} title={data.season ? "No feuds this act yet" : "No feuds yet"}>
           Rivalries start the moment two people land on opposite sides. Go start one.
         </PageEmpty>
       ) : (
@@ -190,6 +194,7 @@ export function RivalriesView() {
         playerBId={pair?.[1] ?? null}
         playerAName={pair ? players.get(pair[0])?.name ?? "" : ""}
         playerBName={pair ? players.get(pair[1])?.name ?? "" : ""}
+        season={season}
       />
     </div>
   )

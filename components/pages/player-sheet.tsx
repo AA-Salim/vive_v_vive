@@ -7,23 +7,28 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { PlayerRecord } from "@/components/pages/player-record"
 import { PageApiError, usePlayerDetail } from "@/components/pages/queries"
 import { PageError } from "@/components/pages/states"
+import { withSeason, type SeasonKey } from "@/components/pages/use-season"
 import { PlayerTitles } from "@/components/titles/player-titles"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { seasonShort, seasonTitle } from "@/lib/pages/season-calendar"
 import type { PlayerRef } from "@/lib/pages/types"
 
 interface PlayerSheetProps {
   player: PlayerRef | null
   onClose: () => void
+  // The act the opening page is reading; the sheet follows it.
+  season?: SeasonKey
 }
 
 // A public court file: any player's record, lanes, champions and rivals, opened from any list.
-export function PlayerSheet({ player: requested, onClose }: PlayerSheetProps) {
+export function PlayerSheet({ player: requested, onClose, season = "current" }: PlayerSheetProps) {
   // The last opened file stays on screen while the sheet animates out.
   const [player, setPlayer] = useState(requested)
   if (requested && requested !== player) setPlayer(requested)
-  const detail = usePlayerDetail(player?.id ?? null)
+  const detail = usePlayerDetail(player?.id ?? null, season)
   const unknown = detail.error instanceof PageApiError && detail.error.status === 404
+  const served = detail.data?.season
 
   return (
     <Dialog open={requested !== null} onOpenChange={(open) => !open && onClose()}>
@@ -36,6 +41,9 @@ export function PlayerSheet({ player: requested, onClose }: PlayerSheetProps) {
                 <DialogTitle className="truncate font-display text-xl font-semibold text-[var(--color-gold-light)]">{player.name}</DialogTitle>
                 <DialogDescription className="sr-only">Record, lanes, champions and rivals of {player.name}</DialogDescription>
                 <PlayerTitles playerId={player.id} userId={player.userId} className="mt-0.5" />
+                {served !== undefined ? (
+                  <p className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">{seasonTitle(served)}</p>
+                ) : null}
               </div>
             </DialogHeader>
             <div className="p-4">
@@ -49,7 +57,9 @@ export function PlayerSheet({ player: requested, onClose }: PlayerSheetProps) {
                 <PlayerRecord detail={detail.data} perspective="them" />
               ) : unknown ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  {player.name} has not set foot on the Rift yet. The file opens with the first game.
+                  {season === "all"
+                    ? `${player.name} has not set foot on the Rift yet. The file opens with the first game.`
+                    : `${player.name} has not played a game in this act yet.`}
                 </p>
               ) : (
                 <PageError
@@ -61,11 +71,12 @@ export function PlayerSheet({ player: requested, onClose }: PlayerSheetProps) {
                 />
               )}
               <Link
-                href={`/history?player=${player.id}`}
+                href={withSeason("/history", season, new URLSearchParams({ player: player.id }))}
                 className="mt-5 inline-flex h-10 items-center gap-1.5 rounded-lg border border-[var(--color-gold)]/25 px-3 text-sm font-medium text-[var(--color-gold-light)] transition-colors outline-none hover:bg-[var(--color-gold)]/10 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <HistoryIcon className="size-4" aria-hidden />
                 Every game of {player.name}
+                {season === "all" ? null : <span className="text-muted-foreground">· {served !== undefined ? seasonShort(served) : "this act"}</span>}
               </Link>
             </div>
           </>

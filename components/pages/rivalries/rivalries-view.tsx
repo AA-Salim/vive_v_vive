@@ -14,12 +14,15 @@ import { useRivalries } from "@/components/pages/queries"
 import { FeudList } from "@/components/pages/rivalries/feud-list"
 import { archNemesisOf, feudsOf, highlightsOf, type Highlight } from "@/components/pages/rivalries/rivalry-math"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
+import { highlightHelp, rivalriesHelp } from "@/lib/pages/help"
 import type { PlayerRef } from "@/lib/pages/types"
 
 const HIGHLIGHT_ICON: Record<string, LucideIcon> = { most: SwordsIcon, lopsided: SkullIcon, closest: ScaleIcon }
 const MATRIX_SIZE = 14
+const HELP = rivalriesHelp(MATRIX_SIZE)
 
 function HighlightCard({ highlight, players, onOpen }: { highlight: Highlight; players: Map<string, PlayerRef>; onOpen: () => void }) {
   const leader = players.get(highlight.leader)
@@ -33,8 +36,9 @@ function HighlightCard({ highlight, players, onOpen }: { highlight: Highlight; p
       className="flex h-full w-full flex-col gap-3 rounded-xl border border-[var(--color-gold)]/20 bg-card p-3 text-left transition-colors outline-none hover:border-[var(--color-gold)]/40 focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <span className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)] uppercase">
-        <Icon className="size-3.5" aria-hidden />
-        {highlight.label}
+        <Icon className="size-3.5 shrink-0" aria-hidden />
+        <span className="min-w-0 flex-1 leading-snug">{highlight.label}</span>
+        <InfoTip help={highlightHelp(highlight.id, highlight.label)} className="-my-1 -mr-1" />
       </span>
       <span className="flex items-center gap-2">
         <span className="flex -space-x-2">
@@ -106,6 +110,7 @@ export function RivalriesView() {
         eyebrow="Blood Feuds"
         title="Rivalries"
         description="Who beats whom, lane by lane. Grudges are permanent. So is the match history."
+        help={HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
 
@@ -125,6 +130,7 @@ export function RivalriesView() {
               a={players.get(nemesis.a) as PlayerRef}
               b={players.get(nemesis.b) as PlayerRef}
               onOpen={() => openPair(nemesis.a, nemesis.b)}
+              help={HELP.nemesis}
             />
           ) : null}
 
@@ -143,6 +149,7 @@ export function RivalriesView() {
             eyebrow="Feud finder"
             title={focusPlayer ? `${focusPlayer.name} against the court` : "Pick a player"}
             description={focusPlayer ? `${plural(feuds.length, "opponent")}, most frequent first. Tap one for every game they played.` : undefined}
+            help={HELP.feuds}
             action={<PlayerSelect value={focus} onChange={setPicked} players={sortedNames} label="Show the feuds of" everyoneLabel={own ? "Back to me" : "Most active player"} className="w-48" />}
           >
             {feuds.length === 0 ? (
@@ -157,6 +164,7 @@ export function RivalriesView() {
             eyebrow="The war table"
             title="Everyone against everyone"
             description="Each cell reads as the row player's record against the column player."
+            help={HELP.table}
             className="hidden lg:block"
             action={
               <Segmented

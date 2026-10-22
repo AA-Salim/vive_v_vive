@@ -5,16 +5,17 @@ import { PlayerAvatar } from "@/components/pages/avatars"
 import { RelativeTime } from "@/components/live/relative-time"
 import { WinRateMeter } from "@/components/pages/indicators"
 import type { Feud } from "@/components/pages/rivalries/rivalry-math"
+import { FEUD_RULES } from "@/lib/pages/constants"
 import type { PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
 const rate = (f: Feud) => (f.games > 0 ? Math.round((f.wins / f.games) * 1000) / 10 : 0)
 
 function verdict(f: Feud): { text: string; tone: string } {
-  if (f.games < 3) return { text: "Barely met", tone: "text-muted-foreground" }
+  if (f.games < FEUD_RULES.metGames) return { text: "Barely met", tone: "text-muted-foreground" }
   const diff = f.wins - f.losses
-  if (diff >= 4 && f.wins >= 2 * f.losses) return { text: "Owns him", tone: "text-emerald-300" }
-  if (diff <= -4 && f.losses >= 2 * f.wins) return { text: "Owned", tone: "text-rose-300" }
+  if (diff >= FEUD_RULES.ownMargin && f.wins >= 2 * f.losses) return { text: "Owns him", tone: "text-emerald-300" }
+  if (diff <= -FEUD_RULES.ownMargin && f.losses >= 2 * f.wins) return { text: "Owned", tone: "text-rose-300" }
   if (diff > 0) return { text: "Has the edge", tone: "text-emerald-300/80" }
   if (diff < 0) return { text: "Trailing", tone: "text-rose-300/80" }
   return { text: "Dead level", tone: "text-[var(--color-gold)]" }

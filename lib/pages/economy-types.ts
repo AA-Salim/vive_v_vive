@@ -7,6 +7,8 @@ export interface ActRef {
   name: string
   subtitle: string | null
   startedAt: string
+  // The purse every noble opened this act with.
+  initialGrant?: number | null
 }
 
 export interface LeaderboardEntry {

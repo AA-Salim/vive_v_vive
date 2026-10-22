@@ -14,9 +14,11 @@ import { PageHeader } from "@/components/pages/page-header"
 import { PlayerSheet } from "@/components/pages/player-sheet"
 import { PAGE_KEYS, useLeaderboard } from "@/components/pages/queries"
 import { PageEmpty, PageError } from "@/components/pages/states"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/hooks/use-auth"
 import { domainOf, type LiveDomain } from "@/lib/live/events"
+import { COURT_LIST_HELP, LEADERBOARD_HELP, TREASURY_TOTALS_HELP } from "@/lib/pages/help"
 import type { LeaderboardEntry, PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -68,9 +70,14 @@ function TreasuryTotals({ entries }: { entries: LeaderboardEntry[] }) {
   const debtors = entries.filter((e) => e.balance < 0).length
   const moved = entries.reduce((sum, e) => sum + Math.abs(e.delta_24h), 0)
   const items = [
-    { icon: CoinsIcon, label: "Coin in play", value: formatNumber(total) },
-    { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved) },
-    { icon: TrendingDownIcon, label: "In debt", value: debtors === 0 ? "Nobody" : plural(debtors, "noble") },
+    { icon: CoinsIcon, label: "Coin in play", value: formatNumber(total), help: TREASURY_TOTALS_HELP.coin },
+    { icon: ScaleIcon, label: "Moved today", value: formatNumber(moved), help: TREASURY_TOTALS_HELP.moved },
+    {
+      icon: TrendingDownIcon,
+      label: "In debt",
+      value: debtors === 0 ? "Nobody" : plural(debtors, "noble"),
+      help: TREASURY_TOTALS_HELP.debt,
+    },
   ]
   return (
     <dl className="grid grid-cols-3 gap-2">
@@ -78,7 +85,8 @@ function TreasuryTotals({ entries }: { entries: LeaderboardEntry[] }) {
         <div key={item.label} className="min-w-0 rounded-xl border border-[var(--color-gold)]/12 bg-card px-2.5 py-2 sm:px-3">
           <dt className="flex items-start gap-1 text-[10px] leading-tight font-semibold tracking-[0.12em] text-muted-foreground uppercase">
             <item.icon className="mt-px size-3 shrink-0 text-[var(--color-gold)]/60" aria-hidden />
-            <span>{item.label}</span>
+            <span className="min-w-0 flex-1">{item.label}</span>
+            <InfoTip help={item.help} className="-my-1 -mr-1 size-4 before:-inset-3 [&_svg]:size-3.5" />
           </dt>
           <dd className="truncate font-display text-base font-semibold text-[var(--color-gold-light)] tabular-nums sm:text-lg">
             {item.value}
@@ -134,6 +142,7 @@ export function LeaderboardView() {
         eyebrow={act ? `Act ${ROMAN[act.number] ?? act.number} · ${act.subtitle ?? act.name}` : "The kingdom"}
         title="The Treasury"
         description="Every coin in the kingdom, counted twice. Salaxe counts it a third time, in his little notebook."
+        help={LEADERBOARD_HELP}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
 
@@ -158,9 +167,12 @@ export function LeaderboardView() {
           {entries.length > 3 ? (
             <section aria-labelledby="court-title" className="space-y-3">
               <div className="flex items-baseline justify-between gap-2">
-                <h2 id="court-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
-                  The rest of the court
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 id="court-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
+                    The rest of the court
+                  </h2>
+                  <InfoTip help={COURT_LIST_HELP} />
+                </div>
                 <span className="hidden text-xs text-muted-foreground sm:inline">Arrows: movement in the last 24 hours</span>
               </div>
               <LeaderboardTable entries={entries.slice(3)} onOpen={setOpen} />

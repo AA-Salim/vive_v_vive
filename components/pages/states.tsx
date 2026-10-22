@@ -3,6 +3,8 @@
 import type { ReactNode } from "react"
 import { type LucideIcon, RefreshCwIcon, ScrollTextIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface PageErrorProps {
@@ -75,12 +77,13 @@ interface SectionCardProps {
   eyebrow?: string
   description?: ReactNode
   action?: ReactNode
+  help?: HelpEntry
   children: ReactNode
   className?: string
   bodyClassName?: string
 }
 
-export function SectionCard({ title, id, eyebrow, description, action, children, className, bodyClassName }: SectionCardProps) {
+export function SectionCard({ title, id, eyebrow, description, action, help, children, className, bodyClassName }: SectionCardProps) {
   const headingId = id ? `${id}-title` : undefined
   return (
     <section
@@ -97,9 +100,12 @@ export function SectionCard({ title, id, eyebrow, description, action, children,
           {eyebrow ? (
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">{eyebrow}</p>
           ) : null}
-          <h2 id={headingId} className="font-display text-lg leading-snug font-semibold text-[var(--color-gold-light)]">
-            {title}
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <h2 id={headingId} className="min-w-0 font-display text-lg leading-snug font-semibold text-[var(--color-gold-light)]">
+              {title}
+            </h2>
+            {help ? <InfoTip help={help} side="bottom" align="start" /> : null}
+          </div>
           {description ? <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{description}</p> : null}
         </div>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}

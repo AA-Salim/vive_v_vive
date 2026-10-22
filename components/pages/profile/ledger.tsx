@@ -6,7 +6,9 @@ import { Segmented } from "@/components/pages/controls"
 import { formatDay, formatSigned, formatTime, localDayKey } from "@/components/pages/format"
 import { toneOf } from "@/components/pages/indicators"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { reasonHelp } from "@/lib/economy"
 import type { PointTransaction } from "@/lib/types"
 import { reasonLabel, reasonMeta, reasonTone, REASON_TONE_CLASSES } from "@/lib/reasons"
 import { cn } from "@/lib/utils"
@@ -47,7 +49,10 @@ function LedgerRow({ tx }: { tx: PointTransaction }) {
         <Icon className="size-4" aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-[var(--color-gold-light)]">{reasonLabel(tx.reason, tx.amount)}</span>
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-sm font-medium text-[var(--color-gold-light)]">{reasonLabel(tx.reason, tx.amount)}</span>
+          <InfoTip help={reasonHelp(tx.reason, tx.amount)} className="-my-1" />
+        </span>
         <span className="block truncate text-xs text-muted-foreground">{meta.detail}</span>
       </span>
       <span className="flex shrink-0 flex-col items-end">

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { loadMarketProfits, summarizeEarnings, type LedgerAmount } from "@/lib/income"
 import { emitLive, getActor } from "@/lib/live/server"
 import { fetchAllRows } from "@/lib/pages/fetch-all"
+import { ACT_WARRIOR_MIN_GAMES } from "@/lib/pages/constants"
 
 export async function POST(request: Request) {
   const supabase = await createClient()
@@ -86,9 +87,9 @@ export async function POST(request: Request) {
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
   const playerMap = new Map((allPlayers ?? []).map((p) => [p.id, p]))
 
-  // Warrior: best win rate (min 5 games) - need user_id via auth_user_id
+  // Warrior: best win rate (min ACT_WARRIOR_MIN_GAMES games) - need user_id via auth_user_id
   const linkedPlayers = (allPlayers ?? []).filter(
-    (p) => p.auth_user_id && p.games_played >= 5
+    (p) => p.auth_user_id && p.games_played >= ACT_WARRIOR_MIN_GAMES
   )
   const warrior = linkedPlayers.sort((a, b) => {
     const rateA = a.games_played > 0 ? a.wins / a.games_played : 0

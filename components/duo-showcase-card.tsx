@@ -5,6 +5,8 @@ import { CrownIcon } from "lucide-react"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { plural } from "@/components/pages/format"
 import { WinRateMeter } from "@/components/pages/indicators"
+import { InfoTip } from "@/components/ui/info-tip"
+import { duoBadgeHelp } from "@/lib/pages/help"
 import type { Duo, PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -44,8 +46,11 @@ export function DuoShowcaseCard({ duo, a, b, rank, onOpen }: DuoShowcaseCardProp
       </span>
       {duo.headline ? (
         <span className="space-y-1">
-          <span className={cn("block font-display font-semibold tracking-wide text-[var(--color-gold)]", first ? "text-2xl" : "text-xl")}>
-            {duo.headline.label}
+          <span className="flex items-center justify-center gap-1.5">
+            <span className={cn("font-display font-semibold tracking-wide text-[var(--color-gold)]", first ? "text-2xl" : "text-xl")}>
+              {duo.headline.label}
+            </span>
+            <InfoTip help={duoBadgeHelp(duo.headline.id, duo.headline.label)} />
           </span>
           <span className="block text-sm leading-snug text-[var(--color-gold-light)]/75">{duo.headline.text}</span>
         </span>

@@ -13,8 +13,11 @@ import { PageHeader } from "@/components/pages/page-header"
 import { useDuos } from "@/components/pages/queries"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
+import { DUO_MIN_GAMES } from "@/lib/pages/constants"
+import { duosHelp } from "@/lib/pages/help"
 import type { Duo } from "@/lib/pages/types"
 
 type Sort = "wins" | "winRate" | "games"
@@ -47,7 +50,8 @@ export function DuosView() {
 
   const players = useMemo(() => new Map((data?.players ?? []).map((p) => [p.id, p])), [data])
   const sortedNames = useMemo(() => [...(data?.players ?? [])].sort((x, y) => x.name.localeCompare(y.name)), [data])
-  const minGames = data?.minGames ?? 5
+  const minGames = data?.minGames ?? DUO_MIN_GAMES
+  const help = useMemo(() => duosHelp(minGames), [minGames])
   const showcase = useMemo(() => (data?.duos ?? []).filter((d) => d.headline).slice(0, 3), [data])
   const honors = useMemo(() => (data?.duos ?? []).flatMap((d) => d.badges.map((badge) => ({ duo: d, badge }))), [data])
 
@@ -88,6 +92,7 @@ export function DuosView() {
         eyebrow="Better Together"
         title="Duos"
         description="Same team, same fate. Who carries, who gets carried, and who should never queue together again."
+        help={help.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
 
@@ -123,6 +128,7 @@ export function DuosView() {
               eyebrow="Partner finder"
               title={`Who should ${focusPlayer.name} queue with?`}
               description={`Based on ${plural(partners.length, "partner")} with ${minGames}+ games together.`}
+              help={help.partners}
               action={<PlayerSelect value={focus} onChange={setPicked} players={sortedNames} label="Find partners for" everyoneLabel={own ? "Back to me" : "Most active player"} className="w-48" />}
             >
               <div className="grid gap-4 sm:grid-cols-2">
@@ -135,9 +141,12 @@ export function DuosView() {
           <section aria-labelledby="all-duos-title" className="space-y-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <h2 id="all-duos-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
-                  Every pairing
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 id="all-duos-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
+                    Every pairing
+                  </h2>
+                  <InfoTip help={help.list} />
+                </div>
                 <p className="text-xs text-muted-foreground">{plural(list.length, "duo")} · tap one for every game they shared</p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">

@@ -1,11 +1,10 @@
 import type { ChampionLookup } from "@/lib/pages/champion-index"
 import { computePlayerStats, winRate } from "@/lib/pages/compute-players"
+import { MATCHUP_MIN_GAMES, PARTNER_MIN_GAMES } from "@/lib/pages/constants"
 import type { MatchData } from "@/lib/pages/matches"
 import type { ChampionRecord, Matchup, Partner, PlayerDetailResponse, RecentGame } from "@/lib/pages/types"
 
 const RECENT_GAMES = 10
-const MATCHUP_MIN_GAMES = 3
-const PARTNER_MIN_GAMES = 4
 
 interface Tally {
   games: number

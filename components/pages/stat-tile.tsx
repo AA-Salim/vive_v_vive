@@ -1,5 +1,7 @@
 import type { ReactNode } from "react"
 import type { LucideIcon } from "lucide-react"
+import { InfoTip } from "@/components/ui/info-tip"
+import type { HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
 
 interface StatTileProps {
@@ -7,11 +9,12 @@ interface StatTileProps {
   value: ReactNode
   hint?: ReactNode
   icon?: LucideIcon
+  help?: HelpEntry
   className?: string
   emphasis?: boolean
 }
 
-export function StatTile({ label, value, hint, icon: Icon, className, emphasis = false }: StatTileProps) {
+export function StatTile({ label, value, hint, icon: Icon, help, className, emphasis = false }: StatTileProps) {
   return (
     <div
       className={cn(
@@ -23,6 +26,7 @@ export function StatTile({ label, value, hint, icon: Icon, className, emphasis =
       <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
         {Icon ? <Icon className="size-3.5 shrink-0 text-[var(--color-gold)]/70" aria-hidden /> : null}
         <span className="truncate">{label}</span>
+        {help ? <InfoTip help={help} className="-my-1 ml-auto" /> : null}
       </p>
       <div className="font-display text-xl leading-tight font-semibold text-[var(--color-gold-light)] sm:text-2xl">{value}</div>
       {hint ? <div className="line-clamp-2 text-xs text-muted-foreground">{hint}</div> : null}

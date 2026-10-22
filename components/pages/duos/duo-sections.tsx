@@ -4,6 +4,8 @@ import type { LucideIcon } from "lucide-react"
 import { DuoBadgeChip } from "@/components/duo-list"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { WinRateMeter } from "@/components/pages/indicators"
+import { InfoTip } from "@/components/ui/info-tip"
+import { duoBadgeHelp } from "@/lib/pages/help"
 import type { Duo, DuoBadge, PlayerRef } from "@/lib/pages/types"
 
 const partnerOf = (duo: Duo, playerId: string) => (duo.a === playerId ? duo.b : duo.a)
@@ -78,7 +80,10 @@ export function DuoHonors({ honors, players, onOpen }: DuoHonorsProps) {
               onClick={() => onOpen(duo)}
               className="flex h-full w-full flex-col gap-2 rounded-xl border border-[var(--color-gold)]/15 bg-card p-3 text-left outline-none hover:border-[var(--color-gold)]/35 focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              <DuoBadgeChip badge={badge} className="self-start" />
+              <span className="flex items-center justify-between gap-2">
+                <DuoBadgeChip badge={badge} />
+                <InfoTip help={duoBadgeHelp(badge.id, badge.label)} className="-my-1 -mr-1" />
+              </span>
               <span className="flex items-center gap-2">
                 <span className="flex shrink-0 -space-x-2">
                   <PlayerAvatar name={a.name} src={a.avatarUrl} size="xs" className="ring-2 ring-card" />

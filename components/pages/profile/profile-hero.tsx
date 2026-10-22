@@ -7,7 +7,10 @@ import { formatNumber, formatSigned } from "@/components/pages/format"
 import { toneOf } from "@/components/pages/indicators"
 import { StatTile } from "@/components/pages/stat-tile"
 import { PlayerTitles } from "@/components/titles/player-titles"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PURSE_HELP } from "@/lib/economy"
+import { PROFILE_HELP } from "@/lib/pages/help"
 import type { PointsHistoryResponse } from "@/lib/pages/types"
 import { isDevotion } from "@/lib/reasons"
 import { cn } from "@/lib/utils"
@@ -62,6 +65,7 @@ export function ProfileHero({ userId, name, username, avatarUrl, playerName, bal
           <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.22em] text-muted-foreground uppercase lg:justify-end">
             <CoinsIcon className="size-3.5 text-[var(--color-gold)]" aria-hidden />
             Treasury
+            <InfoTip help={PURSE_HELP} align="end" className="-my-1" />
           </p>
           <p className={cn("font-display text-5xl leading-none font-semibold text-[var(--color-gold)] sm:text-6xl", balance < 0 && "text-rose-300")}>
             <AnimatedNumber value={balance} format={formatNumber} />
@@ -86,24 +90,28 @@ export function ProfileHero({ userId, name, username, avatarUrl, playerName, bal
           label="Earned"
           value={history ? <span className="text-emerald-300">+{formatNumber(history.income)}</span> : <Skeleton className="h-7 w-16" />}
           hint="This act"
+          help={PROFILE_HELP.earned}
         />
         <StatTile
           icon={TrendingDownIcon}
           label="Spent"
           value={history ? <span className="text-rose-300">-{formatNumber(history.spending)}</span> : <Skeleton className="h-7 w-16" />}
           hint="This act"
+          help={PROFILE_HELP.spent}
         />
         <StatTile
           icon={HandCoinsIcon}
           label="Net result"
           value={history ? <span className={toneOf(net)}>{formatSigned(net)}</span> : <Skeleton className="h-7 w-16" />}
           hint={history ? `${formatNumber(history.transactions)} movements` : undefined}
+          help={PROFILE_HELP.net}
         />
         <StatTile
           icon={CrownIcon}
           label="Devotion"
           value={history ? formatNumber(devotion) : <Skeleton className="h-7 w-10" />}
           hint={devotion === 0 ? "The fallen king noticed." : devotion > 20 ? "Salaxe keeps your verses." : "Kisses and praises"}
+          help={PROFILE_HELP.devotion}
         />
       </div>
     </section>

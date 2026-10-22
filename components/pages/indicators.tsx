@@ -2,6 +2,7 @@
 
 import { ArrowDownIcon, ArrowUpIcon, FlameIcon, SnowflakeIcon } from "lucide-react"
 import { formatPercent, formatSigned } from "@/components/pages/format"
+import { STREAK_MIN } from "@/lib/pages/constants"
 import type { Outcome, Streak } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +41,7 @@ export function FormDots({ form, className }: { form: Outcome[]; className?: str
 }
 
 export function StreakChip({ streak, className }: { streak: Streak | null; className?: string }) {
-  if (!streak || streak.count < 2) return null
+  if (!streak || streak.count < STREAK_MIN) return null
   const hot = streak.outcome === "W"
   const Icon = hot ? FlameIcon : SnowflakeIcon
   return (

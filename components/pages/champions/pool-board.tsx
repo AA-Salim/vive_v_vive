@@ -4,7 +4,9 @@ import { useMemo, useState } from "react"
 import { LaneIcon } from "@/components/lane-icon"
 import { ChampionIcon } from "@/components/pages/avatars"
 import { SearchField } from "@/components/pages/controls"
+import { InfoTip } from "@/components/ui/info-tip"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/champions"
+import { CHAMPIONS_HELP } from "@/lib/pages/help"
 import type { PoolChampion } from "@/lib/pages/types"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -49,8 +51,11 @@ export function PoolBoard({ pools, dealt }: PoolBoardProps) {
         <SearchField value={search} onChange={setSearch} placeholder={`Search ${ROLE_LABELS[role]}`} label={`Search the ${ROLE_LABELS[role]} pool`} className="sm:w-56" />
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        {list.length} {list.length === 1 ? "champion" : "champions"} the randomizer can deal in {ROLE_LABELS[role]}. Grey ones have never been dealt.
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span>
+          {list.length} {list.length === 1 ? "champion" : "champions"} the randomizer can deal in {ROLE_LABELS[role]}. Grey ones have never been dealt.
+        </span>
+        <InfoTip help={CHAMPIONS_HELP.pools} className="-my-1" />
       </p>
 
       {list.length === 0 ? (

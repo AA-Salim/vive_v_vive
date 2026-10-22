@@ -9,6 +9,7 @@ import { PlayerRecord } from "@/components/pages/player-record"
 import { AchievementsCard } from "@/components/pages/profile/achievements-card"
 import { BalanceChart, summarizeSeries } from "@/components/pages/profile/balance-chart"
 import { Breakdown } from "@/components/pages/profile/breakdown"
+import { EconomyPanel, useEconomy } from "@/components/pages/profile/economy-panel"
 import { Ledger } from "@/components/pages/profile/ledger"
 import { ProfileHero } from "@/components/pages/profile/profile-hero"
 import { TitlesCard } from "@/components/pages/profile/titles-card"
@@ -18,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuth } from "@/hooks/use-auth"
 import { usePoints } from "@/hooks/use-points"
+import { PROFILE_HELP } from "@/lib/pages/help"
 import type { BalancePoint } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -67,6 +69,8 @@ export function ProfileView() {
   const playerId = profile?.player_id ?? null
   const detail = usePlayerDetail(playerId)
   const [claimOpen, setClaimOpen] = useState(false)
+  const economy = useEconomy(history.data?.act?.initialGrant)
+  const titlesHelp = economy.find((entry) => entry.key === "titles")?.help
 
   const series = useMemo(() => history.data?.series ?? [], [history.data])
   const summary = summarizeSeries(series)
@@ -79,10 +83,17 @@ export function ProfileView() {
 
   if (isLoading) return <ProfileSkeleton />
 
+  const economySection = (
+    <SectionCard id="economy" eyebrow="The royal rulebook" title="How the points work" help={PROFILE_HELP.economy}>
+      <EconomyPanel entries={economy} />
+    </SectionCard>
+  )
+
   if (!user) {
     return (
-      <div className="mx-auto max-w-xl py-6">
+      <div className="mx-auto max-w-6xl space-y-5 py-6">
         <PageEmpty
+          className="mx-auto max-w-xl"
           icon={ShieldQuestionIcon}
           title="The court does not know your face"
           action={
@@ -94,6 +105,7 @@ export function ProfileView() {
         >
           Sign in to open your court file: your treasury curve, every coin you won and lost, your titles and your deeds.
         </PageEmpty>
+        {economySection}
       </div>
     )
   }
@@ -119,6 +131,7 @@ export function ProfileView() {
           eyebrow={history.data?.act ? `Since ${formatShortDay(history.data.since)}` : "All time"}
           title="Treasury curve"
           description="Every bet, decree and kiss, one step at a time."
+          help={PROFILE_HELP.curve}
           className="lg:col-span-2"
         >
           {history.isPending ? (
@@ -150,7 +163,7 @@ export function ProfileView() {
           )}
         </SectionCard>
 
-        <SectionCard id="money-trail" eyebrow="This act" title="Follow the money">
+        <SectionCard id="money-trail" eyebrow="This act" title="Follow the money" help={PROFILE_HELP.trail}>
           {history.data ? (
             <Breakdown breakdown={history.data.breakdown} />
           ) : history.isError ? (
@@ -170,6 +183,7 @@ export function ProfileView() {
         eyebrow="All time"
         title={playerId ? "Your record on the Rift" : "The Rift does not know you yet"}
         description={playerId ? "Wins, lanes, champions and the people who ruin your evenings." : undefined}
+        help={PROFILE_HELP.record}
       >
         {!playerId ? (
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -193,17 +207,25 @@ export function ProfileView() {
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard id="titles" eyebrow="Wardrobe" title="Titles">
+        <SectionCard id="titles" eyebrow="Wardrobe" title="Titles" help={titlesHelp}>
           <TitlesCard />
         </SectionCard>
-        <SectionCard id="deeds" eyebrow="Milestones" title="Deeds">
+        <SectionCard id="deeds" eyebrow="Milestones" title="Deeds" help={PROFILE_HELP.deeds}>
           <AchievementsCard />
         </SectionCard>
       </div>
 
-      <SectionCard id="ledger" eyebrow="Latest movements" title="The ledger" description="Straight from the royal scribes. They never round in your favour.">
+      <SectionCard
+        id="ledger"
+        eyebrow="Latest movements"
+        title="The ledger"
+        description="Straight from the royal scribes. They never round in your favour."
+        help={PROFILE_HELP.ledger}
+      >
         <Ledger transactions={points.transactions} loading={points.isLoading} />
       </SectionCard>
+
+      {economySection}
 
       <ClaimPlayerDialog open={claimOpen} onOpenChange={setClaimOpen} />
     </div>

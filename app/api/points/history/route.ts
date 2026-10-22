@@ -13,7 +13,7 @@ export async function GET() {
 
   try {
     const [{ data: act }, balances] = await Promise.all([
-      supabase.from("acts").select("id, act_number, name, subtitle, started_at").eq("status", "active").maybeSingle(),
+      supabase.from("acts").select("id, act_number, name, subtitle, started_at, initial_grant").eq("status", "active").maybeSingle(),
       fetchAllRows<{ user_id: string; balance: number }>((from, to) =>
         supabase.from("point_balances").select("user_id, balance").order("user_id").range(from, to)
       ),
@@ -30,7 +30,14 @@ export async function GET() {
     const start = since ?? rows[0]?.created_at ?? new Date().toISOString()
     const { breakdown, income, spending } = summarizeReasons(rows)
     const actRef: ActRef | null = act
-      ? { id: act.id, number: act.act_number, name: act.name, subtitle: act.subtitle ?? null, startedAt: act.started_at }
+      ? {
+          id: act.id,
+          number: act.act_number,
+          name: act.name,
+          subtitle: act.subtitle ?? null,
+          startedAt: act.started_at,
+          initialGrant: act.initial_grant ?? null,
+        }
       : null
 
     const body: PointsHistoryResponse = {

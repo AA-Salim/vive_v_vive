@@ -4,6 +4,8 @@ import { motion, useReducedMotion } from "motion/react"
 import { CrownIcon, DicesIcon, FlameIcon, HandHeartIcon, ShieldIcon, SwordsIcon, TrophyIcon, type LucideIcon } from "lucide-react"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { formatNumber } from "@/components/pages/format"
+import { InfoTip } from "@/components/ui/info-tip"
+import { awardHelp } from "@/lib/pages/help"
 import type { ArchiveAward } from "@/lib/pages/types"
 
 const CATEGORY: Record<string, { label: string; icon: LucideIcon; quip: string }> = {
@@ -32,7 +34,10 @@ export function ArchiveHallOfFame({ awards }: { awards: ArchiveAward[] }) {
         >
           <CrownIcon className="size-8 text-[var(--color-gold)] drop-shadow-[0_0_12px_var(--color-gold)]" aria-hidden />
           <PlayerAvatar name={champion.name} src={champion.avatarUrl} size="xl" ring="gold" />
-          <p className="text-[10px] font-semibold tracking-[0.24em] text-muted-foreground uppercase">{champion.title}</p>
+          <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.24em] text-muted-foreground uppercase">
+            {champion.title}
+            <InfoTip help={awardHelp(champion.category, CATEGORY[champion.category]?.label ?? champion.title, champion.bonus)} className="-my-1" />
+          </p>
           <p className="font-display text-2xl font-semibold text-[var(--color-gold)]">{champion.name}</p>
           {champion.value ? <p className="font-display text-lg text-[var(--color-gold-light)]">{champion.value}</p> : null}
           {champion.bonus > 0 ? (
@@ -60,8 +65,11 @@ export function ArchiveHallOfFame({ awards }: { awards: ArchiveAward[] }) {
                     <Icon className="size-3" aria-hidden />
                   </span>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)] uppercase">{meta.label}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center justify-between gap-1.5 text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)] uppercase">
+                    <span className="truncate">{meta.label}</span>
+                    <InfoTip help={awardHelp(award.category, meta.label, award.bonus)} className="-my-1 -mr-1" />
+                  </p>
                   <p className="truncate text-sm font-semibold text-[var(--color-gold-light)]">{award.name}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {award.value ?? meta.quip}

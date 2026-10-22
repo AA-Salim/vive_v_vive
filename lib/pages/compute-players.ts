@@ -1,10 +1,8 @@
 import type { ChampionLookup } from "@/lib/pages/champion-index"
-import { RATE_MIN_GAMES } from "@/lib/pages/constants"
+import { FORM_LENGTH, RATE_MIN_GAMES, STREAK_MIN } from "@/lib/pages/constants"
 import type { MatchData } from "@/lib/pages/matches"
 import type { ChampionRecord, LaneRecord, Outcome, PlayerRef, PlayerStat, SideRecord, StatsRecord, Streak } from "@/lib/pages/types"
 import type { Role } from "@/lib/types"
-
-const FORM_LENGTH = 5
 
 interface Tally {
   games: number
@@ -151,14 +149,14 @@ export function computeRecords(stats: PlayerStat[]): StatsRecord[] {
     "hot_streak",
     "On fire",
     "Longest winning run still alive. Somebody gank him.",
-    pick(stats, (s) => (s.streak?.outcome === "W" && s.streak.count >= 2 ? s.streak.count : 0)),
+    pick(stats, (s) => (s.streak?.outcome === "W" && s.streak.count >= STREAK_MIN ? s.streak.count : 0)),
     (s) => `${s.streak?.count ?? 0} straight`
   )
   add(
     "cold_streak",
     "Delayed victory tour",
     "Longest losing run still alive. The win is coming. Allegedly.",
-    pick(stats, (s) => (s.streak?.outcome === "L" && s.streak.count >= 2 ? s.streak.count : 0)),
+    pick(stats, (s) => (s.streak?.outcome === "L" && s.streak.count >= STREAK_MIN ? s.streak.count : 0)),
     (s) => `${s.streak?.count ?? 0} straight`
   )
   add("golden_era", "Golden era", "Longest win streak ever recorded.", pick(stats, (s) => s.bestWinStreak), (s) =>

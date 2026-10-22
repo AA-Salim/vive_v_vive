@@ -16,6 +16,7 @@ import { PAGE_KEYS, useHistory, useStats } from "@/components/pages/queries"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { HISTORY_HELP } from "@/lib/pages/help"
 import type { HistoryGame } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -99,6 +100,7 @@ export function HistoryView() {
         eyebrow="The Chronicle"
         title="Match History"
         description="Every game ever played on the Rift. Every gank, every throw, every delayed victory."
+        help={HISTORY_HELP}
         actions={<LiveStamp updatedAt={history.dataUpdatedAt} fetching={history.isFetching && !history.isPending && !history.isFetchingNextPage} />}
       />
 

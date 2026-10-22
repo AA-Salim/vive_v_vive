@@ -1,6 +1,8 @@
 "use client"
 
 import { formatNumber } from "@/components/pages/format"
+import { InfoTip } from "@/components/ui/info-tip"
+import { groupHelp } from "@/lib/economy"
 import type { ReasonTotal } from "@/lib/pages/types"
 import { reasonMeta, REASON_GROUPS, type ReasonGroup } from "@/lib/reasons"
 import { cn } from "@/lib/utils"
@@ -42,6 +44,7 @@ function Column({ title, rows, kind }: { title: string; rows: GroupTotal[]; kind
                   <span className="flex min-w-0 items-center gap-1.5 text-[var(--color-gold-light)]/85">
                     <Icon className="size-3.5 shrink-0 text-[var(--color-gold)]/70" aria-hidden />
                     <span className="truncate">{meta.label}</span>
+                    <InfoTip help={groupHelp(row.group, meta.label)} className="-my-1" />
                   </span>
                   <span className={cn("shrink-0 font-semibold tabular-nums", kind === "income" ? "text-emerald-300" : "text-rose-300")}>
                     {kind === "income" ? "+" : "-"}

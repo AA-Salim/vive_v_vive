@@ -4,6 +4,8 @@ import { ArrowRightIcon, SwordsIcon } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { PlayerAvatar } from "@/components/pages/avatars"
 import { formatShortDay, plural } from "@/components/pages/format"
+import { InfoTip } from "@/components/ui/info-tip"
+import type { HelpEntry } from "@/lib/help"
 import type { PlayerRef, Rivalry } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -12,6 +14,7 @@ interface ArchNemesisCardProps {
   a: PlayerRef
   b: PlayerRef
   onOpen: () => void
+  help?: HelpEntry
 }
 
 function quip(r: Rivalry, a: PlayerRef, b: PlayerRef): string {
@@ -20,7 +23,7 @@ function quip(r: Rivalry, a: PlayerRef, b: PlayerRef): string {
   return `${plural(r.laneDuels, "lane duel")}. ${winner.name} sleeps well. ${loser.name} has a notebook now.`
 }
 
-export function ArchNemesisCard({ rivalry, a, b, onOpen }: ArchNemesisCardProps) {
+export function ArchNemesisCard({ rivalry, a, b, onOpen, help }: ArchNemesisCardProps) {
   const reduced = useReducedMotion()
   const aLeads = rivalry.aLaneWins > rivalry.bLaneWins
   const bLeads = rivalry.bLaneWins > rivalry.aLaneWins
@@ -34,10 +37,13 @@ export function ArchNemesisCard({ rivalry, a, b, onOpen }: ArchNemesisCardProps)
       <div aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-1/2 bg-linear-to-l from-[var(--color-red-team)]/12 to-transparent" />
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-[var(--color-gold)]/80 to-transparent" />
       <div className="relative flex flex-col items-center gap-4 px-4 py-6 text-center sm:px-8">
-        <h2 id="arch-nemesis-title" className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.3em] text-[var(--color-gold)] uppercase">
-          <SwordsIcon className="size-3.5" aria-hidden />
-          Arch-nemesis
-        </h2>
+        <div className="flex items-center gap-1.5">
+          <h2 id="arch-nemesis-title" className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.3em] text-[var(--color-gold)] uppercase">
+            <SwordsIcon className="size-3.5" aria-hidden />
+            Arch-nemesis
+          </h2>
+          {help ? <InfoTip help={help} side="bottom" /> : null}
+        </div>
 
         <div className="grid w-full max-w-xl grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 sm:gap-6">
           {[

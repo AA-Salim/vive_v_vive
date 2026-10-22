@@ -3,6 +3,8 @@
 import { motion, useReducedMotion } from "motion/react"
 import { CrownIcon, FlameIcon, ShieldIcon, SnowflakeIcon, SparklesIcon, SwordsIcon, TargetIcon, type LucideIcon } from "lucide-react"
 import { PlayerAvatar } from "@/components/pages/avatars"
+import { InfoTip } from "@/components/ui/info-tip"
+import { recordHelp } from "@/lib/pages/help"
 import type { PlayerRef, StatsRecord } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -48,7 +50,8 @@ export function StatsRecords({ records, onOpen }: { records: StatsRecord[]; onOp
             >
               <span className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.18em] uppercase">
                 <Icon className="size-3.5 shrink-0" aria-hidden />
-                <span className="truncate">{record.label}</span>
+                <span className="min-w-0 flex-1 leading-snug">{record.label}</span>
+                <InfoTip help={recordHelp(record.id, record.label)} className="-my-1 -mr-1" />
               </span>
               <span className="flex min-w-0 items-center gap-2">
                 <PlayerAvatar name={record.player.name} src={record.player.avatarUrl} size="sm" />

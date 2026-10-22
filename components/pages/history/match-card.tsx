@@ -5,7 +5,9 @@ import { LaneIcon } from "@/components/lane-icon"
 import { ChampionIcon } from "@/components/pages/avatars"
 import { formatNumber, formatTime } from "@/components/pages/format"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { InfoTip } from "@/components/ui/info-tip"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/champions"
+import { VERDICT_HELP } from "@/lib/pages/help"
 import type { HistoryGame, HistoryPlayer } from "@/lib/pages/types"
 import type { Side } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -163,8 +165,8 @@ export function MatchCard({ game, defaultOpen = false, highlight = null }: { gam
           ) : null}
           <ChevronDownIcon className="ml-auto size-4 text-muted-foreground transition-transform group-data-[panel-open]/trigger:rotate-180" aria-hidden />
         </span>
-        {game.verdict ? (
-          <span className="mt-2 flex flex-wrap gap-1.5">
+        {game.verdict && (game.verdict.mvp.length > 0 || game.verdict.inter.length > 0) ? (
+          <span className="mt-2 flex flex-wrap items-center gap-1.5">
             {game.verdict.mvp.length > 0 ? (
               <Chip className="text-[var(--color-gold)] ring-[var(--color-gold)]/30">
                 <StarIcon className="size-3" aria-hidden />
@@ -177,6 +179,7 @@ export function MatchCard({ game, defaultOpen = false, highlight = null }: { gam
                 Inter: {game.verdict.inter.join(" & ")}
               </Chip>
             ) : null}
+            <InfoTip help={VERDICT_HELP} />
           </span>
         ) : null}
         {game.players.length === 0 ? (

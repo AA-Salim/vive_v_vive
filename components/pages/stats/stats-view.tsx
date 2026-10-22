@@ -12,8 +12,10 @@ import { StatTile } from "@/components/pages/stat-tile"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { StatsRecords } from "@/components/pages/stats/stats-records"
 import { sortPlayers, StatsCards, StatsTable, type SortKey, type SortState } from "@/components/pages/stats/stats-table"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RATE_MIN_GAMES } from "@/lib/pages/constants"
+import { STATS_HELP } from "@/lib/pages/help"
 import type { PlayerRef } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -70,6 +72,7 @@ export function StatsView() {
         eyebrow="Hall of Records"
         title="Player Stats"
         description="Wins, streaks, lanes and the champions the dice keep forcing on everyone. The numbers never lie. Salaxe still argues."
+        help={STATS_HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
 
@@ -84,11 +87,12 @@ export function StatsView() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <StatTile icon={SwordsIcon} label="Games played" value={data.totals.games} hint={data.totals.lastGameAt ? `Last one ${formatShortDay(data.totals.lastGameAt)}` : undefined} />
-            <StatTile icon={UsersIcon} label="Players" value={data.totals.players} hint="Have set foot on the Rift" />
+            <StatTile icon={SwordsIcon} label="Games played" value={data.totals.games} hint={data.totals.lastGameAt ? `Last one ${formatShortDay(data.totals.lastGameAt)}` : undefined} help={STATS_HELP.games} />
+            <StatTile icon={UsersIcon} label="Players" value={data.totals.players} hint="Have set foot on the Rift" help={STATS_HELP.players} />
             <StatTile
               icon={BarChart3Icon}
               label="Side war"
+              help={STATS_HELP.sides}
               value={
                 <span>
                   <span className="text-[var(--color-blue-team)]">{data.totals.blueWins}</span>
@@ -109,6 +113,7 @@ export function StatsView() {
               label="Since"
               value={data.totals.firstGameAt ? formatShortDay(data.totals.firstGameAt) : "-"}
               hint="The first recorded game"
+              help={STATS_HELP.since}
             />
           </div>
 
@@ -117,9 +122,12 @@ export function StatsView() {
           <section aria-labelledby="ranking-title" className="space-y-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 id="ranking-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
-                  The roster
-                </h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 id="ranking-title" className="font-display text-lg font-semibold text-[var(--color-gold-light)]">
+                    The roster
+                  </h2>
+                  <InfoTip help={STATS_HELP.roster} />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {plural(players.length, "player")} · tap a name for the full court file
                 </p>

@@ -1,3 +1,4 @@
+import { FEUD_RULES } from "@/lib/pages/constants"
 import type { Rivalry } from "@/lib/pages/types"
 
 export interface Feud {
@@ -66,18 +67,18 @@ export function highlightsOf(rivalries: Rivalry[]): Highlight[] {
   add(
     "lopsided",
     "Owned",
-    "The most one-sided feud, 6+ games.",
+    `The most one-sided feud, ${FEUD_RULES.lopsidedGames}+ games.`,
     pick(
-      rivalries.filter((r) => r.games >= 6 && free(r)),
+      rivalries.filter((r) => r.games >= FEUD_RULES.lopsidedGames && free(r)),
       (r) => Math.abs(r.aWins - r.bWins) / r.games
     )
   )
   add(
     "closest",
     "Knife edge",
-    "Ten games or more and still nobody is sure.",
+    `${FEUD_RULES.closeGames} games or more and still nobody is sure.`,
     pick(
-      rivalries.filter((r) => r.games >= 10 && free(r)),
+      rivalries.filter((r) => r.games >= FEUD_RULES.closeGames && free(r)),
       (r) => r.games - 4 * Math.abs(r.aWins - r.bWins)
     )
   )

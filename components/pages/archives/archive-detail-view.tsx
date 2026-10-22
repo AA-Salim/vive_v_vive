@@ -14,6 +14,7 @@ import { PageApiError, useArchive } from "@/components/pages/queries"
 import { StatTile } from "@/components/pages/stat-tile"
 import { PageEmpty, PageError, SectionCard } from "@/components/pages/states"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ARCHIVE_DETAIL_HELP } from "@/lib/pages/help"
 
 const LIVE_DOMAINS = ["session", "bet", "points", "chaos", "praise", "title", "sidebet", "bounty", "duel", "vote"] as const
 
@@ -103,15 +104,21 @@ export function ArchiveDetailView({ id }: { id: number }) {
       />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile icon={CalendarDaysIcon} label="Days" value={daysBetween(act.startedAt, act.endedAt)} />
-        <StatTile icon={SwordsIcon} label="Games" value={formatNumber(totals.games)} />
-        <StatTile icon={DicesIcon} label="Wagers" value={formatNumber(totals.bets)} />
-        <StatTile icon={CoinsIcon} label="Wagered" value={formatCompact(totals.wagered)} />
-        <StatTile icon={ScrollTextIcon} label="Decrees" value={formatNumber(totals.decrees)} />
-        <StatTile icon={CrownIcon} label="Devotion" value={formatNumber(totals.devotion)} hint={act.number === 1 ? "Hands kissed" : "Praises sung"} />
+        <StatTile icon={CalendarDaysIcon} label="Days" value={daysBetween(act.startedAt, act.endedAt)} help={ARCHIVE_DETAIL_HELP.days} />
+        <StatTile icon={SwordsIcon} label="Games" value={formatNumber(totals.games)} help={ARCHIVE_DETAIL_HELP.games} />
+        <StatTile icon={DicesIcon} label="Wagers" value={formatNumber(totals.bets)} help={ARCHIVE_DETAIL_HELP.wagers} />
+        <StatTile icon={CoinsIcon} label="Wagered" value={formatCompact(totals.wagered)} help={ARCHIVE_DETAIL_HELP.wagered} />
+        <StatTile icon={ScrollTextIcon} label="Decrees" value={formatNumber(totals.decrees)} help={ARCHIVE_DETAIL_HELP.decrees} />
+        <StatTile
+          icon={CrownIcon}
+          label="Devotion"
+          value={formatNumber(totals.devotion)}
+          hint={act.number === 1 ? "Hands kissed" : "Praises sung"}
+          help={ARCHIVE_DETAIL_HELP.devotion}
+        />
       </div>
 
-      <SectionCard id="hall-of-fame" eyebrow="Honors" title="Hall of Fame">
+      <SectionCard id="hall-of-fame" eyebrow="Honors" title="Hall of Fame" help={ARCHIVE_DETAIL_HELP.fame}>
         {data.awards.length > 0 ? (
           <ArchiveHallOfFame awards={data.awards} />
         ) : (
@@ -123,20 +130,20 @@ export function ArchiveDetailView({ id }: { id: number }) {
         )}
       </SectionCard>
 
-      <SectionCard id="treasury-race" eyebrow="Day by day" title="The race for the treasury" description="Every noble's balance across the act. Pick anyone to put them in the spotlight.">
+      <SectionCard id="treasury-race" eyebrow="Day by day" title="The race for the treasury" description="Every noble's balance across the act. Pick anyone to put them in the spotlight." help={ARCHIVE_DETAIL_HELP.race}>
         <TreasuryRace timeline={data.timeline} defaultFocus={champion?.userId ?? null} />
       </SectionCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard id="wagers" eyebrow="The betting book" title="Wager outcomes" description="Most active bettors first.">
+        <SectionCard id="wagers" eyebrow="The betting book" title="Wager outcomes" description="Most active bettors first." help={ARCHIVE_DETAIL_HELP.bets}>
           <WagerOutcomes bets={data.bets} />
         </SectionCard>
-        <SectionCard id="spending" eyebrow="Follow the money" title="Where the coin went">
+        <SectionCard id="spending" eyebrow="Follow the money" title="Where the coin went" help={ARCHIVE_DETAIL_HELP.spending}>
           <SpendingBars spending={data.spending} />
         </SectionCard>
       </div>
 
-      <SectionCard id="standings" eyebrow={live ? "Live standings" : "When the curtain fell"} title={live ? "Standings so far" : "Final standings"}>
+      <SectionCard id="standings" eyebrow={live ? "Live standings" : "When the curtain fell"} title={live ? "Standings so far" : "Final standings"} help={ARCHIVE_DETAIL_HELP.standings}>
         <ArchiveStandings standings={data.standings} />
       </SectionCard>
     </div>

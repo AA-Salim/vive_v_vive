@@ -14,8 +14,12 @@ import { useChampionStats } from "@/components/pages/queries"
 import { StatTile } from "@/components/pages/stat-tile"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { Button } from "@/components/ui/button"
+import { InfoTip } from "@/components/ui/info-tip"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ALL_ROLES, ROLE_LABELS } from "@/lib/champions"
+import type { HelpEntry } from "@/lib/help"
+import { CHAMPION_MIN_GAMES } from "@/lib/pages/constants"
+import { CHAMPIONS_HELP } from "@/lib/pages/help"
 import type { ChampionStat } from "@/lib/pages/types"
 import type { Role } from "@/lib/types"
 
@@ -24,16 +28,25 @@ type Sort = "games" | "winRate" | "name"
 type LaneFilter = Role | "all"
 
 const PAGE = 40
-const MIN_GAMES = 5
 
-function Spotlight({ label, quip, champion, value, icon: Icon }: { label: string; quip: string; champion: ChampionStat; value: string; icon: LucideIcon }) {
+interface SpotlightProps {
+  label: string
+  quip: string
+  champion: ChampionStat
+  value: string
+  icon: LucideIcon
+  help: HelpEntry
+}
+
+function Spotlight({ label, quip, champion, value, icon: Icon, help }: SpotlightProps) {
   return (
     <li className="flex min-w-0 items-center gap-3 rounded-xl border border-[var(--color-gold)]/20 bg-linear-to-br from-[var(--color-gold)]/[0.06] to-transparent p-3">
       <ChampionIcon name={champion.name} internal={champion.internal} size={56} />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.18em] text-[var(--color-gold)] uppercase">
-          <Icon className="size-3.5" aria-hidden />
-          {label}
+          <Icon className="size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">{label}</span>
+          <InfoTip help={help} className="-my-1" />
         </p>
         <p className="truncate font-display text-base font-semibold text-[var(--color-gold-light)]">
           {champion.name} <span className="text-sm text-[var(--color-gold-light)]/70">{value}</span>
@@ -54,7 +67,7 @@ export function ChampionsView() {
   const data = query.data
 
   const dealt = useMemo(() => new Map((data?.champions ?? []).map((c) => [c.name, c.games])), [data])
-  const regulars = useMemo(() => (data?.champions ?? []).filter((c) => c.games >= MIN_GAMES), [data])
+  const regulars = useMemo(() => (data?.champions ?? []).filter((c) => c.games >= CHAMPION_MIN_GAMES), [data])
   const best = regulars.reduce<ChampionStat | null>((b, c) => (!b || c.winRate > b.winRate ? c : b), null)
   const worst = regulars.reduce<ChampionStat | null>((w, c) => (!w || c.winRate < w.winRate ? c : w), null)
   const most = data?.champions[0] ?? null
@@ -79,6 +92,7 @@ export function ChampionsView() {
         eyebrow="The Armory"
         title="Champions"
         description="Every champion the randomizer ever dealt, and what it did to the poor soul who got it."
+        help={CHAMPIONS_HELP.page}
         actions={<LiveStamp updatedAt={query.dataUpdatedAt} fetching={query.isFetching && !query.isPending} />}
       />
 
@@ -117,10 +131,10 @@ export function ChampionsView() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <StatTile icon={DicesIcon} label="Picks dealt" value={formatNumber(data.totals.picks)} hint="Ten per game, no refunds" />
-            <StatTile icon={SparklesIcon} label="Champions seen" value={`${data.totals.unique}`} hint={`Out of ${data.totals.pool} in the pools`} />
-            <StatTile icon={GhostIcon} label="Still waiting" value={fresh} hint={fresh === 0 ? "The dice spared nobody" : "Never dealt, not once"} />
-            <StatTile icon={FlameIcon} label="Most dealt" value={most?.name ?? "-"} hint={most ? plural(most.games, "game") : undefined} />
+            <StatTile icon={DicesIcon} label="Picks dealt" value={formatNumber(data.totals.picks)} hint="Ten per game, no refunds" help={CHAMPIONS_HELP.picks} />
+            <StatTile icon={SparklesIcon} label="Champions seen" value={`${data.totals.unique}`} hint={`Out of ${data.totals.pool} in the pools`} help={CHAMPIONS_HELP.seen} />
+            <StatTile icon={GhostIcon} label="Still waiting" value={fresh} hint={fresh === 0 ? "The dice spared nobody" : "Never dealt, not once"} help={CHAMPIONS_HELP.waiting} />
+            <StatTile icon={FlameIcon} label="Most dealt" value={most?.name ?? "-"} hint={most ? plural(most.games, "game") : undefined} help={CHAMPIONS_HELP.most} />
           </div>
 
           {best || worst ? (
@@ -131,7 +145,8 @@ export function ChampionsView() {
                   label="Blessed pick"
                   champion={best}
                   value={formatPercent(best.winRate)}
-                  quip={`Best win rate with ${MIN_GAMES}+ games. Roll it and start celebrating.`}
+                  quip={`Best win rate with ${CHAMPION_MIN_GAMES}+ games. Roll it and start celebrating.`}
+                  help={CHAMPIONS_HELP.blessed}
                 />
               ) : null}
               {worst && worst !== best ? (
@@ -141,6 +156,7 @@ export function ChampionsView() {
                   champion={worst}
                   value={formatPercent(worst.winRate)}
                   quip="Worst win rate in the armory. Getting it is a delayed victory in waiting."
+                  help={CHAMPIONS_HELP.cursed}
                 />
               ) : null}
             </ul>

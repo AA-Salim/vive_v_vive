@@ -1,9 +1,9 @@
 import { winRate } from "@/lib/pages/compute-players"
+import { DUO_BADGE_RULES } from "@/lib/pages/constants"
 import { pairKey, type MatchData } from "@/lib/pages/matches"
 import type { Duo, DuoBadge, Rivalry } from "@/lib/pages/types"
 
-export const DUO_MIN_GAMES = 5
-const BADGE_MIN_GAMES = 10
+export { DUO_MIN_GAMES } from "@/lib/pages/constants"
 
 export function computeRivalries(data: MatchData): Rivalry[] {
   const pairs = new Map<string, Rivalry>()
@@ -135,7 +135,7 @@ export function computeDuos(data: MatchData): Duo[] {
   })
 
   // Each honor goes to exactly one duo, so a badge stays a story instead of wallpaper.
-  const qualified = duos.filter((d) => d.games >= BADGE_MIN_GAMES)
+  const qualified = duos.filter((d) => d.games >= DUO_BADGE_RULES.minGames)
   const extreme = (list: Duo[], score: (d: Duo) => number) =>
     list.reduce<Duo | null>((best, d) => {
       if (!best) return d
@@ -144,7 +144,7 @@ export function computeDuos(data: MatchData): Duo[] {
     }, null)
 
   const dynasty = extreme(qualified, (d) => d.winRate)
-  if (dynasty && dynasty.winRate >= 60) {
+  if (dynasty && dynasty.winRate >= DUO_BADGE_RULES.dynastyRate) {
     dynasty.badges.push({
       id: "dynasty",
       label: "THE DYNASTY",
@@ -154,7 +154,7 @@ export function computeDuos(data: MatchData): Duo[] {
   }
 
   const cursed = extreme(qualified, (d) => -d.winRate)
-  if (cursed && cursed !== dynasty && cursed.winRate < 40) {
+  if (cursed && cursed !== dynasty && cursed.winRate < DUO_BADGE_RULES.cursedRate) {
     cursed.badges.push({
       id: "cursed",
       label: "CURSED BOND",
@@ -173,7 +173,9 @@ export function computeDuos(data: MatchData): Duo[] {
     })
   }
 
-  const carried = qualified.filter((d) => d.winRate >= 60 && Math.abs(overall(d.a) - overall(d.b)) >= 15)
+  const carried = qualified.filter(
+    (d) => d.winRate >= DUO_BADGE_RULES.carryRate && Math.abs(overall(d.a) - overall(d.b)) >= DUO_BADGE_RULES.carryGap
+  )
   const carry = extreme(carried, (d) => Math.abs(overall(d.a) - overall(d.b)))
   if (carry) {
     const [carrier, passenger] = strongerFirst(carry)
@@ -192,9 +194,9 @@ export function computeDuos(data: MatchData): Duo[] {
       [d.b, d.a],
     ]) {
       const total = totals.get(self)
-      if (!total || total.games - d.games < BADGE_MIN_GAMES) continue
+      if (!total || total.games - d.games < DUO_BADGE_RULES.minGames) continue
       const withoutRate = winRate(total.wins - d.wins, total.games - d.games)
-      if (d.winRate < 55 || withoutRate >= 35) continue
+      if (d.winRate < DUO_BADGE_RULES.leechWithRate || withoutRate >= DUO_BADGE_RULES.leechWithoutRate) continue
       if (!leech || d.winRate - withoutRate > leech.withRate - leech.withoutRate) {
         leech = { duo: d, self, mate, withRate: d.winRate, withoutRate }
       }

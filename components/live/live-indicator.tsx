@@ -4,9 +4,18 @@ import { BellOffIcon } from "lucide-react"
 import { useLive } from "@/components/live/live-context"
 import { LiveSettings } from "@/components/live/live-settings"
 import { LIVE_LABELS, StatusDot, useLiveDisplayState } from "@/components/live/status-dot"
+import { HelpRows } from "@/components/ui/info-tip"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useLivePrefs } from "@/hooks/use-live-prefs"
+import { FREE, type HelpEntry } from "@/lib/help"
 import { cn } from "@/lib/utils"
+
+const LIVE_HELP: HelpEntry = {
+  title: "Live sync",
+  does: "Keeps every page in step with the Rift: bets, decrees, verdicts and purses update without a refresh.",
+  cost: FREE,
+  limits: "Quiet mode, sound and vibration are saved on this device only.",
+}
 
 interface LiveIndicatorProps {
   // Hides the text label (kept for screen readers) where the nav is tight.
@@ -36,6 +45,9 @@ export function LiveIndicator({ compact = false, className }: LiveIndicatorProps
       </PopoverTrigger>
       <PopoverContent align="end" sideOffset={8} className="w-[min(20rem,calc(100vw-1.5rem))] gap-0 p-0">
         <LiveSettings state={state} />
+        <div className="border-t border-border/70 px-4 py-2.5">
+          <HelpRows help={LIVE_HELP} />
+        </div>
       </PopoverContent>
     </Popover>
   )

@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/pages/page-header"
 import { useArchives } from "@/components/pages/queries"
 import { PageEmpty, PageError } from "@/components/pages/states"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ARCHIVES_HELP } from "@/lib/pages/help"
 import type { ArchiveSummary } from "@/lib/pages/types"
 import { cn } from "@/lib/utils"
 
@@ -109,6 +110,7 @@ export function ArchivesView() {
         eyebrow="The Royal Archives"
         title="Archives"
         description="Every act of the saga, sealed and shelved. Kings rise, kings fall, and the scribes write all of it down."
+        help={ARCHIVES_HELP}
       />
       {query.isPending ? (
         <div className="space-y-4" aria-busy="true" aria-label="Dusting off the archives">
